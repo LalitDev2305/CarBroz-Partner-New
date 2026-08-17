@@ -196,5 +196,33 @@ A task is COMPLETE if and only if all applicable criteria pass:
   - Structured concurrency is mandatory. `GlobalScope` and unowned coroutine scopes are strictly prohibited.
   - Durable background tasks (surviving app process termination) operate behind platform-neutral background-work contracts adapted later to platform schedulers (e.g., WorkManager, Apple background tasks). Common code MUST NOT depend directly on platform APIs.
 
-
-
+## 20. RUNTIME CLEAN ARCHITECTURE & EXECUTION LAWS
+- **Splash Clean Architecture Law**:
+  - Native Splash UI operates through `SplashIntent -> Store<SplashState, SplashIntent, SplashEffect> -> Startup Orchestrator -> SplashState / SplashEffect -> First SDUI Route`.
+  - Store is the single state owner. Dual `SplashViewModel` + `SplashStore` duplication is strictly prohibited. `SplashRepository` classes MUST NOT be created unless a genuine reusable data abstraction exists.
+  - Splash MUST NOT directly depend on Ktor, database implementations, secure storage implementations, SDUI parser internals, or platform SDKs.
+- **Post-Splash Dynamic Architecture Law**:
+  - Post-Splash screens are fully backend-driven (SDUI). Endpoint- or screen-specific repositories/use-cases/viewmodels (e.g. `LoginRepository`, `OtpUseCase`, `WalletViewModel`) are strictly prohibited.
+  - Runtime execution operates via `SDUI Renderer -> NodeEvent -> EventRouter -> ActionDispatcher -> ActionExecutor -> Transport -> Response Mapping -> Result Binding -> Store -> StateFlow -> Compose Recomposition`.
+  - Domain UseCases and Repositories remain valid ONLY for genuine, reusable application/domain capabilities.
+- **Request Model & Context Ownership Law**:
+  - Raw backend JSON MUST NOT be passed directly to transport clients. Request creation follows `Backend Action Definition -> Parse / Validate -> Request Definition -> Request Resolution -> Typed Resolved Request -> Transport`.
+  - Context ownership is strictly partitioned across canonical owners:
+    1. `Device / Application Context`: Installation ID, app version, OS version, locale, timezone.
+    2. `Session Context`: Access token, refresh token, user ID, partner ID, session ID.
+    3. `Screen / Runtime State`: Screen-specific state variables (`selectedServiceId`, `bookingId`).
+    4. `Form State`: Dynamic form input values owned by generic Form Runtime.
+    5. `Workflow State`: Multi-step workflow variables owned by Workflow Runtime.
+    6. `Action Result Context`: Values produced by prior action executions.
+    7. `Action Constants`: Static backend action parameters.
+- **Binding Resolution & Single-Owner Request Assembly**:
+  - One canonical binding-resolution mechanism (`BindingResolver`) resolves scoped runtime values (`${device.id}`, `${session.partnerId}`, `${form.phone}`) for headers, query params, path params, request bodies, UI text, and conditions. Individual subsystems MUST NOT invent custom string interpolation.
+  - Request assembly pipeline (`Request Definition -> Default Metadata -> Device Context -> Session Context -> Trace Context -> Action Values -> Security Policy -> Resolved Request`) is centralized. Screens and renderers MUST NOT manually construct headers (e.g., `Authorization`, `Device-Id`, `Trace-Id`).
+- **Response Mapping & Result Binding Law**:
+  - Reverse execution pipeline (`Raw Response -> Transport Model -> Mapper -> Execution Result -> Result Binding -> Runtime State -> Store -> StateFlow -> UI`) enforces boundary mapping.
+  - Transport DTOs MUST NOT leak into Store states, SDUI renderers, or domain models. Meaningless 1:1 mappers without architectural boundaries are prohibited.
+- **MVI vs Execution vs Network Responsibility Matrix**:
+  - `MVI`: Intent, State, Effect, state transitions, state lifecycle.
+  - `Execution`: Actions, action execution, workflows, capability invocation, navigation requests.
+  - `Network`: HTTP, GraphQL, WebSockets, Multipart, auth headers, serialization.
+  - `Runtime Context`: Session, Device/App Context, Screen State, Form State, Workflow State, Action Result Context.
