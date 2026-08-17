@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 
+import com.carbroz.partner.app.composition.CarBrozPartnerRoot
+
 /**
  * Main Android activity serving as the thin host for the CarBroz Partner application.
  *

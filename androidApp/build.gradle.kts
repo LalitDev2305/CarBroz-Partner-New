@@ -23,10 +23,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":shared"))
+    implementation(project(":app:composition"))
     implementation(libs.androidx.activity.compose)
-    implementation(compose.runtime)
-    implementation(compose.foundation)
-    implementation(compose.material3)
-    implementation(compose.ui)
 }

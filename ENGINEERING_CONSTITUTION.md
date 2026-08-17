@@ -92,6 +92,12 @@
   - **Object Graph Assembly**: Assembler (Builder ONLY when progressive conditional construction is truly required)
 - **Pattern Review Mandate**: All future major architecture implementation plans MUST include a `DESIGN PATTERN REVIEW` section detailing the problem, change axis, pattern selected, alternatives rejected, and verification that extending the subsystem requires editing **ZERO** existing code (only new registration/composition).
 - **Reuse Law**: Search codebase before creating any class, interface, function, Store, or test utility. Decision hierarchy: `REUSE -> COMPOSE -> EXTEND -> CREATE`.
+- **Cross-Cutting Single-Owner & Zero Semantic Duplication Law**:
+  - If a behavior, calculation, or pipeline applies to multiple renderers, screens, nodes, actions, platforms, or subsystems, its algorithm MUST have exactly ONE canonical implementation. Duplicating semantic logic across multiple renderers or platform source sets is strictly prohibited.
+  - Renderers MUST remain thin presentation bridges (`NodeEvent` emission + Compose primitive rendering). Renderers MUST NOT perform screen-ratio scaling, density calculations, raw JSON parsing, or direct network/database calls.
+  - Adaptive resolution operates through a centralized pipeline (`AdaptiveEnvironment` snapshot -> Focused Resolvers for Dimension, Typography, Spacing, Color, Radius, Elevation -> Clamped Safety Bounds -> Resolved Compose Token). Renderers consume resolved style inputs without calculating layout mathematics independently.
+  - Absolute Prohibition of God Utilities: Centralization MUST NOT result in generic dumping grounds (`Utils.kt`, `UiUtils.kt`, `CommonHelper.kt`). Reusable algorithms MUST be owned by focused, single-responsibility domain resolvers or engine services.
+
 
 ## 10. DEPENDENCY ADMISSION & CATALOG POLICY
 - **Admission Checklist**: Before adding any external library, verify: actual requirement, existing capability, stable release status, Android/iOS/Desktop compatibility, KMP/CMP support, maintenance activity, licensing, security, binary size, build impact, and replacement complexity.
@@ -145,3 +151,36 @@ A task is COMPLETE if and only if all applicable criteria pass:
 4. Run builds, tests, and Desktop JVM runtime smoke test.
 5. Perform repository audit (`git diff`, `git status`).
 6. Present factual report and stop. Never auto-advance.
+
+## 18. MAPPING, SUBSYSTEM & MODEL-BOUNDARY CONSTITUTION
+- **Data Flow Lifecycle**:
+  - `External / Transport DTO -> Deserializer -> Validator -> Normalizer -> Mapper / Assembler -> Domain / Definition Model`
+  - `Persistence Entity <-> Mapper <-> Domain Model`
+- **Mapping Laws**:
+  - Mapping has exactly one canonical owner. Mappers are pure, deterministic functions.
+  - Mappers MUST NOT perform network calls, database queries, navigation operations, Compose UI rendering, or vendor SDK interactions.
+  - DTOs MUST NOT leak into UI/runtime presentation layers. Database entities MUST NOT leak into domain/rendering. Runtime state MUST NOT be reused as transport DTOs. Renderers MUST NEVER manually parse or convert transport DTOs.
+- **Model Classification**:
+  - `TRANSPORT DTO`: External serialized representation.
+  - `PERSISTENCE ENTITY`: Local database/storage representation.
+  - `DOMAIN / CONTRACT MODEL`: Stable application business meaning.
+  - `SDUI DEFINITION MODEL`: Immutable, validated backend screen definition.
+  - `RUNTIME STATE MODEL`: Mutable/evolving application runtime state.
+  - `RESOLVED PRESENTATION MODEL`: Final renderer-ready values after token, adaptive, and property resolution.
+- **Product Model & Static vs SDUI Laws**:
+  - **Single Native Screen**: Native product UI exists ONLY for the Launch/Splash Screen (`feature:splash`).
+  - **Backend-Driven Screens**: EVERY screen after Splash (Login, OTP, KYC, Home, Bookings, Earnings, Wallet, Support, Profile, Dialogs, Sheets) is Server-Driven UI. Monolithic native feature screens (e.g., `AuthScreen`, `BookingScreen`) are strictly prohibited.
+  - **Zero Static Visual Values**: Renderers MUST NOT hardcode text, font size, padding, margin, radius, color, icon, or dimensions. Visual attributes originate from backend definitions, theme tokens, and centralized adaptive resolvers.
+- **Cross-Cutting Subsystem Ownership Laws**:
+  - **Resource Resolution**: `ResourceReference -> ResourceResolver -> ResolvedResource -> Renderer`. Single canonical owner for loading/error/fallback resource resolution. Renderers consume resolved resource states without executing transport or loading algorithms independently.
+  - **Dynamic Form Runtime**: One generic dynamic form runtime (`FieldId`, value, validation, touched, dirty, enabled, visible, focus, keyboard action, submit state) manages post-Splash dynamic forms. Native Auth/Profile form managers are prohibited.
+  - **Session Runtime**: Session management (access token, refresh token, expiry, restoration, logout, secure persistence) is owned by a single cross-cutting session runtime service. Creating native `AuthRepository` classes for Login/OTP is prohibited.
+  - **Application Configuration**: Single read-only runtime configuration owner manages environment parameters, minimum app versions, maintenance flags, and supported SDUI schemas post-Splash bootstrap.
+  - **Lifecycle & Capability States**: Common lifecycle signals (`ACTIVE`, `INACTIVE`, `FOREGROUND`, `BACKGROUND`) are decoupled from platform APIs. Capability states (`SUPPORTED`, `UNSUPPORTED`, `AVAILABLE`, `UNAVAILABLE`, `PERMISSION_REQUIRED`, `PERMISSION_DENIED`) are platform-neutral.
+  - **Clock, ID & Concurrency**: Time providers, UUID generation, trace IDs, request IDs, workflow IDs, idempotency keys, and coroutine dispatchers are owned centrally by testable providers. `GlobalScope` is prohibited.
+  - **Cache & Refresh Policy**: Centralized rules govern cache expiry, invalidation, stale data, SDUI document caching, offline queues, and reconnect sync. Individual repositories MUST NOT invent arbitrary caching logic.
+  - **Screen & Overlay Coordination**: Navigation and Renderers do NOT fetch screens directly. Single Screen Runtime Coordinator manages `Route -> Screen Acquisition -> Parse -> Validate -> Normalize -> Definition -> State -> Render`. Single Overlay Coordinator handles dynamic dialogs, sheets, snackbars, and loading overlays.
+  - **Realtime, Analytics & Security**: `WebSocket Frame -> Realtime Mapper -> App Event -> Execution`. Vendor analytics names are mapped strictly at the analytics provider boundary. Payload size limits, hierarchy depth limits, malformed resource rejection, and URL allow-policies are enforced at parsing boundaries.
+  - **Test Fixtures & Visibility**: Representative SDUI JSON fixtures (all composite levels, actions, bindings, unknown types, malformed properties) are mandatory for contract testing. Modules default to `internal` visibility.
+
+
