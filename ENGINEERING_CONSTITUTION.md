@@ -183,4 +183,18 @@ A task is COMPLETE if and only if all applicable criteria pass:
   - **Realtime, Analytics & Security**: `WebSocket Frame -> Realtime Mapper -> App Event -> Execution`. Vendor analytics names are mapped strictly at the analytics provider boundary. Payload size limits, hierarchy depth limits, malformed resource rejection, and URL allow-policies are enforced at parsing boundaries.
   - **Test Fixtures & Visibility**: Representative SDUI JSON fixtures (all composite levels, actions, bindings, unknown types, malformed properties) are mandatory for contract testing. Modules default to `internal` visibility.
 
+## 19. CACHE, MEMORY, BACKGROUND & RESOURCE CONSTITUTION
+- **Cache Architecture & Centralized Policy**:
+  - Caching is a first-class runtime concern. Repositories, renderers, and executors MUST NOT independently invent TTL, expiration, stale behavior, eviction, or refresh logic.
+  - Multi-level caching (`Request -> Memory Cache -> Persistent Cache -> Network -> Mapper -> Cache Update -> Consumer`) must preserve schema/version validity. Incompatible cached SDUI screens MUST NEVER be rendered merely because data exists locally.
+  - Memory caches MUST be bounded (defined maximum size/cost, eviction policy, lifetime, clear triggers). Unbounded mutable maps are strictly prohibited.
+- **Memory & Resource Lifecycle**:
+  - All long-lived objects (WebSockets, DB connections, streams, image resources, BLE/Location sessions) MUST define explicit release behavior (`Acquire -> Use -> Cancel/Close/Dispose`). Lifecycle cleanup MUST NOT rely solely on garbage collection.
+  - Lifecycle, coroutine scope, listener, subscription, and platform context leaks are strictly prohibited.
+- **Background Execution & Concurrency**:
+  - Long-running or blocking work (I/O, parsing, mapping, crypto) MUST NOT execute on the UI/main thread. Dispatcher selection operates through testable context abstractions without scattering `Dispatchers.IO` indiscriminately.
+  - Structured concurrency is mandatory. `GlobalScope` and unowned coroutine scopes are strictly prohibited.
+  - Durable background tasks (surviving app process termination) operate behind platform-neutral background-work contracts adapted later to platform schedulers (e.g., WorkManager, Apple background tasks). Common code MUST NOT depend directly on platform APIs.
+
+
 
