@@ -1,0 +1,147 @@
+# CARBROZ PARTNER — ENGINEERING & ARCHITECTURE CONSTITUTION
+
+## 1. ARCHITECTURAL PRINCIPLES & BOUNDARIES
+- **Core Multiplatform Stack**: Kotlin Multiplatform (KMP), Compose Multiplatform (CMP), JDK 21 LTS.
+- **Architectural Paradigm**: Clean Architecture with MVI + Unidirectional Data Flow (UDF), immutable state, and `StateFlow`-based observation.
+- **Dependency Direction & Ownership Rules**:
+  - **High-Level Policy Integrity**: High-level policy and business rules MUST NEVER depend on low-level infrastructure, UI frameworks, or network/database drivers.
+  - **Contract Ownership**: Contracts (interfaces) are owned by the domain/boundary that requires them, not by the implementing infrastructure.
+  - **Implementation Inversion**: Implementations depend strictly on contracts (Dependency Inversion Principle).
+  - **Platform Hosts**: Platform hosts (`androidApp`, `iosApp`, `desktopApp`) compose the application and provide platform contexts, but DO NOT own business or application state logic.
+  - **Source vs Runtime Distinction**: Do not confuse control flow / runtime invocation (UI -> Store -> Network) with source-code dependency direction (UI -> Store Contract <- Store Impl -> Network Contract <- Ktor Impl).
+  - **Zero Circular Dependencies**: Strict acyclic dependency graph across all source sets and Gradle modules.
+- **Modularity Policy**: A Gradle module exists ONLY when a strict binary, compilation, or dependency boundary is required. Packages are preferred for internal logical isolation within a module.
+- **Prohibition of Dumping Grounds**: Absolutely no generic dumping grounds (`Helper`, `Utils`, `Common`, `Misc`, `BaseManager`). Every class and function MUST have a single, explicitly named domain responsibility.
+
+## 2. PRODUCT MODEL & EQUAL PLATFORM TARGETS
+- **Independent Repositories**: CarBroz Partner is a standalone multiplatform project. (CarBroz Customer exists in a separate repository; Admin is a separate web/backend system).
+- **First-Class Platform Parity**: Android, iOS, and Desktop (JVM) are equal first-class targets.
+- **Zero Platform Branching in Common Code**: Common code MUST NEVER contain platform conditional branches (`if (android)`, `if (ios)`). Platform variations MUST be isolated behind multiplatform abstraction contracts and instantiated at dependency injection boundaries.
+
+## 3. MVI + UNIDIRECTIONAL DATA FLOW (UDF) CONSTITUTION
+- **State & Intent Flow**:
+  - `UI -> Intent/Event -> Store -> State Transition -> Immutable State -> UI`
+  - `Store -> One-Time Effect -> UI/Host/Navigation/Capability Handler`
+- **Ownership & Lifecycle Rules**:
+  - Exactly one State Owner per context exposing an immutable `StateFlow<State>`.
+  - No dual ViewModel + Store or Presenter + Store duplication.
+  - Store manages state transitions natively. Reducers exist only when complex state transition logic justifies separate, pure function testing.
+  - Common architecture MUST NOT depend on `androidx.lifecycle.ViewModel` or any Android/JVM-specific lifecycle classes.
+
+## 4. SERVER-DRIVEN UI (SDUI) CONSTITUTION & OBJECT GRAPH
+- **Canonical Non-Recursive Hierarchy**:
+  - `Screen -> Template -> Component -> SubComponent -> Child -> ChildrenData`
+  - `Screen` owns root Theme & metadata.
+  - `ChildrenData` is ALWAYS terminal and cannot contain any further hierarchy node.
+  - **Recursion Restrictions**: No `Child -> Child` recursion; no `SubComponent -> SubComponent` recursion; no arbitrary recursive trees.
+- **SDUI Object Graph Lifecycle**:
+  - `Raw Response -> Parse -> Validate -> Normalize -> Apply Theme/Screen Context -> Assemble Hierarchy Nodes -> Attach Terminal ChildrenData -> Immutable Screen Graph -> Render`.
+  - Compose MUST NEVER render directly from raw/unchecked JSON. Monolithic `ScreenBuilder` classes are prohibited.
+  - Hierarchy construction uses `Composite` + `Assembler`. Construction operates via `Assembler` rather than Builders unless progressive conditional building is genuinely required.
+- **Context Ownership & Extension Law**:
+  - `Screen` establishes `ThemeContext` once; child nodes inherit context without re-parsing theme metrics for every leaf.
+  - Adding a new `Template`, `Component`, `SubComponent`, `Child`, or `ChildrenData` renderer MUST NOT require modifying the core rendering pipeline. Renderers use `Registry` + `Strategy` patterns to eliminate giant `when(type)` blocks.
+- **Node Interaction & Declarative Action Model**:
+  - Visually terminal `ChildrenData` nodes emit semantic `NodeEvents`. Renderers detect interactions; the execution layer processes actions via `NodeEvent -> EventRouter -> ActionDispatcher -> ActionRegistry -> ActionExecutor -> ExecutionResult`.
+  - Backend-driven actions describe `type`, `id`, `parameters`, `target`, `execution policy`, `guard`, and `result binding`. Multiple actions support explicit policies (`SEQUENTIAL`, `PARALLEL`, `FIRST_SUCCESS`, `STOP_ON_FAILURE`).
+
+## 5. DYNAMIC ACTION, EXECUTION & WORKFLOW ENGINE
+- **Action Execution Architecture**:
+  - Uniform execution flow: `Action -> ActionExecutor -> ActionRegistry -> ExecutionContext -> ExecutionResult` using Command + Registry/Executor patterns.
+  - Adding a new action type (API call, GraphQL, Navigation, Form Update, Dialogs, Payments, Camera, BLE, Location, Workflows) requires registering a new `ActionExecutor`—never modifying the execution engine core.
+- **Action Safety & Interaction Guards**:
+  - Cross-cutting policies (rapid double-click prevention, duplicate submission guards, disabled state, debounce, throttle, idempotency, authentication requirement, network checks, retry, timeout) are composed around execution (Chain of Responsibility / Pipeline) rather than duplicated inside individual ActionExecutors.
+- **Parent/Child Coordination & State Binding**:
+  - Nodes MUST NOT couple tightly using parent references (`child.parent.doSomething()`). Target resolution relies on context scope IDs (`SELF`, `PARENT`, `SCREEN`, `NodeId`, `StateScopeId`).
+  - Dynamic content uses `BindingResolver` to resolve scoped runtime state to render values without custom native screen code.
+- **Workflow Subsystem**:
+  - Sequential steps, branching, retries, timeouts, pause/resume, and recovery are handled in a dedicated Workflow engine boundary built on top of the Execution engine.
+
+## 6. NAVIGATION CONSTITUTION
+- Multiplatform-compatible stateful navigation stack (single source of truth for `push`, `replace`, `pop`, `popTo`, `reset`, deep links, state restoration, system back, and desktop keyboard shortcuts).
+- Navigation MUST NOT fetch SDUI screens or make business network calls directly. Execution engine requests navigation operations through contracts.
+
+## 7. COMMUNICATION & TRANSPORT CONSTITUTION
+- **Multi-Transport Mapping**:
+  - **Dynamic SDUI Documents**: REST / HTTP
+  - **Structured Business Data**: GraphQL
+  - **Realtime Operations**: WebSockets / Streaming
+  - **Media & Files**: Multipart HTTP
+- Transport implementations (Ktor, Apollo, etc.) are strictly hidden behind protocol-agnostic domain request contracts.
+
+## 8. PERSISTENCE & CAPABILITY PROVIDERS
+- **Persistence Decoupling**: Separate abstractions for `Preferences`, `SecureStorage`, `StructuredDatabase`, `Cache`, `FileStorage`, and `OfflineQueue`. Database details MUST NOT leak outside their persistence module.
+- **Secure Storage**: Exposes one multiplatform `SecureStorage` contract implemented via platform-native security (KeyStore on Android, Keychain on iOS, Keyring on Desktop).
+- **Capability Providers**: Platform & vendor capabilities (Payment, Camera, Location, Maps, BLE, Biometric, QR, Notifications, File Picker, Share) are accessed via `CapabilityProvider` contracts. Changing vendors (e.g., Razorpay -> Stripe) requires zero changes to business execution or SDUI code.
+
+## 9. DESIGN PATTERN SELECTION CONSTITUTION & REUSE LAW
+- **Pattern Selection Rule**: Design patterns are architectural tools, NOT mandatory ceremony. Evaluate the expected change axis and select the smallest pattern or combination that solves the concrete problem.
+- **Prohibited Ceremonial Usage**: NEVER create `Factory`, `Builder`, `Strategy`, `Registry`, `Manager`, `Mediator`, `Observer`, `Command`, `Adapter`, or `Repository` merely because a pattern is common. Prefer composition over inheritance.
+- **Canonical Design Pattern Guidance by Concern**:
+  - **SDUI Hierarchy**: Composite
+  - **Dynamic Renderer/Action/Provider Discovery**: Registry
+  - **Dynamic Implementation Selection**: Factory Method / Registered Factory
+  - **Contextual Metric Interpretation**: Resolver
+  - **Interchangeable Rendering/Layout**: Strategy
+  - **Dynamic Backend Actions**: Command
+  - **Multi-Step Workflows**: State Machine + Interpreter
+  - **Action Guard & Execution Pipeline**: Chain of Responsibility / Pipeline
+  - **Platform/Vendor Integration**: Adapter + Provider
+  - **Cross-System Event Routing**: Mediator / EventRouter
+  - **State Observation**: StateFlow / Observer semantics
+  - **Object Graph Assembly**: Assembler (Builder ONLY when progressive conditional construction is truly required)
+- **Pattern Review Mandate**: All future major architecture implementation plans MUST include a `DESIGN PATTERN REVIEW` section detailing the problem, change axis, pattern selected, alternatives rejected, and verification that extending the subsystem requires editing **ZERO** existing code (only new registration/composition).
+- **Reuse Law**: Search codebase before creating any class, interface, function, Store, or test utility. Decision hierarchy: `REUSE -> COMPOSE -> EXTEND -> CREATE`.
+
+## 10. DEPENDENCY ADMISSION & CATALOG POLICY
+- **Admission Checklist**: Before adding any external library, verify: actual requirement, existing capability, stable release status, Android/iOS/Desktop compatibility, KMP/CMP support, maintenance activity, licensing, security, binary size, build impact, and replacement complexity.
+- **Strict Isolation**: Dependencies are introduced ONLY when their owning subsystem is implemented. Never add dependencies "for future use".
+- **Single Catalog**: `gradle/libs.versions.toml` is the single source of truth for versions and dependencies. No hardcoded version literals in `.gradle.kts` files.
+
+## 11. QUALITY GATES, WARNINGS & ZERO SUPPRESSION
+- **Three Quality Gates**: `1. BUILD SUCCESS` | `2. TEST SUCCESS` | `3. RUNTIME SMOKE SUCCESS`.
+- **Zero Suppression Policy**: NEVER suppress compiler warnings, toolchain compatibility warnings (`android.suppressUnsupportedCompileSdk`), lint findings, or runtime errors to fake a green build. Fix the root cause or report technical incompatibility to obtain decision approval.
+
+## 12. TESTING & PLATFORM VALIDATION
+- **Testing Categories**: Unit, MVI/State, Reducer, Parser, Validator, Normalization, Serialization, Schema/Contract, Execution, Workflow, Navigation, Persistence, Cache, Communication, Capability, UI, Accessibility, Snapshot, Integration, and Regression.
+- **Location & Coverage**: Common logic tested in `commonTest`. Platform-specific behavior tested in corresponding Android/iOS/Desktop test targets. Focus on high behavioral coverage for critical business/engine logic rather than superficial 100% line coverage. Every bug fix requires a regression test.
+- **Platform Verification Reporting**:
+  - `Android`: Build (PASS/FAIL), Tests (PASS/FAIL), Runtime (PASS/FAIL/NOT AVAILABLE).
+  - `iOS`: Configuration (PASS/FAIL), Metadata/Commonization (PASS/FAIL), Native Compilation (PASS/FAIL/NOT AVAILABLE), Framework Linking (PASS/FAIL/NOT AVAILABLE), Xcode Build (PASS/FAIL/NOT AVAILABLE), Runtime (PASS/FAIL/NOT AVAILABLE).
+  - `Desktop`: Build (PASS/FAIL), Tests (PASS/FAIL), Runtime (PASS/FAIL). Mandatory Desktop JVM smoke test (`./gradlew :desktopApp:run`) on Windows before completing any phase.
+
+## 13. KDOC & DOCUMENTATION MANDATE
+- **Public APIs**: All public interfaces, classes, methods, and types MUST have meaningful KDoc explaining purpose, responsibility, why it exists, expected caller, ownership, lifecycle, concurrency behavior, platform considerations, extension rules, and error behavior.
+- **Intent Focus**: Documentation MUST explain *WHY* and architectural intent, not restate code syntax. Private code MUST be documented when non-obvious rationale exists.
+
+## 14. OBSERVABILITY, DIAGNOSTICS & SECURITY
+- **Structured Multi-Category Observability**: Zero raw console logging (`println`, `Log.*`, `NSLog`). Events include `timestamp`, `level`, `category`, `sourceClass`, `sourceFunction`, `event`, `message`, `traceId`, `operationId`, `requestId`, `screenId`, `actionId`, `workflowId`, `durationMs`, and `platform`.
+- **Categories**: `APP`, `LIFECYCLE`, `UI`, `INTERACTION`, `MVI`, `SDUI`, `EXECUTION`, `WORKFLOW`, `NAVIGATION`, `COMMUNICATION`, `GRAPHQL`, `HTTP`, `WEBSOCKET`, `PERSISTENCE`, `CACHE`, `CAPABILITY`, `PAYMENT`, `LOCATION`, `BLE`, `PERFORMANCE`, `SECURITY`, `ERROR`.
+- **Network & Realtime Diagnostics**: Human-readable JSON formatting in development. Clear GraphQL operation/variable tracing. WebSocket lifecycle state logging (`CONNECT`, `CONNECTED`, `SUBSCRIBE`, `MESSAGE_RECEIVED`, `RECONNECTING`, `DISCONNECTED`, `ERROR`).
+- **End-to-End Flow Tracing**: Enable full flow reconstruction (e.g., `User Interaction -> Intent -> Store -> Action -> Executor -> Network -> State Transition -> Navigation` and `SDUI Parse -> Validate -> Normalize -> Template -> Render -> Action -> Workflow`).
+- **Security & Mandatory Redaction**: ABSOLUTE PROHIBITION of logging sensitive credentials (tokens, Authorization headers, OTPs, passwords, PINs, bank secrets, secure storage data). PII (phones, emails, addresses, locations) MUST be masked/redacted automatically.
+
+## 15. PERFORMANCE & CONCURRENCY CONSTITUTION
+- **Performance Anti-Patterns**: Avoid main-thread blocking, uncontrolled recomposition, repeated JSON parsing, unnecessary network calls, unbounded caches, renderer reflection, and giant state copies.
+- **Structured Concurrency**: No `GlobalScope`. Coroutine scopes are strictly tied to component lifecycles or managed execution engines. Structured cancellation propagation, race condition prevention, rapid double-click action deduplication, and thread-safe state update serialization are enforced.
+
+## 16. COMPLETE DEFINITION OF DONE
+A task is COMPLETE if and only if all applicable criteria pass:
+1. Requirement & ownership confirmed.
+2. Codebase searched; reuse/compose/extend decision documented.
+3. Architecture boundaries & multiplatform parity respected.
+4. Implementation complete with KDoc explaining intent.
+5. `commonTest` / platform tests written and passing.
+6. Build successful with ZERO actionable warnings/suppressions.
+7. Security, redaction, and logging rules verified.
+8. Android & iOS validated to environment capability.
+9. Desktop JVM runtime smoke test passed locally (`./gradlew :desktopApp:run`).
+10. `git diff` and `git status` reviewed; self-audit clean.
+
+## 17. ANTIGRAVITY WORKFLOW (PERMANENT STEP-BY-STEP)
+1. Inspect repository & verify environment.
+2. Formulate explicit Implementation Plan & request approval. Include `DESIGN PATTERN REVIEW` for major architecture subsystems.
+3. Implement approved scope only (KDoc + tests).
+4. Run builds, tests, and Desktop JVM runtime smoke test.
+5. Perform repository audit (`git diff`, `git status`).
+6. Present factual report and stop. Never auto-advance.
