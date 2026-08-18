@@ -16,10 +16,15 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":sdui:engine"))
+            implementation(libs.kotlinx.serialization.json)
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
         }
     }
 }
