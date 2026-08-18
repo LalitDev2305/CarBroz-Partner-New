@@ -21,5 +21,11 @@ kotlin {
             implementation(compose.material3)
             implementation(compose.ui)
         }
+
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+        }
     }
 }
+
