@@ -88,6 +88,32 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 - **Failure Interpretation**: Failure indicates mathematical inaccuracy or violation of responsive adaptive contracts.
 
 --------------------------------------------------
+### MODULE: `:core:navigation`
+--------------------------------------------------
+- **Purpose**: Stateful multiplatform router foundation, stack entries, atomic commands, and mutex-serialized navigation state management.
+- **Current Implementation Status**: **IMPLEMENTED** (Phase 010)
+- **Test Types**: Common Multiplatform Unit Tests (`commonTest`)
+- **Exact Commands**:
+  ```bash
+  ./gradlew :core:navigation:allTests --no-daemon
+  ```
+- **Expected Result**: `BUILD SUCCESSFUL` with 30 test methods passing.
+
+
+- **Contracts Verified**:
+  - `NavDestination` parameter immutability and defensive map copying.
+  - `NavStack` non-empty stack invariant enforcement.
+  - `DefaultRouter` atomic stack mutations (`Push`, `Replace`, `Pop`, `PopTo`, `ResetTo`).
+  - `PopToTarget` last-match route resolution and entry ID targeting.
+  - `NavResult` typed rejection handling (`CannotPopRoot`, `TargetNotFound`, `InvalidRoute`).
+  - `Mutex` command serialization preventing race conditions during concurrent execution.
+  - Telemetry emitting `LogCategory.NAVIGATION` structured log events.
+- **Edge Cases Covered**: Pop on root, popTo inclusive root protection, blank/whitespace route rejection, duplicate route instances, concurrent pushes, parameter map mutation after construction.
+- **Platform Verification**: Android (PASS), Desktop JVM (PASS), iOS Compilation (PASS), iOS Runtime (NOT VERIFIED ON WINDOWS).
+- **Known Limitations**: None.
+- **Failure Interpretation**: Failure indicates non-deterministic navigation state mutations or broken stack invariants.
+
+--------------------------------------------------
 ### MODULE: `:androidApp`
 --------------------------------------------------
 - **Purpose**: Android Application Host (`MainActivity`, Android Manifest, Application Composition).
@@ -128,7 +154,6 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 
 The following modules exist as architectural subprojects in `settings.gradle.kts` but currently contain skeleton code reserved for upcoming implementation phases:
 
-- **`:core:navigation`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:domain:actions`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:domain:capabilities`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:domain:storage`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
@@ -151,10 +176,11 @@ To execute the complete quality gate verification across all currently implement
 
 ### Standard Gradle Command (Linux / macOS / Windows Bash)
 ```bash
-./gradlew :core:observability:allTests :core:mvi:allTests :core:ui:allTests :androidApp:assembleDebug :desktopApp:assemble :core:ui:compileKotlinIosArm64 :core:ui:compileKotlinIosSimulatorArm64 --no-daemon
+./gradlew :core:navigation:allTests :core:observability:allTests :core:mvi:allTests :core:ui:allTests :androidApp:assembleDebug :desktopApp:assemble :core:navigation:compileKotlinIosArm64 :core:navigation:compileKotlinIosSimulatorArm64 --no-daemon
 ```
 
 ### Windows PowerShell Command Syntax
 ```powershell
-& "./gradlew" :core:observability:allTests :core:mvi:allTests :core:ui:allTests :androidApp:assembleDebug :desktopApp:assemble :core:ui:compileKotlinIosArm64 :core:ui:compileKotlinIosSimulatorArm64 --no-daemon
+& "./gradlew" :core:navigation:allTests :core:observability:allTests :core:mvi:allTests :core:ui:allTests :androidApp:assembleDebug :desktopApp:assemble :core:navigation:compileKotlinIosArm64 :core:navigation:compileKotlinIosSimulatorArm64 --no-daemon
 ```
+

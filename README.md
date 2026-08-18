@@ -87,9 +87,10 @@ CarBroz-Partner-New/
 │   ├── observability/        # [IMPLEMENTED] Structured Logging & Redaction
 │   ├── mvi/                  # [IMPLEMENTED] Multiplatform MVI Store Foundation
 │   ├── ui/                   # [IMPLEMENTED] Adaptive Design Foundation
-│   └── navigation/           # Stateful Multiplatform Router [PLANNED]
+│   └── navigation/           # [IMPLEMENTED] Stateful Multiplatform Router
 ├── domain/
 │   ├── actions/              # Dynamic Action System Models [PLANNED]
+
 │   ├── capabilities/         # Platform Capability Contracts [PLANNED]
 │   └── storage/              # Storage & Cache Domain Models [PLANNED]
 ├── engine/
@@ -187,7 +188,25 @@ graph TD
 - **Categories**: `APP`, `LIFECYCLE`, `UI`, `MVI`, `SDUI`, `EXECUTION`, `WORKFLOW`, `NAVIGATION`, `NETWORK`, `SECURITY`, `ERROR`.
 - **Redaction Engine**: Automatically redacts sensitive fields classified under `PII`, `FINANCIAL`, or `CREDENTIALS`.
 
-### 7.4 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
+### 7.4 Stateful Navigation Router Architecture (`:core:navigation`) — *[IMPLEMENTED]*
+- **Package Layout**:
+  - `com.carbroz.partner.core.navigation.destination` $\implies$ `NavDestination`
+  - `com.carbroz.partner.core.navigation.stack` $\implies$ `NavEntry`, `NavStack`, `NavEntryIdGenerator`, `DefaultNavEntryIdGenerator`
+  - `com.carbroz.partner.core.navigation.command` $\implies$ `NavCommand`, `PopToTarget`
+  - `com.carbroz.partner.core.navigation.state` $\implies$ `NavState`
+  - `com.carbroz.partner.core.navigation.result` $\implies$ `NavResult`
+  - `com.carbroz.partner.core.navigation.router` $\implies$ `Router`, `DefaultRouter`
+- **Flow**: `Caller / Execution Engine -> Router.execute(NavCommand) -> Mutex Serialization -> Stack Mutation -> StateFlow<NavState> -> UI / Render Host`.
+- **Contracts**:
+  - `NavDestination`: Immutable descriptor of dynamic route string and primitive parameter map.
+  - `NavEntry`: Runtime instance model pairing a unique entry ID with a `NavDestination`.
+  - `NavStack`: Immutable non-empty back stack container (guarantees size $\ge 1$).
+  - `NavCommand`: Atomic stack mutation operations (`Push`, `Replace`, `Pop`, `PopTo`, `ResetTo`).
+  - `PopToTarget`: Deterministic stack popping targeting either `ByEntryId` or top-most `ByRoute`.
+  - `NavResult`: Typed outcome hierarchy (`Executed` vs `Rejected` variants like `CannotPopRoot`, `TargetNotFound`, `InvalidRoute`).
+  - `Router` & `DefaultRouter`: Thread-safe, coroutine-mutex-serialized router implementation emitting structured telemetry under `LogCategory.NAVIGATION`.
+
+### 7.5 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
 ```
 Screen Specification
   └─► Template Node
@@ -199,7 +218,7 @@ Screen Specification
 - **Parse & Render Pipeline**: `Raw JSON Response -> Parse -> Validate -> Normalize -> Theme Context -> Immutable Screen Graph -> Compose Render`.
 - **Dynamic Event Pipeline**: `Node Event -> EventRouter -> ActionDispatcher -> ActionExecutor -> Dynamic Request -> Network Transport -> Store Result -> Recompose`.
 
-### 7.5 Request, Binding & Mapper Architecture — *[PLANNED]*
+### 7.6 Request, Binding & Mapper Architecture — *[PLANNED]*
 - **Context Owners**: Device Context, Session Context, Screen State, Form State, Workflow State, Action Result Context.
 - **Binding Resolution**: `BindingResolver` interpolates scoped expressions (e.g. `${session.partnerId}`, `${form.phone}`).
 - **Mapper Boundary**: Transport DTOs mapped to immutable Domain models before reaching Store or UI.
@@ -212,6 +231,8 @@ Screen Specification
   $\implies$ Add focused resolver in [`:core:ui`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/ui). Do NOT create `UiUtils.kt`.
 - **New State Machine / Intent Handler?**
   $\implies$ Implement using [`:core:mvi`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/mvi) `Store` contracts.
+- **New Navigation Command or Router Extension?**
+  $\implies$ Implement in [`:core:navigation`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/navigation).
 - **New Structured Log Category or Sensitive Field Redaction?**
   $\implies$ Update [`:core:observability`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/observability).
 - **New Platform Capability (Camera, GPS, BLE)?**
@@ -228,10 +249,12 @@ Screen Specification
 | Structured Observability Foundation | `:core:observability` | **COMMITTED** | `e48d7d4` |
 | Multiplatform MVI Foundation | `:core:mvi` | **COMMITTED** | `2a84bcd` |
 | Adaptive Design Foundation | `:core:ui` | **COMMITTED** | `a1708e6` |
-| Documentation Baseline | Root | **IN REVIEW** | Current Phase |
-| Navigation Router | `:core:navigation` | *PLANNED* | Future Phase |
+| Documentation Baseline | Root | **COMMITTED** | `2ccb65d` |
+| Large-Scale Package Structural Refactor | `:core:ui`, `:core:mvi` | **COMMITTED** | `c902417` |
+| Stateful Navigation Router | `:core:navigation` | **IMPLEMENTED** | Current Phase |
 | Execution Engine & SDUI | `:engine:execution`, `:sdui:*` | *PLANNED* | Future Phase |
 | Infrastructure & Features | `:infrastructure:*`, `:feature:*` | *PLANNED* | Future Phase |
+
 
 ---
 
