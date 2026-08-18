@@ -96,7 +96,8 @@ CarBroz-Partner-New/
 
 
 ├── engine/
-│   └── execution/            # Runtime Action & Request Execution Engine [PLANNED]
+│   └── execution/            # [IMPLEMENTED] Dynamic Action Execution Engine
+
 ├── sdui/
 │   ├── engine/               # SDUI Schema Parser & Normalizer [PLANNED]
 │   └── render/               # Compose SDUI Component Renderers [PLANNED]
@@ -132,7 +133,8 @@ graph TD
 
     subgraph Business Engine & Navigation
         SE[:sdui:engine - PLANNED]
-        CR[:engine:execution - PLANNED]
+        CR[:engine:execution - IMPLEMENTED]
+
         CN[:core:navigation - IMPLEMENTED]
         ACT[:domain:actions - IMPLEMENTED]
         CAP[:domain:capabilities - IMPLEMENTED]
@@ -263,7 +265,22 @@ graph TD
   - `SecureStorageGateway`: Synchronous suspend CRUD contract for sensitive string payloads intended for platform-secure persistence adapters.
 
 
-### 7.8 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
+### 7.8 Execution Engine Models (`:engine:execution`) — *[IMPLEMENTED]*
+- **Package Layout**:
+  - `com.carbroz.partner.engine.execution.binding` $\implies$ `BindingResult`, `BindingScope`, `BindingResolver`, `DefaultBindingResolver`
+  - `com.carbroz.partner.engine.execution.dispatcher` $\implies$ `ActionDispatcher`, `DefaultActionDispatcher`
+  - `com.carbroz.partner.engine.execution.executor` $\implies$ `ActionExecutor`, `ActionRegistry`
+  - `com.carbroz.partner.engine.execution.result` $\implies$ `ExecutionResult`, `ExecutionFailure`
+- **Flow**: `Compose UI Node Event -> ActionDispatcher -> BindingResolver -> ActionRegistry -> ActionExecutor -> ExecutionResult`.
+- **Contracts**:
+  - `ActionDispatcher`: Primary entry boundary orchestrating lookup, recursive parameter binding resolution, and execution.
+  - `ActionRegistry`: Immutable lookup registry mapping `ActionType` to corresponding `ActionExecutor` strategy implementations.
+  - `BindingResolver`: Normalizes `${path}` binding expressions and resolves values against `BindingScope`.
+  - `ExecutionResult`: Sealed outcome hierarchy (`Success`, `Failure`).
+  - `ExecutionFailure`: Structured error codes (`UNREGISTERED_ACTION_TYPE`, `BINDING_RESOLUTION_FAILED`, `EXECUTOR_FAILED`, `UNKNOWN`).
+
+### 7.9 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
+
 
 ```
 Screen Specification
@@ -314,9 +331,11 @@ Screen Specification
 | Stateful Navigation Router | `:core:navigation` | **COMMITTED** | `3a0296f` |
 | Dynamic Action Domain Foundation | `:domain:actions` | **COMMITTED** | `49d21ba` |
 | Platform Capability Domain Foundation | `:domain:capabilities` | **COMMITTED** | `ebee37b` |
-| Storage & Persistence Domain Foundation | `:domain:storage` | **IMPLEMENTED** | Current Phase |
-| Execution Engine & SDUI | `:engine:execution`, `:sdui:*` | *PLANNED* | Future Phase |
+| Storage & Persistence Domain Foundation | `:domain:storage` | **COMMITTED** | `5533ed5` |
+| Execution Engine Foundation | `:engine:execution` | **IMPLEMENTED** | Current Phase |
+| SDUI Engine & Renderers | `:sdui:engine`, `:sdui:render` | *PLANNED* | Future Phase |
 | Infrastructure & Features | `:infrastructure:*`, `:feature:*` | *PLANNED* | Future Phase |
+
 
 
 

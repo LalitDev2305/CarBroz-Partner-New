@@ -185,10 +185,29 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 - **Failure Interpretation**: Failure indicates broken preference key invariants or non-deterministic storage result hierarchy handling.
 
 --------------------------------------------------
+### MODULE: `:engine:execution`
+--------------------------------------------------
+- **Purpose**: Pure platform-neutral dynamic action execution engine foundation providing immutable strategy lookup, recursive parameter binding resolution, structured outcome handling, and safe diagnostic tracing.
+- **Current Implementation Status**: **IMPLEMENTED** (Phase 014)
+- **Test Types**: Common Multiplatform Unit Tests (`commonTest`)
+- **Exact Commands**:
+  ```bash
+  ./gradlew :engine:execution:allTests --no-daemon
+  ```
+- **Expected Result**: `BUILD SUCCESSFUL` with 20 test methods passing across `BindingResolverTest`, `ActionRegistryTest`, `ActionDispatcherTest`, and `ExecutionResultTest`.
+
+- **Contracts Verified**:
+  - `ActionDispatcher` & `DefaultActionDispatcher` dispatch orchestration, unregistered action type failure, parameter binding resolution before execution, recursive object/list parameter resolution, missing binding execution abort, immutable `ActionSpec` copy, executor exception safety, coroutine cancellation propagation, and raw parameter logging omission.
+  - `ActionRegistry` immutable strategy registration, single-claim `ActionType` ownership, duplicate claim `IllegalArgumentException` enforcement, and defensive map copy immutability.
+  - `BindingResolver` & `DefaultBindingResolver` `${path}` path normalization, `BindingScope` value lookup delegation, and explicit `BindingResult.Failure` on missing paths.
+  - `ExecutionResult` sealed variants (`Success`, `Failure`) and `ExecutionFailure` non-blank message guard.
+- **Edge Cases Covered**: Missing binding with null scope, nested object/list parameter bindings, missing nested key, duplicate executor registration, unexpected executor runtime exceptions, cancellation propagation, parameter value redaction in diagnostic logs.
+- **Platform Verification**: Android (PASS), Desktop JVM (PASS), iOS Compilation (PASS), iOS Runtime (NOT VERIFIED ON WINDOWS).
+- **Known Limitations**: Concrete action executors (e.g. navigation, network, capability) are implemented by future integration modules.
+- **Failure Interpretation**: Failure indicates broken parameter binding resolution, non-deterministic action strategy lookup, or parameter mutation.
+
+--------------------------------------------------
 ### MODULE: `:androidApp`
-
-
-
 --------------------------------------------------
 - **Purpose**: Android Application Host (`MainActivity`, Android Manifest, Application Composition).
 - **Current Implementation Status**: **IMPLEMENTED HOST**
@@ -228,8 +247,6 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 
 The following modules exist as architectural subprojects in `settings.gradle.kts` but currently contain skeleton code reserved for upcoming implementation phases:
 
-- **`:engine:execution`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
-
 - **`:sdui:engine`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:sdui:render`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:feature:splash`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
@@ -249,15 +266,14 @@ The following modules exist as architectural subprojects in `settings.gradle.kts
 
 ## 4. Master Verification Commands
 
-To execute the complete quality gate verification across all currently implemented modules (`:core:observability`, `:core:mvi`, `:core:ui`, `:core:navigation`, `:domain:actions`, `:domain:capabilities`, `:domain:storage`) and platform targets:
+To execute the complete quality gate verification across all currently implemented modules (`:core:observability`, `:core:mvi`, `:core:ui`, `:core:navigation`, `:domain:actions`, `:domain:capabilities`, `:domain:storage`, `:engine:execution`) and platform targets:
 
 ### Standard Gradle Command (Linux / macOS / Windows Bash)
 ```bash
-./gradlew :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :androidApp:assembleDebug :desktopApp:assemble :domain:storage:compileKotlinIosArm64 :domain:storage:compileKotlinIosSimulatorArm64 --no-daemon
+./gradlew :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :engine:execution:allTests :androidApp:assembleDebug :desktopApp:assemble :engine:execution:compileKotlinIosArm64 :engine:execution:compileKotlinIosSimulatorArm64 --no-daemon
 ```
 
 ### Windows PowerShell Command Syntax
 ```powershell
-& "./gradlew" :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :androidApp:assembleDebug :desktopApp:assemble :domain:storage:compileKotlinIosArm64 :domain:storage:compileKotlinIosSimulatorArm64 --no-daemon
+& "./gradlew" :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :engine:execution:allTests :androidApp:assembleDebug :desktopApp:assemble :engine:execution:compileKotlinIosArm64 :engine:execution:compileKotlinIosSimulatorArm64 --no-daemon
 ```
-
