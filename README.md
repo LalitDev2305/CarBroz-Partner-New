@@ -90,8 +90,9 @@ CarBroz-Partner-New/
 │   └── navigation/           # [IMPLEMENTED] Stateful Multiplatform Router
 ├── domain/
 │   ├── actions/              # [IMPLEMENTED] Dynamic Action System Models
-│   ├── capabilities/         # Platform Capability Contracts [PLANNED]
+│   ├── capabilities/         # [IMPLEMENTED] Platform Capability Contracts
 │   └── storage/              # Storage & Cache Domain Models [PLANNED]
+
 ├── engine/
 │   └── execution/            # Runtime Action & Request Execution Engine [PLANNED]
 ├── sdui/
@@ -130,8 +131,11 @@ graph TD
     subgraph Business Engine & Navigation
         SE[:sdui:engine - PLANNED]
         CR[:engine:execution - PLANNED]
-        CN[:core:navigation - PLANNED]
+        CN[:core:navigation - IMPLEMENTED]
+        ACT[:domain:actions - IMPLEMENTED]
+        CAP[:domain:capabilities - IMPLEMENTED]
     end
+
 
     subgraph State & Core Foundation
         MVI[:core:mvi - IMPLEMENTED]
@@ -220,7 +224,28 @@ graph TD
   - `ActionParameters`: Immutable, defensively-copied container for parameter maps. Redacts parameter values in `toString()` for log security.
   - `ActionSpec`: Pure declarative specification composing `ActionId`, `ActionType`, `ActionParameters`, and `ActionMetadata`.
 
-### 7.6 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
+### 7.6 Platform Capability Domain Models (`:domain:capabilities`) — *[IMPLEMENTED]*
+- **Package Layout**:
+  - `com.carbroz.partner.domain.capabilities.core` $\implies$ `CapabilityResult`, `CapabilityFailure`
+  - `com.carbroz.partner.domain.capabilities.permission` $\implies$ `Permission`, `PermissionState`, `PermissionGateway`
+  - `com.carbroz.partner.domain.capabilities.location` $\implies$ `GeoCoordinate`, `LocationSnapshot`, `LocationPrecision`, `LocationGateway`
+  - `com.carbroz.partner.domain.capabilities.camera` $\implies$ `CapturedImage`, `CameraGateway`
+  - `com.carbroz.partner.domain.capabilities.media` $\implies$ `MediaType`, `SelectedMedia`, `MediaPickerGateway`
+  - `com.carbroz.partner.domain.capabilities.document` $\implies$ `SelectedDocument`, `DocumentPickerGateway`
+  - `com.carbroz.partner.domain.capabilities.connectivity` $\implies$ `ConnectivityState`, `ConnectivityGateway`
+  - `com.carbroz.partner.domain.capabilities.clipboard` $\implies$ `ClipboardGateway`
+  - `com.carbroz.partner.domain.capabilities.external` $\implies$ `ExternalUriLauncher`
+  - `com.carbroz.partner.domain.capabilities.settings` $\implies$ `SettingsLauncher`
+- **Flow**: `Execution Engine -> Domain Capability Gateway -> Infrastructure Adapter -> Platform Native API`.
+- **Contracts**:
+  - `CapabilityResult`: Universal sealed result hierarchy (`Success`, `Cancelled`, `Unavailable`, `Unsupported`, `Failure`).
+  - `CapabilityFailure`: Structured failure code (`SERVICE_DISABLED`, `TIMEOUT`, `RESOURCE_EXHAUSTED`, `UNKNOWN`) without leaking platform `Throwable`.
+  - `PermissionGateway`: Cross-platform permission state query and request boundary.
+  - `LocationGateway`: One-shot location reading with strict non-finite value checks (`.isFinite()`).
+  - `CameraGateway`, `MediaPickerGateway`, `DocumentPickerGateway`: Photo capture, media selection, and file selection gateways.
+  - `ConnectivityGateway`: Continuous flow observation of network reachability (`CONNECTED` vs `DISCONNECTED`).
+
+### 7.7 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
 ```
 Screen Specification
   └─► Template Node
@@ -232,7 +257,7 @@ Screen Specification
 - **Parse & Render Pipeline**: `Raw JSON Response -> Parse -> Validate -> Normalize -> Theme Context -> Immutable Screen Graph -> Compose Render`.
 - **Dynamic Event Pipeline**: `Node Event -> EventRouter -> ActionDispatcher -> ActionExecutor -> Dynamic Request -> Network Transport -> Store Result -> Recompose`.
 
-### 7.7 Request, Binding & Mapper Architecture — *[PLANNED]*
+### 7.8 Request, Binding & Mapper Architecture — *[PLANNED]*
 - **Context Owners**: Device Context, Session Context, Screen State, Form State, Workflow State, Action Result Context.
 - **Binding Resolution**: `BindingResolver` interpolates scoped expressions (e.g. `${session.partnerId}`, `${form.phone}`).
 - **Mapper Boundary**: Transport DTOs mapped to immutable Domain models before reaching Store or UI.
@@ -249,10 +274,10 @@ Screen Specification
   $\implies$ Implement in [`:core:navigation`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/navigation).
 - **New Dynamic Action Model or Parameter Value Variant?**
   $\implies$ Implement in [`:domain:actions`](file:///d:/Android%20Projects/CarBroz-Partner-New/domain/actions).
+- **New Platform Capability Contract (e.g. Bluetooth, Biometrics)?**
+  $\implies$ Contract in [`:domain:capabilities`](file:///d:/Android%20Projects/CarBroz-Partner-New/domain/capabilities), platform adapter in `:infrastructure:capabilities`.
 - **New Structured Log Category or Sensitive Field Redaction?**
   $\implies$ Update [`:core:observability`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/observability).
-- **New Platform Capability (Camera, GPS, BLE)?**
-  $\implies$ Contract in `:domain:capabilities`, platform adapter in `:infrastructure:capabilities`.
 
 ---
 
@@ -268,9 +293,11 @@ Screen Specification
 | Documentation Baseline | Root | **COMMITTED** | `2ccb65d` |
 | Large-Scale Package Structural Refactor | `:core:ui`, `:core:mvi` | **COMMITTED** | `c902417` |
 | Stateful Navigation Router | `:core:navigation` | **COMMITTED** | `3a0296f` |
-| Dynamic Action Domain Foundation | `:domain:actions` | **IMPLEMENTED** | Current Phase |
+| Dynamic Action Domain Foundation | `:domain:actions` | **COMMITTED** | `49d21ba` |
+| Platform Capability Domain Foundation | `:domain:capabilities` | **IMPLEMENTED** | Current Phase |
 | Execution Engine & SDUI | `:engine:execution`, `:sdui:*` | *PLANNED* | Future Phase |
 | Infrastructure & Features | `:infrastructure:*`, `:feature:*` | *PLANNED* | Future Phase |
+
 
 
 

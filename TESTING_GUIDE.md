@@ -140,7 +140,31 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 - **Failure Interpretation**: Failure indicates non-deterministic action value tree representation or broken defensive collection copying.
 
 --------------------------------------------------
+### MODULE: `:domain:capabilities`
+--------------------------------------------------
+- **Purpose**: Pure declarative platform-neutral domain model foundation for platform capabilities, permissions, location, camera, media/document pickers, connectivity, clipboard, external launcher, and app settings.
+- **Current Implementation Status**: **IMPLEMENTED** (Phase 012)
+- **Test Types**: Common Multiplatform Unit Tests (`commonTest`)
+- **Exact Commands**:
+  ```bash
+  ./gradlew :domain:capabilities:allTests --no-daemon
+  ```
+- **Expected Result**: `BUILD SUCCESSFUL` with 23 test methods passing.
+- **Contracts Verified**:
+  - `CapabilityResult` sealed variants (`Success`, `Cancelled`, `Unavailable`, `Unsupported`, `Failure`).
+  - `CapabilityFailure` code evaluation and non-blank message invariant.
+  - `GeoCoordinate` boundary range validation (-90..90, -180..180) and non-finite number (`NaN`, `+Infinity`, `-Infinity`) rejection.
+  - `LocationSnapshot` accuracy finiteness and non-negative check, timestamp epoch milliseconds positivity.
+  - `CapturedImage`, `SelectedMedia`, and `SelectedDocument` non-blank URI/fileName/MIME invariants and non-negative sizeBytes validation.
+  - `PermissionGateway`, `LocationGateway`, `CameraGateway`, `MediaPickerGateway`, `DocumentPickerGateway`, `ConnectivityGateway`, `ClipboardGateway`, `ExternalUriLauncher`, and `SettingsLauncher` domain contracts.
+- **Edge Cases Covered**: `NaN`/`Infinity` coordinates/accuracies, negative timestamps, negative file sizes, blank URIs/MIMEs, user cancellation, hardware unavailability, system permission recovery states.
+- **Platform Verification**: Android (PASS), Desktop JVM (PASS), iOS Compilation (PASS), iOS Runtime (NOT VERIFIED ON WINDOWS).
+- **Known Limitations**: None.
+- **Failure Interpretation**: Failure indicates broken numeric invariant guards or non-deterministic capability outcome hierarchy mapping.
+
+--------------------------------------------------
 ### MODULE: `:androidApp`
+
 
 --------------------------------------------------
 - **Purpose**: Android Application Host (`MainActivity`, Android Manifest, Application Composition).
@@ -181,8 +205,6 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 
 The following modules exist as architectural subprojects in `settings.gradle.kts` but currently contain skeleton code reserved for upcoming implementation phases:
 
-- **`:domain:capabilities`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
-
 - **`:domain:storage`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:engine:execution`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:sdui:engine`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
@@ -197,17 +219,22 @@ The following modules exist as architectural subprojects in `settings.gradle.kts
 
 ---
 
+> [!IMPORTANT]
+> **Master Command Synchronization Mandate**: Whenever a new module becomes IMPLEMENTED, the implementation phase MUST evaluate and update the Master Verification Commands below to include the new module's unit tests, host assembly tasks, and KMP iOS compilation targets.
+
+---
+
 ## 4. Master Verification Commands
 
-To execute the complete quality gate verification across all currently implemented modules and platform targets:
+To execute the complete quality gate verification across all currently implemented modules (`:core:observability`, `:core:mvi`, `:core:ui`, `:core:navigation`, `:domain:actions`, `:domain:capabilities`) and platform targets:
 
 ### Standard Gradle Command (Linux / macOS / Windows Bash)
 ```bash
-./gradlew :core:navigation:allTests :core:observability:allTests :core:mvi:allTests :core:ui:allTests :androidApp:assembleDebug :desktopApp:assemble :core:navigation:compileKotlinIosArm64 :core:navigation:compileKotlinIosSimulatorArm64 --no-daemon
+./gradlew :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :androidApp:assembleDebug :desktopApp:assemble :domain:capabilities:compileKotlinIosArm64 :domain:capabilities:compileKotlinIosSimulatorArm64 --no-daemon
 ```
 
 ### Windows PowerShell Command Syntax
 ```powershell
-& "./gradlew" :core:navigation:allTests :core:observability:allTests :core:mvi:allTests :core:ui:allTests :androidApp:assembleDebug :desktopApp:assemble :core:navigation:compileKotlinIosArm64 :core:navigation:compileKotlinIosSimulatorArm64 --no-daemon
+& "./gradlew" :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :androidApp:assembleDebug :desktopApp:assemble :domain:capabilities:compileKotlinIosArm64 :domain:capabilities:compileKotlinIosSimulatorArm64 --no-daemon
 ```
 
