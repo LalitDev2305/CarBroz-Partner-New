@@ -44,6 +44,21 @@ public class DefaultSduiMapper : SduiMapper {
             else -> LayoutAxis.VERTICAL
         }
 
+        fun parseAlignment(alignment: String?): LayoutAlignment = when (alignment?.lowercase()?.trim()) {
+            "center" -> LayoutAlignment.CENTER
+            "end" -> LayoutAlignment.END
+            else -> LayoutAlignment.START
+        }
+
+        fun parseArrangement(arrangement: String?): LayoutArrangement = when (arrangement?.lowercase()?.trim()) {
+            "center" -> LayoutArrangement.CENTER
+            "end" -> LayoutArrangement.END
+            "space_between" -> LayoutArrangement.SPACE_BETWEEN
+            "space_around" -> LayoutArrangement.SPACE_AROUND
+            "space_evenly" -> LayoutArrangement.SPACE_EVENLY
+            else -> LayoutArrangement.START
+        }
+
         fun parseAction(action: RawActionDto?): SduiAction? {
             if (action == null || action.api.isNullOrBlank()) return null
             return SduiAction(
@@ -92,6 +107,8 @@ public class DefaultSduiMapper : SduiMapper {
                 width = parseDimension(ch.width),
                 height = parseDimension(ch.height),
                 axis = parseAxis(ch.axis),
+                alignment = parseAlignment(ch.alignment),
+                arrangement = parseArrangement(ch.arrangement),
                 padding = parseEdgeSpacing(ch.padding),
                 margin = parseEdgeSpacing(ch.margin),
                 gap = parseSpacing(ch.gap),
@@ -115,6 +132,8 @@ public class DefaultSduiMapper : SduiMapper {
                 width = parseDimension(s.width),
                 height = parseDimension(s.height),
                 axis = parseAxis(s.axis),
+                alignment = parseAlignment(s.alignment),
+                arrangement = parseArrangement(s.arrangement),
                 padding = parseEdgeSpacing(s.padding),
                 margin = parseEdgeSpacing(s.margin),
                 gap = parseSpacing(s.gap),
@@ -139,6 +158,8 @@ public class DefaultSduiMapper : SduiMapper {
                 width = parseDimension(c.width),
                 height = parseDimension(c.height),
                 axis = parseAxis(c.axis),
+                alignment = parseAlignment(c.alignment),
+                arrangement = parseArrangement(c.arrangement),
                 padding = parseEdgeSpacing(c.padding),
                 margin = parseEdgeSpacing(c.margin),
                 gap = parseSpacing(c.gap),
@@ -162,6 +183,8 @@ public class DefaultSduiMapper : SduiMapper {
                 width = parseDimension(t.width),
                 height = parseDimension(t.height),
                 axis = parseAxis(t.axis),
+                alignment = parseAlignment(t.alignment),
+                arrangement = parseArrangement(t.arrangement),
                 padding = parseEdgeSpacing(t.padding),
                 margin = parseEdgeSpacing(t.margin),
                 gap = parseSpacing(t.gap),

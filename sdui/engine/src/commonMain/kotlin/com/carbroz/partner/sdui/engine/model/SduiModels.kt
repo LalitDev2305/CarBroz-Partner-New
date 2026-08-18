@@ -42,12 +42,29 @@ public sealed interface SduiNodeRef {
     val acceptsParentAction: Boolean
 }
 
+public enum class LayoutAlignment {
+    START,
+    CENTER,
+    END
+}
+
+public enum class LayoutArrangement {
+    START,
+    CENTER,
+    END,
+    SPACE_BETWEEN,
+    SPACE_AROUND,
+    SPACE_EVENLY
+}
+
 public data class SduiTemplate(
     override val id: String,
     val templateType: String,
     val width: DimensionSpec,
     val height: DimensionSpec,
     val axis: LayoutAxis,
+    val alignment: LayoutAlignment = LayoutAlignment.START,
+    val arrangement: LayoutArrangement = LayoutArrangement.START,
     val padding: SduiEdgeSpacing,
     val margin: SduiEdgeSpacing,
     val gap: SpacingSpec,
@@ -62,6 +79,8 @@ public data class SduiComponent(
     val width: DimensionSpec,
     val height: DimensionSpec,
     val axis: LayoutAxis,
+    val alignment: LayoutAlignment = LayoutAlignment.START,
+    val arrangement: LayoutArrangement = LayoutArrangement.START,
     val padding: SduiEdgeSpacing,
     val margin: SduiEdgeSpacing,
     val gap: SpacingSpec,
@@ -81,6 +100,8 @@ public data class SduiSubComponent(
     val width: DimensionSpec,
     val height: DimensionSpec,
     val axis: LayoutAxis,
+    val alignment: LayoutAlignment = LayoutAlignment.START,
+    val arrangement: LayoutArrangement = LayoutArrangement.START,
     val padding: SduiEdgeSpacing,
     val margin: SduiEdgeSpacing,
     val gap: SpacingSpec,
@@ -100,6 +121,8 @@ public data class SduiChild(
     val width: DimensionSpec,
     val height: DimensionSpec,
     val axis: LayoutAxis,
+    val alignment: LayoutAlignment = LayoutAlignment.START,
+    val arrangement: LayoutArrangement = LayoutArrangement.START,
     val padding: SduiEdgeSpacing,
     val margin: SduiEdgeSpacing,
     val gap: SpacingSpec,

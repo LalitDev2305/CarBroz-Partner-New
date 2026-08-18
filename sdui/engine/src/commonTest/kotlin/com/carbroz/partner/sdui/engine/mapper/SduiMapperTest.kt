@@ -212,4 +212,62 @@ class SduiMapperTest {
         assertEquals(1, rawScreen.schemaVersion)
         assertEquals("screen_direct", rawScreen.screenId)
     }
+
+    @Test
+    fun testAlignmentAndArrangementMapping() {
+        val cdLeaf = RawChildrenDataDto(
+            childrenDataId = "cd_leaf",
+            childrenDataType = "text"
+        )
+        val chNode = RawChildDto(
+            childId = "ch_1",
+            childType = "field",
+            alignment = "center",
+            arrangement = "space_between",
+            childrenData = listOf(cdLeaf)
+        )
+        val subCompNode = RawSubComponentDto(
+            subcomponentId = "sub_1",
+            subcomponentType = "row",
+            alignment = "end",
+            arrangement = "space_around",
+            children = listOf(chNode)
+        )
+        val compNode = RawComponentDto(
+            componentId = "cmp_1",
+            componentType = "card",
+            alignment = "center",
+            arrangement = "space_evenly",
+            subcomponents = listOf(subCompNode)
+        )
+        val tplLayout = RawTemplateDto(
+            templateId = "tpl_1",
+            templateType = "form",
+            alignment = "end",
+            arrangement = "space_between",
+            components = listOf(compNode)
+        )
+        val rawScreen = RawScreenDto(
+            schemaVersion = 1,
+            screenId = "screen_align",
+            template = tplLayout
+        )
+
+        val screen = mapper.map(rawScreen)
+
+        assertEquals(com.carbroz.partner.sdui.engine.model.LayoutAlignment.END, screen.template.alignment)
+        assertEquals(com.carbroz.partner.sdui.engine.model.LayoutArrangement.SPACE_BETWEEN, screen.template.arrangement)
+
+        val comp = screen.template.components.first()
+        assertEquals(com.carbroz.partner.sdui.engine.model.LayoutAlignment.CENTER, comp.alignment)
+        assertEquals(com.carbroz.partner.sdui.engine.model.LayoutArrangement.SPACE_EVENLY, comp.arrangement)
+
+        val subComp = comp.subcomponents.first()
+        assertEquals(com.carbroz.partner.sdui.engine.model.LayoutAlignment.END, subComp.alignment)
+        assertEquals(com.carbroz.partner.sdui.engine.model.LayoutArrangement.SPACE_AROUND, subComp.arrangement)
+
+        val child = subComp.children.first()
+        assertEquals(com.carbroz.partner.sdui.engine.model.LayoutAlignment.CENTER, child.alignment)
+        assertEquals(com.carbroz.partner.sdui.engine.model.LayoutArrangement.SPACE_BETWEEN, child.arrangement)
+    }
 }
