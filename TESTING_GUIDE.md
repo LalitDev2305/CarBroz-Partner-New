@@ -114,7 +114,34 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 - **Failure Interpretation**: Failure indicates non-deterministic navigation state mutations or broken stack invariants.
 
 --------------------------------------------------
+### MODULE: `:domain:actions`
+--------------------------------------------------
+- **Purpose**: Pure declarative domain model foundation for dynamic Server-Driven UI actions, parameters, binding expressions, and metadata.
+- **Current Implementation Status**: **IMPLEMENTED** (Phase 011)
+- **Test Types**: Common Multiplatform Unit Tests (`commonTest`)
+- **Exact Commands**:
+  ```bash
+  ./gradlew :domain:actions:allTests --no-daemon
+  ```
+- **Expected Result**: `BUILD SUCCESSFUL` with 18 test methods passing.
+
+- **Contracts Verified**:
+  - `ActionId` non-blank invariant validation and value equality.
+  - `ActionType` open backend-extensible raw value wrapping and constant matching.
+  - `BindingExpression` syntax verification (`${...}`).
+  - `ActionValue` sealed value tree (`Text`, `Integer`, `Decimal`, `Flag`, `Binding`, `Object`, `List`, `Null`).
+  - `ActionValue.Decimal` exact text precision preservation for financial/numeric values.
+  - `ActionParameters` defensive map copying and `toString()` parameter log value redaction.
+  - `ActionMetadata` positive version validation.
+  - `ActionSpec` pure declarative data composition and adversarial backend action key representation.
+- **Edge Cases Covered**: Blank action IDs/types, malformed binding syntax, negative decimals, invalid metadata versions, mutable map/list source mutation post-construction, log payload leaking.
+- **Platform Verification**: Android (PASS), Desktop JVM (PASS), iOS Compilation (PASS), iOS Runtime (NOT VERIFIED ON WINDOWS).
+- **Known Limitations**: None.
+- **Failure Interpretation**: Failure indicates non-deterministic action value tree representation or broken defensive collection copying.
+
+--------------------------------------------------
 ### MODULE: `:androidApp`
+
 --------------------------------------------------
 - **Purpose**: Android Application Host (`MainActivity`, Android Manifest, Application Composition).
 - **Current Implementation Status**: **IMPLEMENTED HOST**
@@ -154,8 +181,8 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 
 The following modules exist as architectural subprojects in `settings.gradle.kts` but currently contain skeleton code reserved for upcoming implementation phases:
 
-- **`:domain:actions`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:domain:capabilities`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
+
 - **`:domain:storage`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:engine:execution`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:sdui:engine`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET

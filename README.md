@@ -89,8 +89,7 @@ CarBroz-Partner-New/
 │   ├── ui/                   # [IMPLEMENTED] Adaptive Design Foundation
 │   └── navigation/           # [IMPLEMENTED] Stateful Multiplatform Router
 ├── domain/
-│   ├── actions/              # Dynamic Action System Models [PLANNED]
-
+│   ├── actions/              # [IMPLEMENTED] Dynamic Action System Models
 │   ├── capabilities/         # Platform Capability Contracts [PLANNED]
 │   └── storage/              # Storage & Cache Domain Models [PLANNED]
 ├── engine/
@@ -206,7 +205,22 @@ graph TD
   - `NavResult`: Typed outcome hierarchy (`Executed` vs `Rejected` variants like `CannotPopRoot`, `TargetNotFound`, `InvalidRoute`).
   - `Router` & `DefaultRouter`: Thread-safe, coroutine-mutex-serialized router implementation emitting structured telemetry under `LogCategory.NAVIGATION`.
 
-### 7.5 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
+### 7.5 Dynamic Action Domain Models (`:domain:actions`) — *[IMPLEMENTED]*
+- **Package Layout**:
+  - `com.carbroz.partner.domain.actions.model` $\implies$ `ActionId`, `ActionType`
+  - `com.carbroz.partner.domain.actions.value` $\implies$ `ActionValue`, `ActionParameters`
+  - `com.carbroz.partner.domain.actions.binding` $\implies$ `BindingExpression`
+  - `com.carbroz.partner.domain.actions.spec` $\implies$ `ActionMetadata`, `ActionSpec`
+- **Flow**: `Backend Spec / SDUI Parser -> ActionSpec -> ActionParameters -> ActionValue Tree -> Execution Engine`.
+- **Contracts**:
+  - `ActionId`: Value object wrapping runtime/instance identity strings.
+  - `ActionType`: Open, backend-extensible action type wrapper (supports known constants like `navigation.push` and unknown backend action strings).
+  - `BindingExpression`: Pure declarative representation of runtime binding expressions (e.g. `${session.partnerId}`).
+  - `ActionValue`: Sealed, type-safe value tree (`Text`, `Integer`, `Decimal`, `Flag`, `Binding`, `Object`, `List`, `Null`). Preserves exact decimal string precision with zero dynamic `Any` usage.
+  - `ActionParameters`: Immutable, defensively-copied container for parameter maps. Redacts parameter values in `toString()` for log security.
+  - `ActionSpec`: Pure declarative specification composing `ActionId`, `ActionType`, `ActionParameters`, and `ActionMetadata`.
+
+### 7.6 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
 ```
 Screen Specification
   └─► Template Node
@@ -218,7 +232,7 @@ Screen Specification
 - **Parse & Render Pipeline**: `Raw JSON Response -> Parse -> Validate -> Normalize -> Theme Context -> Immutable Screen Graph -> Compose Render`.
 - **Dynamic Event Pipeline**: `Node Event -> EventRouter -> ActionDispatcher -> ActionExecutor -> Dynamic Request -> Network Transport -> Store Result -> Recompose`.
 
-### 7.6 Request, Binding & Mapper Architecture — *[PLANNED]*
+### 7.7 Request, Binding & Mapper Architecture — *[PLANNED]*
 - **Context Owners**: Device Context, Session Context, Screen State, Form State, Workflow State, Action Result Context.
 - **Binding Resolution**: `BindingResolver` interpolates scoped expressions (e.g. `${session.partnerId}`, `${form.phone}`).
 - **Mapper Boundary**: Transport DTOs mapped to immutable Domain models before reaching Store or UI.
@@ -233,6 +247,8 @@ Screen Specification
   $\implies$ Implement using [`:core:mvi`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/mvi) `Store` contracts.
 - **New Navigation Command or Router Extension?**
   $\implies$ Implement in [`:core:navigation`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/navigation).
+- **New Dynamic Action Model or Parameter Value Variant?**
+  $\implies$ Implement in [`:domain:actions`](file:///d:/Android%20Projects/CarBroz-Partner-New/domain/actions).
 - **New Structured Log Category or Sensitive Field Redaction?**
   $\implies$ Update [`:core:observability`](file:///d:/Android%20Projects/CarBroz-Partner-New/core/observability).
 - **New Platform Capability (Camera, GPS, BLE)?**
@@ -251,9 +267,11 @@ Screen Specification
 | Adaptive Design Foundation | `:core:ui` | **COMMITTED** | `a1708e6` |
 | Documentation Baseline | Root | **COMMITTED** | `2ccb65d` |
 | Large-Scale Package Structural Refactor | `:core:ui`, `:core:mvi` | **COMMITTED** | `c902417` |
-| Stateful Navigation Router | `:core:navigation` | **IMPLEMENTED** | Current Phase |
+| Stateful Navigation Router | `:core:navigation` | **COMMITTED** | `3a0296f` |
+| Dynamic Action Domain Foundation | `:domain:actions` | **IMPLEMENTED** | Current Phase |
 | Execution Engine & SDUI | `:engine:execution`, `:sdui:*` | *PLANNED* | Future Phase |
 | Infrastructure & Features | `:infrastructure:*`, `:feature:*` | *PLANNED* | Future Phase |
+
 
 
 ---
