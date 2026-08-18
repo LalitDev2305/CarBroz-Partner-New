@@ -207,6 +207,27 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 - **Failure Interpretation**: Failure indicates broken parameter binding resolution, non-deterministic action strategy lookup, or parameter mutation.
 
 --------------------------------------------------
+### MODULE: `:sdui:engine`
+--------------------------------------------------
+- **Purpose**: Pure platform-neutral Server-Driven UI (SDUI) schema parsing, structural validation, model normalization, template component assembly, and action execution payload bridging.
+- **Current Implementation Status**: **IMPLEMENTED** (Phase 015.1)
+- **Test Types**: Common Multiplatform Unit Tests (`commonTest`)
+- **Exact Commands**:
+  ```bash
+  ./gradlew :sdui:engine:allTests --no-daemon
+  ```
+- **Expected Result**: `BUILD SUCCESSFUL` with 8 test methods passing across `SduiEngineTest.kt`.
+- **Contracts Verified**:
+  - `DefaultSduiParser` kotlinx.serialization JSON decoding into polymorphic `SduiScreenDto` / `SduiTemplateDto` / `SduiComponentDto` / `SduiSubComponentDto` / `SduiChildDto` / `SduiChildrenDataDto` models with `@SerialName` `snake_case` mapping.
+  - `DefaultSduiValidator` structural validation enforcing mandatory schema version 1, unique element IDs, valid hierarchy types (`home`, `form`, `grid`, `list`, `card`, `section`, `row`, `column`, `cell`, `item`, `button`, `input`, `timer`, `badge`, `banner`, `image`), `ChildrenData` terminal depth invariant, and `parent_action` `target_id` controlled node existence and `accepts_parent_action` declaration.
+  - `DefaultSduiNormalizer` property mapping converting dimension/spacing strings to `DimensionSpec` (`Fixed`, `Adaptive`, `Fraction`, `Fill`, `Wrap`, `Token`) and `SpacingSpec` (`Fixed`, `Adaptive`, `Token`).
+  - `DefaultSduiScreenAssembler` full pipeline execution producing valid `SduiScreen` domain model and building fast O(1) `nodeIndex` map.
+- **Edge Cases Covered**: Missing/blank screenId, invalid schema version, duplicate template/component/subcomponent/child/childrenData IDs, invalid hierarchy type strings, non-terminal `ChildrenData -> ChildrenData` violation, dangling `parent_action` `target_id`, target node missing `accepts_parent_action`, missing optional hierarchy levels (e.g. direct Template -> SubComponent or Template -> Child).
+- **Platform Verification**: Android (PASS), Desktop JVM (PASS), iOS Compilation (PASS), iOS Runtime (NOT VERIFIED ON WINDOWS).
+- **Known Limitations**: Component renderers (`:sdui:render`) and runtime state management are implemented in future phases.
+- **Failure Interpretation**: Failure indicates JSON contract decoding mismatch, structural validation rule breach, or normalizer property map failure.
+
+--------------------------------------------------
 ### MODULE: `:androidApp`
 --------------------------------------------------
 - **Purpose**: Android Application Host (`MainActivity`, Android Manifest, Application Composition).
@@ -247,7 +268,6 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 
 The following modules exist as architectural subprojects in `settings.gradle.kts` but currently contain skeleton code reserved for upcoming implementation phases:
 
-- **`:sdui:engine`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:sdui:render`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:feature:splash`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:infrastructure:network`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
@@ -266,14 +286,14 @@ The following modules exist as architectural subprojects in `settings.gradle.kts
 
 ## 4. Master Verification Commands
 
-To execute the complete quality gate verification across all currently implemented modules (`:core:observability`, `:core:mvi`, `:core:ui`, `:core:navigation`, `:domain:actions`, `:domain:capabilities`, `:domain:storage`, `:engine:execution`) and platform targets:
+To execute the complete quality gate verification across all currently implemented modules (`:core:observability`, `:core:mvi`, `:core:ui`, `:core:navigation`, `:domain:actions`, `:domain:capabilities`, `:domain:storage`, `:engine:execution`, `:sdui:engine`) and platform targets:
 
 ### Standard Gradle Command (Linux / macOS / Windows Bash)
 ```bash
-./gradlew :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :engine:execution:allTests :androidApp:assembleDebug :desktopApp:assemble :engine:execution:compileKotlinIosArm64 :engine:execution:compileKotlinIosSimulatorArm64 --no-daemon
+./gradlew :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :engine:execution:allTests :sdui:engine:allTests :androidApp:assembleDebug :desktopApp:assemble :sdui:engine:compileKotlinIosSimulatorArm64 --no-daemon
 ```
 
 ### Windows PowerShell Command Syntax
 ```powershell
-& "./gradlew" :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :engine:execution:allTests :androidApp:assembleDebug :desktopApp:assemble :engine:execution:compileKotlinIosArm64 :engine:execution:compileKotlinIosSimulatorArm64 --no-daemon
+& "./gradlew" :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :engine:execution:allTests :sdui:engine:allTests :androidApp:assembleDebug :desktopApp:assemble :sdui:engine:compileKotlinIosSimulatorArm64 --no-daemon
 ```

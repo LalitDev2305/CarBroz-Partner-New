@@ -99,7 +99,7 @@ CarBroz-Partner-New/
 │   └── execution/            # [IMPLEMENTED] Dynamic Action Execution Engine
 
 ├── sdui/
-│   ├── engine/               # SDUI Schema Parser & Normalizer [PLANNED]
+│   ├── engine/               # [IMPLEMENTED] SDUI Schema Parser, Normalizer & Assembler
 │   └── render/               # Compose SDUI Component Renderers [PLANNED]
 ├── feature/
 │   └── splash/               # Native Splash / Launch Screen [PLANNED]
@@ -132,7 +132,7 @@ graph TD
     end
 
     subgraph Business Engine & Navigation
-        SE[:sdui:engine - PLANNED]
+        SE[:sdui:engine - IMPLEMENTED]
         CR[:engine:execution - IMPLEMENTED]
 
         CN[:core:navigation - IMPLEMENTED]
