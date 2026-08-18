@@ -11,4 +11,9 @@ kotlin {
     )
 
     jvm("desktop")
+    sourceSets {
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+        }
+    }
 }

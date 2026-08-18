@@ -163,7 +163,30 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 - **Failure Interpretation**: Failure indicates broken numeric invariant guards or non-deterministic capability outcome hierarchy mapping.
 
 --------------------------------------------------
+### MODULE: `:domain:storage`
+--------------------------------------------------
+- **Purpose**: Pure platform-neutral domain model foundation for key-value preferences, strongly-typed preference keys, sensitive string persistence contracts, and unified storage outcome results.
+
+- **Current Implementation Status**: **IMPLEMENTED** (Phase 013)
+- **Test Types**: Common Multiplatform Unit Tests (`commonTest`)
+- **Exact Commands**:
+  ```bash
+  ./gradlew :domain:storage:allTests --no-daemon
+  ```
+- **Expected Result**: `BUILD SUCCESSFUL` with 15 test methods passing across `StorageResultTest` and `PreferenceKeyTest`.
+- **Contracts Verified**:
+  - `StorageResult` sealed variants (`Success`, `NotFound`, `Failure`).
+  - `StorageFailure` code classification (`READ_FAILED`, `WRITE_FAILED`, `DELETE_FAILED`, `SECURITY_HARDWARE_UNAVAILABLE`, `UNKNOWN`) and non-blank error message guard.
+  - `PreferenceKey` sealed variants (`StringKey`, `BooleanKey`, `IntKey`, `LongKey`) non-blank key name validation, default value preservation, and key type identity distinction.
+  - `PreferenceGateway` and `SecureStorageGateway` suspend CRUD domain contracts.
+- **Edge Cases Covered**: Blank/whitespace key name rejection, blank error message rejection, default value fallback preservation, unicode key names, key type mismatch isolation.
+- **Platform Verification**: Android (PASS), Desktop JVM (PASS), iOS Compilation (PASS), iOS Runtime (NOT VERIFIED ON WINDOWS).
+- **Known Limitations**: `SecureStorageGateway` input validation is enforced by concrete infrastructure adapters or calling contracts.
+- **Failure Interpretation**: Failure indicates broken preference key invariants or non-deterministic storage result hierarchy handling.
+
+--------------------------------------------------
 ### MODULE: `:androidApp`
+
 
 
 --------------------------------------------------
@@ -205,8 +228,8 @@ A task or feature in CarBroz Partner is **NOT DONE** until it satisfies **3 Qual
 
 The following modules exist as architectural subprojects in `settings.gradle.kts` but currently contain skeleton code reserved for upcoming implementation phases:
 
-- **`:domain:storage`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:engine:execution`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
+
 - **`:sdui:engine`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:sdui:render`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
 - **`:feature:splash`**: SKELETON — NO FUNCTIONAL TEST CONTRACT YET
@@ -226,15 +249,15 @@ The following modules exist as architectural subprojects in `settings.gradle.kts
 
 ## 4. Master Verification Commands
 
-To execute the complete quality gate verification across all currently implemented modules (`:core:observability`, `:core:mvi`, `:core:ui`, `:core:navigation`, `:domain:actions`, `:domain:capabilities`) and platform targets:
+To execute the complete quality gate verification across all currently implemented modules (`:core:observability`, `:core:mvi`, `:core:ui`, `:core:navigation`, `:domain:actions`, `:domain:capabilities`, `:domain:storage`) and platform targets:
 
 ### Standard Gradle Command (Linux / macOS / Windows Bash)
 ```bash
-./gradlew :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :androidApp:assembleDebug :desktopApp:assemble :domain:capabilities:compileKotlinIosArm64 :domain:capabilities:compileKotlinIosSimulatorArm64 --no-daemon
+./gradlew :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :androidApp:assembleDebug :desktopApp:assemble :domain:storage:compileKotlinIosArm64 :domain:storage:compileKotlinIosSimulatorArm64 --no-daemon
 ```
 
 ### Windows PowerShell Command Syntax
 ```powershell
-& "./gradlew" :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :androidApp:assembleDebug :desktopApp:assemble :domain:capabilities:compileKotlinIosArm64 :domain:capabilities:compileKotlinIosSimulatorArm64 --no-daemon
+& "./gradlew" :core:observability:allTests :core:mvi:allTests :core:ui:allTests :core:navigation:allTests :domain:actions:allTests :domain:capabilities:allTests :domain:storage:allTests :androidApp:assembleDebug :desktopApp:assemble :domain:storage:compileKotlinIosArm64 :domain:storage:compileKotlinIosSimulatorArm64 --no-daemon
 ```
 

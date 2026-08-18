@@ -91,7 +91,9 @@ CarBroz-Partner-New/
 ├── domain/
 │   ├── actions/              # [IMPLEMENTED] Dynamic Action System Models
 │   ├── capabilities/         # [IMPLEMENTED] Platform Capability Contracts
-│   └── storage/              # Storage & Cache Domain Models [PLANNED]
+│   └── storage/              # [IMPLEMENTED] Preferences & Secure Storage Domain Contracts
+
+
 
 ├── engine/
 │   └── execution/            # Runtime Action & Request Execution Engine [PLANNED]
@@ -134,7 +136,9 @@ graph TD
         CN[:core:navigation - IMPLEMENTED]
         ACT[:domain:actions - IMPLEMENTED]
         CAP[:domain:capabilities - IMPLEMENTED]
+        STO[:domain:storage - IMPLEMENTED]
     end
+
 
 
     subgraph State & Core Foundation
@@ -245,7 +249,22 @@ graph TD
   - `CameraGateway`, `MediaPickerGateway`, `DocumentPickerGateway`: Photo capture, media selection, and file selection gateways.
   - `ConnectivityGateway`: Continuous flow observation of network reachability (`CONNECTED` vs `DISCONNECTED`).
 
-### 7.7 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
+### 7.7 Storage Domain Models (`:domain:storage`) — *[IMPLEMENTED]*
+- **Package Layout**:
+  - `com.carbroz.partner.domain.storage.core` $\implies$ `StorageResult`, `StorageFailure`
+  - `com.carbroz.partner.domain.storage.preference` $\implies$ `PreferenceKey`, `PreferenceGateway`
+  - `com.carbroz.partner.domain.storage.secure` $\implies$ `SecureStorageGateway`
+- **Flow**: `Semantic Caller -> Domain Storage Gateway -> Infrastructure Persistence Adapter -> Platform Persistence API`.
+- **Contracts**:
+  - `StorageResult`: Sealed result hierarchy (`Success<T>`, `NotFound`, `Failure`).
+  - `StorageFailure`: Structured error codes (`READ_FAILED`, `WRITE_FAILED`, `DELETE_FAILED`, `SECURITY_HARDWARE_UNAVAILABLE`, `UNKNOWN`) without leaking platform exceptions.
+  - `PreferenceKey`: Strongly typed value keys (`StringKey`, `BooleanKey`, `IntKey`, `LongKey`) preventing stringly-typed dumping grounds and `Any` casting.
+  - `PreferenceGateway`: Synchronous suspend CRUD operations for application settings and preference flags.
+  - `SecureStorageGateway`: Synchronous suspend CRUD contract for sensitive string payloads intended for platform-secure persistence adapters.
+
+
+### 7.8 Target SDUI Hierarchy & Execution Pipeline — *[PLANNED]*
+
 ```
 Screen Specification
   └─► Template Node
@@ -294,9 +313,11 @@ Screen Specification
 | Large-Scale Package Structural Refactor | `:core:ui`, `:core:mvi` | **COMMITTED** | `c902417` |
 | Stateful Navigation Router | `:core:navigation` | **COMMITTED** | `3a0296f` |
 | Dynamic Action Domain Foundation | `:domain:actions` | **COMMITTED** | `49d21ba` |
-| Platform Capability Domain Foundation | `:domain:capabilities` | **IMPLEMENTED** | Current Phase |
+| Platform Capability Domain Foundation | `:domain:capabilities` | **COMMITTED** | `ebee37b` |
+| Storage & Persistence Domain Foundation | `:domain:storage` | **IMPLEMENTED** | Current Phase |
 | Execution Engine & SDUI | `:engine:execution`, `:sdui:*` | *PLANNED* | Future Phase |
 | Infrastructure & Features | `:infrastructure:*`, `:feature:*` | *PLANNED* | Future Phase |
+
 
 
 
