@@ -143,6 +143,7 @@ A task is COMPLETE if and only if all applicable criteria pass:
 8. Android & iOS validated to environment capability.
 9. Desktop JVM runtime smoke test passed locally (`./gradlew :desktopApp:run`).
 10. `git diff` and `git status` reviewed; self-audit clean.
+11. Documentation Impact Check completed; `README.md` and/or `TESTING_GUIDE.md` updated when module ownership, architecture, runtime flow, dependencies, tests, commands, coverage, platform behavior, or developer onboarding information changed.
 
 ## 17. ANTIGRAVITY WORKFLOW (PERMANENT STEP-BY-STEP)
 1. Inspect repository & verify environment.
@@ -226,3 +227,13 @@ A task is COMPLETE if and only if all applicable criteria pass:
   - `Execution`: Actions, action execution, workflows, capability invocation, navigation requests.
   - `Network`: HTTP, GraphQL, WebSockets, Multipart, auth headers, serialization.
   - `Runtime Context`: Session, Device/App Context, Screen State, Form State, Workflow State, Action Result Context.
+
+## 21. DOCUMENTATION SYNCHRONIZATION & ARCHITECTURE DISCOVERABILITY LAW
+- **Documentation Triad**:
+  - `ENGINEERING_CONSTITUTION.md`: Supreme architectural law and permanent invariants of the CarBroz Partner repository.
+  - `README.md`: Canonical developer onboarding map, module architecture guide, and runtime vision.
+  - `TESTING_GUIDE.md`: Canonical executable verification guide, quality gates, and module testing matrix.
+- **Definition of Done Requirement**: Documentation is an explicit part of Definition of Done. Any phase that modifies modules, packages, architectural ownership, core contracts, runtime flows, entry points, dependencies, platform behaviors, test commands, or test coverage MUST update the corresponding documentation within the SAME phase. Stale documentation invalidates phase completion.
+- **Factual Evidence Standard**: Documentation MUST accurately reflect source truth. Planned architecture MUST be explicitly distinguished from currently implemented architecture. Engineers MUST NEVER document unverified test commands, fake test counts, unrun platform runtimes, or non-existent classes.
+- **Minimizing Duplication & Ownership Boundaries**: Documentation duplication MUST be minimized across files. `ENGINEERING_CONSTITUTION.md` owns architectural rules, `README.md` owns developer understanding and module maps, and `TESTING_GUIDE.md` owns executable verification steps.
+
