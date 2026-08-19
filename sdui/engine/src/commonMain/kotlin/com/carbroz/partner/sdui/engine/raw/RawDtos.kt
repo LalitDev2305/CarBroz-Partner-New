@@ -148,6 +148,7 @@ public data class RawActionDto(
     @SerialName("api") val api: String? = null,
     @SerialName("template_id") val templateId: String? = null,
     @SerialName("template_type") val templateType: String? = null,
+    @SerialName("auth_policy") val authPolicy: String? = null,
     @SerialName("payload") val payload: JsonObject? = null
 )
 

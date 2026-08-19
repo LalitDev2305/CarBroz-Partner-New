@@ -21,6 +21,7 @@ public class SduiActionMapper {
     ): ActionSpec {
         val paramMap = mutableMapOf<String, ActionValue>()
         paramMap["endpoint"] = ActionValue.Text(action.api)
+        paramMap["auth_policy"] = ActionValue.Text(action.authPolicy)
 
         action.templateId?.let { paramMap["template_id"] = ActionValue.Text(it) }
         action.templateType?.let { paramMap["template_type"] = ActionValue.Text(it) }

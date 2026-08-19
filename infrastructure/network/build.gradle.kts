@@ -22,11 +22,13 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":domain:session"))
             implementation(libs.ktor.client.core)
             implementation(libs.kotlinx.coroutines.core)
         }
 
         commonTest.dependencies {
+            implementation(project(":domain:storage"))
             implementation(kotlin("test"))
             implementation(libs.ktor.client.mock)
             implementation(libs.kotlinx.coroutines.test)

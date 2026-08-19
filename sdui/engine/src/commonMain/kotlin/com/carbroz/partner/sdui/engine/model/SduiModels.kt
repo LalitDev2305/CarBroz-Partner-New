@@ -166,6 +166,7 @@ public data class SduiAction(
     val api: String,
     val templateId: String?,
     val templateType: String?,
+    val authPolicy: String = "optional",
     val payload: JsonObject?
 )
 

@@ -54,6 +54,19 @@ public fun CarBrozPartnerRoot(
                     val controller = remember(appGraph) {
                         appGraph.createHostController(scope)
                     }
+
+                    androidx.compose.runtime.LaunchedEffect(appGraph.sessionStore) {
+                        var previousState: com.carbroz.partner.domain.session.model.SessionState? = null
+                        appGraph.sessionStore.state.collect { currentState ->
+                            if (previousState == com.carbroz.partner.domain.session.model.SessionState.Authenticated &&
+                                currentState == com.carbroz.partner.domain.session.model.SessionState.Unauthenticated
+                            ) {
+                                controller.loadScreen(appGraph.endpointConfig.entryEndpoint)
+                            }
+                            previousState = currentState
+                        }
+                    }
+
                     SduiScreenHost(
                         controller = controller,
                         modifier = modifier

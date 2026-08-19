@@ -57,4 +57,24 @@ class ApiActionExecutorTest {
         val result = executor.execute(actionSpec)
         assertTrue(result is ExecutionResult.Failure)
     }
+
+    @Test
+    fun testAuthPolicyTranslation() = runTest {
+        val fakeNetwork = FakeNetworkClient(NetworkResponse(200, "{}"))
+        val executor = ApiActionExecutor(fakeNetwork)
+
+        val actionSpec = ActionSpec.create(
+            id = ActionId("act_1"),
+            type = ActionType.API_REQUEST,
+            parameters = ActionParameters.create(
+                mapOf(
+                    "endpoint" to ActionValue.Text("/api/v1/test"),
+                    "auth_policy" to ActionValue.Text("none")
+                )
+            )
+        )
+
+        executor.execute(actionSpec)
+        assertEquals(com.carbroz.partner.infrastructure.network.client.AuthPolicy.NONE, fakeNetwork.lastRequest?.authPolicy)
+    }
 }

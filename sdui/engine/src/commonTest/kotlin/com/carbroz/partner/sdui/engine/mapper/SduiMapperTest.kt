@@ -270,4 +270,40 @@ class SduiMapperTest {
         assertEquals(com.carbroz.partner.sdui.engine.model.LayoutAlignment.CENTER, child.alignment)
         assertEquals(com.carbroz.partner.sdui.engine.model.LayoutArrangement.SPACE_BETWEEN, child.arrangement)
     }
+
+    @Test
+    fun testAuthPolicyMapping() {
+        val actionNone = RawActionDto(api = "/login", authPolicy = "none")
+        val actionReq = RawActionDto(api = "/profile", authPolicy = "REQUIRED")
+        val actionOpt = RawActionDto(api = "/data", authPolicy = "  optional  ")
+        val actionUnknown = RawActionDto(api = "/unknown", authPolicy = "invalid_policy")
+        val actionMissing = RawActionDto(api = "/default")
+
+        val comp = RawComponentDto(
+            componentId = "cmp_auth",
+            componentType = "card",
+            childrenData = listOf(
+                RawChildrenDataDto(childrenDataId = "c1", childrenDataType = "btn", action = actionNone),
+                RawChildrenDataDto(childrenDataId = "c2", childrenDataType = "btn", action = actionReq),
+                RawChildrenDataDto(childrenDataId = "c3", childrenDataType = "btn", action = actionOpt),
+                RawChildrenDataDto(childrenDataId = "c4", childrenDataType = "btn", action = actionUnknown),
+                RawChildrenDataDto(childrenDataId = "c5", childrenDataType = "btn", action = actionMissing)
+            )
+        )
+
+        val screen = mapper.map(
+            RawScreenDto(
+                schemaVersion = 1,
+                screenId = "auth_test",
+                template = RawTemplateDto(templateId = "t1", templateType = "form", components = listOf(comp))
+            )
+        )
+
+        val cdList = screen.template.components.first().childrenData
+        assertEquals("none", cdList[0].action?.authPolicy)
+        assertEquals("required", cdList[1].action?.authPolicy)
+        assertEquals("optional", cdList[2].action?.authPolicy)
+        assertEquals("optional", cdList[3].action?.authPolicy)
+        assertEquals("optional", cdList[4].action?.authPolicy)
+    }
 }

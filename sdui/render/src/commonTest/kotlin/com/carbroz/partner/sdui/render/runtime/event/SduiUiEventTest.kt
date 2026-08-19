@@ -24,7 +24,7 @@ class SduiUiEventTest {
             visible = true,
             enabled = true,
             properties = null,
-            action = SduiAction("/api/v1/submit", "tpl_1", "form", null),
+            action = SduiAction(api = "/api/v1/submit", templateId = "tpl_1", templateType = "form", payload = null),
             parentAction = SduiParentAction("target_123"),
             acceptsParentAction = false
         )

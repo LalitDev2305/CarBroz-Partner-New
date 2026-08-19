@@ -29,6 +29,7 @@ include(":core:navigation")
 include(":domain:actions")
 include(":domain:capabilities")
 include(":domain:storage")
+include(":domain:session")
 
 // Engine Modules
 include(":engine:execution")

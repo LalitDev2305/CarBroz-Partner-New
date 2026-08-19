@@ -16,6 +16,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":domain:session"))
             implementation(project(":core:mvi"))
             implementation(project(":core:observability"))
             implementation(compose.runtime)

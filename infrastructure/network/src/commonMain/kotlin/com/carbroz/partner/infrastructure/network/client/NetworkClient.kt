@@ -4,7 +4,8 @@ public data class NetworkRequest(
     val url: String,
     val method: String = "GET",
     val headers: Map<String, String> = emptyMap(),
-    val bodyJson: String? = null
+    val bodyJson: String? = null,
+    val authPolicy: AuthPolicy = AuthPolicy.OPTIONAL
 )
 
 public data class NetworkResponse(

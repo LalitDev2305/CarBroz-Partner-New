@@ -59,12 +59,21 @@ public class DefaultSduiMapper : SduiMapper {
             else -> LayoutArrangement.START
         }
 
+        fun parseAuthPolicy(policy: String?): String {
+            return when (policy?.trim()?.lowercase()) {
+                "none" -> "none"
+                "required" -> "required"
+                else -> "optional"
+            }
+        }
+
         fun parseAction(action: RawActionDto?): SduiAction? {
             if (action == null || action.api.isNullOrBlank()) return null
             return SduiAction(
                 api = action.api,
                 templateId = action.templateId,
                 templateType = action.templateType,
+                authPolicy = parseAuthPolicy(action.authPolicy),
                 payload = action.payload
             )
         }

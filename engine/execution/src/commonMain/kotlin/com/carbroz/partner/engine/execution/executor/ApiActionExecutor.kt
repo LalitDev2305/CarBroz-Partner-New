@@ -35,11 +35,19 @@ public class ApiActionExecutor(
             )
         }
 
+        val authPolicyParam = (action.parameters.get("auth_policy") as? ActionValue.Text)?.value
+        val parsedAuthPolicy = when (authPolicyParam?.lowercase()) {
+            "none" -> com.carbroz.partner.infrastructure.network.client.AuthPolicy.NONE
+            "required" -> com.carbroz.partner.infrastructure.network.client.AuthPolicy.REQUIRED
+            else -> com.carbroz.partner.infrastructure.network.client.AuthPolicy.OPTIONAL
+        }
+
         return try {
             val response = networkClient.execute(
                 NetworkRequest(
                     url = endpoint,
-                    method = "POST"
+                    method = "POST",
+                    authPolicy = parsedAuthPolicy
                 )
             )
             if (response.isSuccessful) {

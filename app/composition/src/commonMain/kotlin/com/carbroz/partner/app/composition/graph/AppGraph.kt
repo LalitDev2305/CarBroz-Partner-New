@@ -33,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 public class AppGraph(
     public val config: AppConfig,
     public val endpointConfig: SduiEndpointConfig = SduiEndpointConfig(),
+    public val sessionStore: com.carbroz.partner.domain.session.store.SessionStore = com.carbroz.partner.domain.session.store.SessionStore(),
     public val networkClient: NetworkClient = KtorNetworkClient(config.baseUrl),
     public val logger: StructuredLogger = DefaultPipelineLogger(),
     public val startupOrchestrator: StartupOrchestrator = ImmediateStartupOrchestrator()

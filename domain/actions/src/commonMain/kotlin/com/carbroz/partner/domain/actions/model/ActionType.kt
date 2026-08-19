@@ -17,5 +17,6 @@ value class ActionType(val rawValue: String) {
         val API_REQUEST = ActionType("api.request")
         val FORM_SUBMIT = ActionType("form.submit")
         val CAPABILITY_EXECUTE = ActionType("capability.execute")
+        val AUTH_LOGOUT = ActionType("auth.logout")
     }
 }
