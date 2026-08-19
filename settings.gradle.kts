@@ -36,6 +36,8 @@ include(":engine:execution")
 // SDUI Modules
 include(":sdui:engine")
 include(":sdui:render")
+include(":sdui:runtime")
+include(":sdui:host")
 
 // Feature Modules
 include(":feature:splash")

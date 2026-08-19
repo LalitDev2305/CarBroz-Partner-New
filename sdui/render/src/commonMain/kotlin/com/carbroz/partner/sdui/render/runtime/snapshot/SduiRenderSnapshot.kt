@@ -5,7 +5,8 @@ public data class SduiRenderSnapshot(
     val executingNodeIds: Set<String> = emptySet(),
     val nodeVisibility: Map<String, Boolean> = emptyMap(),
     val nodeEnabled: Map<String, Boolean> = emptyMap(),
-    val timerStates: Map<String, TimerPresentationState> = emptyMap()
+    val timerStates: Map<String, TimerPresentationState> = emptyMap(),
+    val parentSignalVersions: Map<String, Long> = emptyMap()
 ) {
     public fun isNodeExecuting(nodeId: String): Boolean = executingNodeIds.contains(nodeId)
     public fun isNodeVisible(nodeId: String, defaultVisible: Boolean): Boolean =
@@ -14,6 +15,7 @@ public data class SduiRenderSnapshot(
         if (isNodeExecuting(nodeId)) false else (nodeEnabled[nodeId] ?: defaultEnabled)
     public fun getInputValue(nodeId: String): String? = inputValues[nodeId]
     public fun getTimerState(nodeId: String): TimerPresentationState? = timerStates[nodeId]
+    public fun getParentSignalVersion(nodeId: String): Long = parentSignalVersions[nodeId] ?: 0L
 }
 
 public data class TimerPresentationState(
