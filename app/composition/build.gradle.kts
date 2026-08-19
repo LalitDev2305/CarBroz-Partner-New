@@ -32,10 +32,12 @@ kotlin {
             implementation(project(":sdui:engine"))
             implementation(project(":engine:execution"))
             implementation(project(":infrastructure:network"))
+            implementation(project(":infrastructure:persistence"))
             implementation(project(":core:navigation"))
             implementation(project(":core:observability"))
             implementation(project(":core:ui"))
             implementation(project(":domain:session"))
+            implementation(project(":domain:storage"))
             implementation(project(":feature:splash"))
         }
 

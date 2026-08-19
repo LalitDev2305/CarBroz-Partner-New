@@ -7,6 +7,7 @@ import com.carbroz.partner.core.navigation.router.DefaultRouter
 import com.carbroz.partner.core.navigation.router.Router
 import com.carbroz.partner.core.observability.logger.DefaultPipelineLogger
 import com.carbroz.partner.core.observability.logger.StructuredLogger
+import com.carbroz.partner.domain.storage.secure.SecureStorageGateway
 import com.carbroz.partner.engine.execution.binding.DefaultBindingResolver
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
 import com.carbroz.partner.engine.execution.dispatcher.DefaultActionDispatcher
@@ -18,8 +19,10 @@ import com.carbroz.partner.feature.splash.orchestrator.StartupOrchestrator
 import com.carbroz.partner.feature.splash.store.SplashStore
 import com.carbroz.partner.infrastructure.network.client.KtorNetworkClient
 import com.carbroz.partner.infrastructure.network.client.NetworkClient
+import com.carbroz.partner.infrastructure.persistence.secure.SecureStorageFactory
 import com.carbroz.partner.sdui.engine.processor.SduiProcessor
 import com.carbroz.partner.sdui.host.controller.SduiScreenHostController
+import com.carbroz.partner.sdui.host.repository.CachedSduiScreenRepository
 import com.carbroz.partner.sdui.host.repository.NetworkSduiScreenRepository
 import com.carbroz.partner.sdui.host.repository.SduiScreenRepository
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +37,7 @@ public class AppGraph(
     public val config: AppConfig,
     public val endpointConfig: SduiEndpointConfig = SduiEndpointConfig(),
     public val sessionStore: com.carbroz.partner.domain.session.store.SessionStore = com.carbroz.partner.domain.session.store.SessionStore(),
+    public val secureStorage: SecureStorageGateway = SecureStorageFactory.create(),
     public val networkClient: NetworkClient = KtorNetworkClient(config.baseUrl),
     public val logger: StructuredLogger = DefaultPipelineLogger(),
     public val startupOrchestrator: StartupOrchestrator = ImmediateStartupOrchestrator()
@@ -50,7 +54,11 @@ public class AppGraph(
         bindingResolver = DefaultBindingResolver(),
         logger = logger
     )
-    public val screenRepository: SduiScreenRepository = NetworkSduiScreenRepository(networkClient)
+    public val rawScreenRepository: SduiScreenRepository = NetworkSduiScreenRepository(networkClient)
+    public val screenRepository: SduiScreenRepository = CachedSduiScreenRepository(
+        delegate = rawScreenRepository,
+        sessionStore = sessionStore
+    )
 
     /**
      * Factory function creating a new [SplashStore] managed by the specified [scope].
@@ -63,15 +71,12 @@ public class AppGraph(
     }
 
     /**
-     * Factory function creating a new [SduiScreenHostController] initialized for [StartupDestination.ServerDrivenUi].
+     * Factory function creating a new [SduiScreenHostController] managed by the specified [scope].
      */
-    public fun createHostController(
-        scope: CoroutineScope,
-        endpoint: String = endpointConfig.entryEndpoint
-    ): SduiScreenHostController {
+    public fun createHostController(scope: CoroutineScope): SduiScreenHostController {
         return SduiScreenHostController(
             scope = scope,
-            endpoint = endpoint,
+            endpoint = endpointConfig.entryEndpoint,
             repository = screenRepository,
             actionDispatcher = actionDispatcher,
             router = router,

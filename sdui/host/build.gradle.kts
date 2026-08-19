@@ -22,6 +22,7 @@ kotlin {
             implementation(project(":infrastructure:network"))
             implementation(project(":engine:execution"))
             implementation(project(":domain:actions"))
+            implementation(project(":domain:session"))
             implementation(project(":core:navigation"))
             implementation(project(":core:observability"))
             implementation(libs.kotlinx.coroutines.core)
