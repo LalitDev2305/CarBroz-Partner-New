@@ -7,7 +7,7 @@ public interface SduiScreenRepository {
     public suspend fun fetchScreenJson(endpoint: String): Result<String>
 }
 
-public class DefaultSduiScreenRepository(
+public class NetworkSduiScreenRepository(
     private val networkClient: NetworkClient
 ) : SduiScreenRepository {
 

@@ -16,10 +16,16 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":core:mvi"))
+            implementation(project(":core:observability"))
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }

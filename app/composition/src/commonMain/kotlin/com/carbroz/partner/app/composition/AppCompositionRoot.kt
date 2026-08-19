@@ -1,20 +1,65 @@
 package com.carbroz.partner.app.composition
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import com.carbroz.partner.app.composition.config.AppConfig
+import com.carbroz.partner.app.composition.graph.AppGraph
+import com.carbroz.partner.feature.splash.orchestrator.StartupDestination
+import com.carbroz.partner.feature.splash.store.SplashEffect
+import com.carbroz.partner.feature.splash.ui.SplashScreen
+import com.carbroz.partner.sdui.host.composable.SduiScreenHost
 
 /**
  * Root multiplatform Compose entry point for CarBroz Partner.
  *
- * Owned by the application composition root ([com.carbroz.partner.app.composition]),
- * it serves as the single multiplatform rendering root invoked by platform hosts
- * (Android [com.carbroz.partner.MainActivity], Desktop [com.carbroz.partner.main],
- * and iOS [com.carbroz.partner.app.composition.MainViewController]).
+ * Serves as the single multiplatform rendering root invoked by platform hosts.
+ * Renders native [SplashScreen] first; upon receiving [SplashEffect.NavigateToDestination],
+ * transitions application layout to [SduiScreenHost].
  */
 @Composable
-fun CarBrozPartnerRoot() {
+public fun CarBrozPartnerRoot(
+    config: AppConfig,
+    modifier: Modifier = Modifier
+) {
+    val appGraph = remember(config) { AppGraph(config) }
+    val scope = rememberCoroutineScope()
+
+    val splashStore = remember(appGraph) { appGraph.createSplashStore(scope) }
+
+    var currentDestination by remember { mutableStateOf<StartupDestination?>(null) }
+
     MaterialTheme {
-        Text(text = "CarBroz Partner")
+        val destination = currentDestination
+        if (destination == null) {
+            SplashScreen(
+                store = splashStore,
+                onEffect = { effect ->
+                    when (effect) {
+                        is SplashEffect.NavigateToDestination -> {
+                            currentDestination = effect.destination
+                        }
+                    }
+                },
+                modifier = modifier
+            )
+        } else {
+            when (destination) {
+                is StartupDestination.ServerDrivenUi -> {
+                    val controller = remember(appGraph) {
+                        appGraph.createHostController(scope)
+                    }
+                    SduiScreenHost(
+                        controller = controller,
+                        modifier = modifier
+                    )
+                }
+            }
+        }
     }
 }

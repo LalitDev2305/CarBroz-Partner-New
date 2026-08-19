@@ -1,13 +1,14 @@
 package com.carbroz.partner.app.composition
 
 import androidx.compose.ui.window.ComposeUIViewController
+import com.carbroz.partner.app.composition.config.AppConfig
 import platform.UIKit.UIViewController
 
 /**
- * Main UIViewController builder for iOS platform host integration.
- *
- * Exposes the multiplatform Compose entry point [CarBrozPartnerRoot] to Apple UIKit environment.
+ * iOS Platform Host entry point returning a [UIViewController] embedding [CarBrozPartnerRoot].
  */
-fun MainViewController(): UIViewController = ComposeUIViewController {
-    CarBrozPartnerRoot()
+public fun MainViewController(
+    config: AppConfig = AppConfig(baseUrl = "https://api.carbroz.com")
+): UIViewController = ComposeUIViewController {
+    CarBrozPartnerRoot(config = config)
 }

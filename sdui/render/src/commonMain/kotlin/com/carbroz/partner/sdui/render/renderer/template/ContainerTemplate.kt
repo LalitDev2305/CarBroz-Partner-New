@@ -8,7 +8,7 @@ import com.carbroz.partner.sdui.engine.model.SduiTemplate
 import com.carbroz.partner.sdui.render.resolver.LayoutResolver
 import com.carbroz.partner.sdui.render.scope.RenderScope
 
-public object DefaultTemplate : TemplateRenderer {
+public object ContainerTemplate : TemplateRenderer {
     @Composable
     override fun render(template: SduiTemplate, scope: RenderScope) {
         val widthMod = LayoutResolver.resolveWidth(template.width)

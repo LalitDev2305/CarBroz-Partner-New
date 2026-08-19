@@ -8,7 +8,7 @@ import com.carbroz.partner.sdui.engine.model.SduiComponent
 import com.carbroz.partner.sdui.render.resolver.LayoutResolver
 import com.carbroz.partner.sdui.render.scope.RenderScope
 
-public object DefaultComponent : ComponentRenderer {
+public object ContainerComponent : ComponentRenderer {
     @Composable
     override fun render(component: SduiComponent, scope: RenderScope) {
         if (!component.visible) return

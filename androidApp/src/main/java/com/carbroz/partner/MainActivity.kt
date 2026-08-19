@@ -3,21 +3,23 @@ package com.carbroz.partner
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-
 import com.carbroz.partner.app.composition.CarBrozPartnerRoot
+import com.carbroz.partner.app.composition.config.AppConfig
 
 /**
- * Main Android activity serving as the thin host for the CarBroz Partner application.
+ * Android Platform Host Activity.
  *
- * It delegates layout rendering directly to the shared [CarBrozPartnerRoot] Compose entry point
- * without containing business or state logic.
+ * Serves as the thin Android entry point. Instantiates [AppConfig] with environment
+ * parameters and delegates layout rendering directly to [CarBrozPartnerRoot].
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val config = AppConfig(
+            baseUrl = "https://api.carbroz.com"
+        )
         setContent {
-            CarBrozPartnerRoot()
+            CarBrozPartnerRoot(config = config)
         }
     }
 }
-

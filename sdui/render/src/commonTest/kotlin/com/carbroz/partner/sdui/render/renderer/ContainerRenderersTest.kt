@@ -17,11 +17,11 @@ import com.carbroz.partner.sdui.render.registry.ChildrenDataRendererRegistry
 import com.carbroz.partner.sdui.render.registry.ComponentRendererRegistry
 import com.carbroz.partner.sdui.render.registry.SubComponentRendererRegistry
 import com.carbroz.partner.sdui.render.registry.TemplateRendererRegistry
-import com.carbroz.partner.sdui.render.renderer.child.DefaultChild
+import com.carbroz.partner.sdui.render.renderer.child.ContainerChild
 import com.carbroz.partner.sdui.render.renderer.childdata.ChildrenDataRenderer
-import com.carbroz.partner.sdui.render.renderer.component.DefaultComponent
-import com.carbroz.partner.sdui.render.renderer.subcomponent.DefaultSubComponent
-import com.carbroz.partner.sdui.render.renderer.template.DefaultTemplate
+import com.carbroz.partner.sdui.render.renderer.component.ContainerComponent
+import com.carbroz.partner.sdui.render.renderer.subcomponent.ContainerSubComponent
+import com.carbroz.partner.sdui.render.renderer.template.ContainerTemplate
 import com.carbroz.partner.sdui.render.renderer.template.FormTemplate
 import com.carbroz.partner.sdui.render.runtime.event.SduiUiEventSink
 import com.carbroz.partner.sdui.render.runtime.snapshot.SduiRenderSnapshot
@@ -31,14 +31,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-class DefaultRenderersTest {
+class ContainerRenderersTest {
 
     private fun createTemplate(
         id: String = "tpl_1",
         components: List<SduiComponent> = emptyList()
     ) = SduiTemplate(
         id = id,
-        templateType = "default_template",
+        templateType = "container_template",
         width = DimensionSpec.Fill,
         height = DimensionSpec.Wrap,
         axis = LayoutAxis.VERTICAL,
@@ -55,7 +55,7 @@ class DefaultRenderersTest {
         childrenData: List<SduiChildrenData> = emptyList()
     ) = SduiComponent(
         id = id,
-        componentType = "default_component",
+        componentType = "container_component",
         width = DimensionSpec.Fill,
         height = DimensionSpec.Wrap,
         axis = LayoutAxis.VERTICAL,
@@ -78,7 +78,7 @@ class DefaultRenderersTest {
         childrenData: List<SduiChildrenData> = emptyList()
     ) = SduiSubComponent(
         id = id,
-        subcomponentType = "default_subcomponent",
+        subcomponentType = "container_subcomponent",
         width = DimensionSpec.Fill,
         height = DimensionSpec.Wrap,
         axis = LayoutAxis.VERTICAL,
@@ -100,7 +100,7 @@ class DefaultRenderersTest {
         childrenData: List<SduiChildrenData> = emptyList()
     ) = SduiChild(
         id = id,
-        childType = "default_child",
+        childType = "container_child",
         width = DimensionSpec.Fill,
         height = DimensionSpec.Wrap,
         axis = LayoutAxis.VERTICAL,
@@ -115,6 +115,7 @@ class DefaultRenderersTest {
         childrenData = childrenData,
         acceptsParentAction = false
     )
+
 
     private fun createChildrenData(
         id: String = "cd_1"
@@ -134,31 +135,31 @@ class DefaultRenderersTest {
     )
 
     @Test
-    fun testDefaultTemplateResolution() {
-        val renderer = SduiRenderers.defaultTemplates.resolve("default_template")
+    fun testContainerTemplateResolution() {
+        val renderer = SduiRenderers.defaultTemplates.resolve("container_template")
         assertNotNull(renderer)
-        assertEquals(DefaultTemplate, renderer)
+        assertEquals(ContainerTemplate, renderer)
     }
 
     @Test
-    fun testDefaultComponentResolution() {
-        val renderer = SduiRenderers.defaultComponents.resolve("default_component")
+    fun testContainerComponentResolution() {
+        val renderer = SduiRenderers.defaultComponents.resolve("container_component")
         assertNotNull(renderer)
-        assertEquals(DefaultComponent, renderer)
+        assertEquals(ContainerComponent, renderer)
     }
 
     @Test
-    fun testDefaultSubComponentResolution() {
-        val renderer = SduiRenderers.defaultSubComponents.resolve("default_subcomponent")
+    fun testContainerSubComponentResolution() {
+        val renderer = SduiRenderers.defaultSubComponents.resolve("container_subcomponent")
         assertNotNull(renderer)
-        assertEquals(DefaultSubComponent, renderer)
+        assertEquals(ContainerSubComponent, renderer)
     }
 
     @Test
-    fun testDefaultChildResolution() {
-        val renderer = SduiRenderers.defaultChildren.resolve("default_child")
+    fun testContainerChildResolution() {
+        val renderer = SduiRenderers.defaultChildren.resolve("container_child")
         assertNotNull(renderer)
-        assertEquals(DefaultChild, renderer)
+        assertEquals(ContainerChild, renderer)
     }
 
     @Test

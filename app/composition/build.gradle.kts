@@ -25,10 +25,22 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+
+            implementation(project(":sdui:host"))
+            implementation(project(":sdui:render"))
+            implementation(project(":sdui:runtime"))
+            implementation(project(":sdui:engine"))
+            implementation(project(":engine:execution"))
+            implementation(project(":infrastructure:network"))
+            implementation(project(":core:navigation"))
+            implementation(project(":core:observability"))
+            implementation(project(":core:ui"))
+            implementation(project(":feature:splash"))
         }
 
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
