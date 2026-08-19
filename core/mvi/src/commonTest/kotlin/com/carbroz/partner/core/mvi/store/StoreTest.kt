@@ -267,4 +267,62 @@ class StoreTest {
         assertTrue(logger.events.all { !it.message.contains("Count(100)") })
         assertTrue(logger.events.all { !it.message.contains("Increment(1)") })
     }
+
+    @Test
+    fun verifyEffectEmittedWithoutActiveCollectorDoesNotSuspendProcessor() = runTest {
+        val testScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        val store = createStore<TestState, TestIntent, TestEffect>(
+            scope = testScope,
+            initialState = TestState.Count(0),
+            storeId = "TestStore"
+        ) { intent ->
+            if (intent is TestIntent.TriggerEffect) {
+                emitEffect(TestEffect.ShowMessage("BufferedEffect"))
+                updateState { TestState.Count(99) }
+            }
+        }
+
+        // Dispatch intent without any active effect collector
+        store.dispatch(TestIntent.TriggerEffect)
+
+        // State update must complete successfully despite absence of effect collector
+        assertEquals(TestState.Count(99), store.state.value)
+
+        // Late collector receives the buffered effect
+        val received = store.effects.first()
+        assertEquals(TestEffect.ShowMessage("BufferedEffect"), received)
+    }
+
+    @Test
+    fun verifyBufferedEffectsRetainFifoOrdering() = runTest {
+        val testScope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        val store = createStore<TestState, TestIntent, TestEffect>(
+            scope = testScope,
+            initialState = TestState.Count(0),
+            storeId = "TestStore"
+        ) { intent ->
+            if (intent is TestIntent.TriggerEffect) {
+                emitEffect(TestEffect.ShowMessage("Msg 1"))
+                emitEffect(TestEffect.ShowMessage("Msg 2"))
+                emitEffect(TestEffect.ShowMessage("Msg 3"))
+            }
+        }
+
+        store.dispatch(TestIntent.TriggerEffect)
+
+        val collected = mutableListOf<TestEffect>()
+        val job = testScope.launch {
+            store.effects.collect { effect: TestEffect ->
+                collected.add(effect)
+            }
+        }
+
+        val expected: List<TestEffect> = listOf(
+            TestEffect.ShowMessage("Msg 1"),
+            TestEffect.ShowMessage("Msg 2"),
+            TestEffect.ShowMessage("Msg 3")
+        )
+        assertEquals(expected, collected)
+        job.cancel()
+    }
 }

@@ -32,7 +32,7 @@ internal class DefaultStore<State, Intent, Effect>(
     override val state: StateFlow<State> = _state.asStateFlow()
 
     private val intentChannel = Channel<Intent>(Channel.RENDEZVOUS)
-    private val effectChannel = Channel<Effect>(Channel.RENDEZVOUS)
+    private val effectChannel = Channel<Effect>(Channel.BUFFERED)
 
     override val effects: Flow<Effect> = effectChannel.receiveAsFlow()
 
