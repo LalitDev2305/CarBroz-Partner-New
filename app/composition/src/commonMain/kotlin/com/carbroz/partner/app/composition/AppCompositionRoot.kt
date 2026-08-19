@@ -24,7 +24,7 @@ import com.carbroz.partner.sdui.host.composable.SduiScreenHost
  */
 @Composable
 public fun CarBrozPartnerRoot(
-    config: AppConfig,
+    config: AppConfig = AppConfig.production(),
     modifier: Modifier = Modifier
 ) {
     val appGraph = remember(config) { AppGraph(config) }

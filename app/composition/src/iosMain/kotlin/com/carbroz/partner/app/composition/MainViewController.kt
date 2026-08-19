@@ -8,7 +8,7 @@ import platform.UIKit.UIViewController
  * iOS Platform Host entry point returning a [UIViewController] embedding [CarBrozPartnerRoot].
  */
 public fun MainViewController(
-    config: AppConfig = AppConfig(baseUrl = "https://api.carbroz.com")
+    config: AppConfig = AppConfig.production()
 ): UIViewController = ComposeUIViewController {
     CarBrozPartnerRoot(config = config)
 }
