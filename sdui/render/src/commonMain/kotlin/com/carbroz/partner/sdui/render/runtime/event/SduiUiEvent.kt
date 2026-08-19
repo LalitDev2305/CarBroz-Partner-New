@@ -13,6 +13,15 @@ public sealed interface SduiUiEvent {
         val parentAction: SduiParentAction?
     ) : SduiUiEvent
 
+    public data class ValueChanged(
+        val nodeId: String,
+        val newValue: String
+    ) : SduiUiEvent
+
+    @Deprecated(
+        message = "Use ValueChanged instead for all dynamic node value emissions.",
+        replaceWith = ReplaceWith("ValueChanged(nodeId, newValue)")
+    )
     public data class InputChanged(
         val nodeId: String,
         val newValue: String

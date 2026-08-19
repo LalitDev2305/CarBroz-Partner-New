@@ -1,5 +1,6 @@
 package com.carbroz.partner.sdui.render.renderer.childdata.input
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,7 +19,8 @@ public object InputChildrenData : ChildrenDataRenderer {
         eventSink: SduiUiEventSink
     ) {
         val props = InputChildrenDataProperties.decode(childrenData.properties)
-        val currentValue = snapshot.getInputValue(childrenData.id) ?: ""
+        val currentValue = snapshot.getNodeValue(childrenData.id) ?: ""
+        val validationError = snapshot.getValidationError(childrenData.id)
         val isEnabled = snapshot.isNodeEnabled(childrenData.id, childrenData.enabled)
 
         val widthMod = LayoutResolver.resolveWidth(childrenData.width)
@@ -29,11 +31,15 @@ public object InputChildrenData : ChildrenDataRenderer {
         OutlinedTextField(
             value = currentValue,
             onValueChange = { newValue ->
-                eventSink.onUiEvent(SduiUiEvent.InputChanged(childrenData.id, newValue))
+                eventSink.onUiEvent(SduiUiEvent.ValueChanged(childrenData.id, newValue))
             },
             enabled = isEnabled,
+            isError = validationError != null,
             label = if (props.label.isNotBlank()) { { Text(props.label) } } else null,
             placeholder = if (props.placeholder.isNotBlank()) { { Text(props.placeholder) } } else null,
+            supportingText = if (validationError != null) {
+                { Text(text = validationError, color = MaterialTheme.colorScheme.error) }
+            } else null,
             modifier = paddingMod
         )
     }

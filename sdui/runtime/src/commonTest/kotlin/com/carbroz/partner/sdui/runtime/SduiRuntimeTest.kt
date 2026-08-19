@@ -79,13 +79,25 @@ class SduiRuntimeTest {
     )
 
     @Test
-    fun testInputChangedUpdatesOverlay() = runTest {
+    fun testValueChangedUpdatesOverlay() = runTest {
         val dispatcher = FakeActionDispatcher(ExecutionResult.Success())
         val runtime = SduiRuntime(testScreen, dispatcher)
 
+        runtime.onEvent(SduiUiEvent.ValueChanged("phone", "9876543210"))
+        val currentSnapshot = runtime.state.value.snapshot
+        assertEquals("9876543210", currentSnapshot.getNodeValue("phone"))
+        assertEquals("9876543210", currentSnapshot.getInputValue("phone"))
+    }
+
+    @Test
+    fun testInputChangedBackwardCompatibility() = runTest {
+        val dispatcher = FakeActionDispatcher(ExecutionResult.Success())
+        val runtime = SduiRuntime(testScreen, dispatcher)
+
+        @Suppress("DEPRECATION")
         runtime.onEvent(SduiUiEvent.InputChanged("phone", "9876543210"))
         val currentSnapshot = runtime.state.value.snapshot
-        assertEquals("9876543210", currentSnapshot.getInputValue("phone"))
+        assertEquals("9876543210", currentSnapshot.getNodeValue("phone"))
     }
 
     @Test

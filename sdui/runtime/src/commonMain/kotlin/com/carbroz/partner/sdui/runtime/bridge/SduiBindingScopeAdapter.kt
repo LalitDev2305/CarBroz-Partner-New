@@ -4,7 +4,7 @@ import com.carbroz.partner.domain.actions.value.ActionValue
 import com.carbroz.partner.engine.execution.binding.BindingScope
 
 public class SduiBindingScopeAdapter(
-    private val inputValues: Map<String, String>
+    private val nodeValues: Map<String, String>
 ) : BindingScope {
 
     override fun resolveValue(path: String): ActionValue? {
@@ -14,7 +14,7 @@ public class SduiBindingScopeAdapter(
         } else {
             trimmed
         }
-        val rawValue = inputValues[key] ?: return null
+        val rawValue = nodeValues[key] ?: return null
         return ActionValue.Text(rawValue)
     }
 }

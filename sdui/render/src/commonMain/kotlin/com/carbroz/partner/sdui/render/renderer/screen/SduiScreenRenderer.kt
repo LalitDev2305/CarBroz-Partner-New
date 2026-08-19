@@ -1,9 +1,12 @@
 package com.carbroz.partner.sdui.render.renderer.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import com.carbroz.partner.core.ui.theme.ThemeResolver
 import com.carbroz.partner.sdui.engine.assembly.AssembledSduiScreen
 import com.carbroz.partner.sdui.render.registry.ChildRendererRegistry
 import com.carbroz.partner.sdui.render.registry.ChildrenDataRendererRegistry
@@ -36,7 +39,13 @@ public fun SduiScreenRenderer(
         eventSink = eventSink
     )
 
-    Box(modifier = modifier.fillMaxSize()) {
+    val bgColor = ThemeResolver.parseHexColor(
+        colorHex = assembledScreen.screen.theme?.backgroundColor,
+        fallback = Color.Unspecified
+    )
+    val bgModifier = if (bgColor != Color.Unspecified) modifier.background(bgColor) else modifier
+
+    Box(modifier = bgModifier.fillMaxSize()) {
         scope.renderTemplate(assembledScreen.screen.template)
     }
 }

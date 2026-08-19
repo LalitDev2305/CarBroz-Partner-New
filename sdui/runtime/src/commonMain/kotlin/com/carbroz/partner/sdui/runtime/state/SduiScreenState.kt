@@ -9,7 +9,8 @@ public data class SduiScreenState(
 ) {
     public val snapshot: SduiRenderSnapshot
         get() = SduiRenderSnapshot(
-            inputValues = overlay.inputValues,
+            inputValues = overlay.nodeValues,
+            validationErrors = overlay.validationErrors,
             executingNodeIds = overlay.executingNodeIds,
             nodeVisibility = overlay.nodeVisibility,
             nodeEnabled = overlay.nodeEnabled,

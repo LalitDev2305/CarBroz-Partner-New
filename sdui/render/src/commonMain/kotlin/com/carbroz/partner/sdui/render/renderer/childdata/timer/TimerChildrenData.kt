@@ -16,8 +16,8 @@ public object TimerChildrenData : ChildrenDataRenderer {
         eventSink: SduiUiEventSink
     ) {
         val props = TimerChildrenDataProperties.decode(childrenData.properties)
-        val state = snapshot.getTimerState(childrenData.id)
-        val remainingSeconds = state?.remainingSeconds ?: props.initialSeconds
+        val rawNodeValue = snapshot.getNodeValue(childrenData.id)?.toIntOrNull()
+        val remainingSeconds = rawNodeValue ?: props.initialSeconds
 
         val minutes = remainingSeconds / 60
         val seconds = remainingSeconds % 60
