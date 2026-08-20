@@ -7,10 +7,17 @@ plugins {
 kotlin {
     jvmToolchain(21)
 
+    applyDefaultHierarchyTemplate()
+
     listOf(
         iosArm64(),
         iosSimulatorArm64()
-    )
+    ).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "appComposition"
+            isStatic = true
+        }
+    }
 
     jvm("desktop")
 
@@ -31,6 +38,12 @@ kotlin {
             implementation(project(":core:observability"))
             implementation(project(":domain:session"))
             implementation(project(":feature:splash"))
+        }
+
+        val iosMain by getting {
+            dependencies {
+                implementation(project(":infrastructure:persistence"))
+            }
         }
 
         commonTest.dependencies {

@@ -6,6 +6,8 @@ import com.carbroz.partner.domain.session.credential.SessionCredentialPersistenc
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.model.SessionState
+import com.carbroz.partner.engine.execution.action.ActionId
+import com.carbroz.partner.engine.execution.action.ActionParameters
 import com.carbroz.partner.engine.execution.action.ActionSpec
 import com.carbroz.partner.engine.execution.action.ActionType
 import com.carbroz.partner.engine.execution.result.ExecutionResult
@@ -62,7 +64,7 @@ class AppGraphTest {
 
         val controller = graph.createHostController(testScope)
         assertNotNull(controller)
-        assertEquals("splash", graph.router.currentState.activeEntry.destination.route)
+        assertEquals("splash", graph.router.state.value.activeEntry.destination.route)
         assertEquals(SduiEndpointConfig.ROOT_SDUI_ENDPOINT, graph.endpointConfig.entryEndpoint)
     }
 
@@ -98,7 +100,11 @@ class AppGraphTest {
         graph.sessionRestorer.restore()
         assertEquals(SessionState.Authenticated, graph.sessionStore.state.value)
 
-        val logoutAction = ActionSpec.create(ActionType.AUTH_LOGOUT)
+        val logoutAction = ActionSpec.create(
+            id = ActionId("act_logout"),
+            type = ActionType.AUTH_LOGOUT,
+            parameters = ActionParameters.EMPTY
+        )
         val result = graph.actionDispatcher.dispatch(logoutAction)
 
         assertTrue(result is ExecutionResult.Success)
