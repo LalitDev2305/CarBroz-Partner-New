@@ -6,6 +6,7 @@ plugins {
 
 kotlin {
     jvmToolchain(21)
+    applyDefaultHierarchyTemplate()
 
     listOf(
         iosArm64(),
@@ -38,13 +39,7 @@ kotlin {
             implementation(project(":feature:splash"))
         }
 
-        val iosArm64Main by getting {
-            dependencies {
-                implementation(project(":infrastructure:persistence"))
-            }
-        }
-
-        val iosSimulatorArm64Main by getting {
+        val iosMain by getting {
             dependencies {
                 implementation(project(":infrastructure:persistence"))
             }
