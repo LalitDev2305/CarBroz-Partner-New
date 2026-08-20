@@ -1,7 +1,7 @@
 package com.carbroz.partner.sdui.host.controller
 
-import com.carbroz.partner.core.navigation.command.NavCommand
-import com.carbroz.partner.core.navigation.router.Router
+import com.carbroz.partner.core.navigation.NavCommand
+import com.carbroz.partner.core.navigation.Router
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
 import com.carbroz.partner.sdui.engine.processor.SduiProcessor
 import com.carbroz.partner.sdui.engine.result.SduiParseResult

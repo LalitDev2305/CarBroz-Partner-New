@@ -1,6 +1,4 @@
-package com.carbroz.partner.core.navigation.stack
-
-import com.carbroz.partner.core.navigation.destination.NavDestination
+package com.carbroz.partner.core.navigation
 
 /**
  * Pairs a unique runtime [entryId] with a [NavDestination].
@@ -10,4 +8,8 @@ import com.carbroz.partner.core.navigation.destination.NavDestination
 data class NavEntry(
     val entryId: String,
     val destination: NavDestination
-)
+) {
+    init {
+        require(entryId.isNotBlank()) { "NavEntry entryId must not be blank" }
+    }
+}

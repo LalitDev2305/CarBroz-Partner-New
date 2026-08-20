@@ -1,4 +1,4 @@
-package com.carbroz.partner.core.navigation.destination
+package com.carbroz.partner.core.navigation
 
 /**
  * Immutable value descriptor representing a navigation route and primitive parameters.
@@ -10,6 +10,10 @@ class NavDestination private constructor(
     params: Map<String, String>
 ) {
     val params: Map<String, String> = params.toMap()
+
+    init {
+        require(route.isNotBlank()) { "NavDestination route must not be blank" }
+    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -24,7 +28,7 @@ class NavDestination private constructor(
     }
 
     override fun toString(): String {
-        return "NavDestination(route='$route', params=$params)"
+        return "NavDestination(route='$route', paramCount=${params.size})"
     }
 
     companion object {
