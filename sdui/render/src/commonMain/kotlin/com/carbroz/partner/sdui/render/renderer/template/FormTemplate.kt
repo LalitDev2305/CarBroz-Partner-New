@@ -17,12 +17,8 @@ public object FormTemplate : TemplateRenderer {
     override fun render(template: SduiTemplate, scope: RenderScope) {
         val widthRes = LayoutResolver.resolveWidth(template.width, scope.resolutionContext)
         val heightRes = LayoutResolver.resolveHeight(template.height, scope.resolutionContext)
-        val arrangementRes = LayoutResolver.resolveColumnArrangement(template.arrangement, template.gap, scope.resolutionContext)
 
-        if (widthRes !is ResolutionResult.Resolved ||
-            heightRes !is ResolutionResult.Resolved ||
-            arrangementRes !is ResolutionResult.Resolved
-        ) {
+        if (widthRes !is ResolutionResult.Resolved || heightRes !is ResolutionResult.Resolved) {
             UnsupportedFallback.renderUnsupportedTemplate(template, scope)
             return
         }
@@ -32,11 +28,17 @@ public object FormTemplate : TemplateRenderer {
         val verticalAlignment = LayoutResolver.resolveColumnAlignment(template.alignment)
 
         BoxWithConstraints(modifier = paddingMod) {
-            val childContext = ResolutionContext(
+            val localContext = ResolutionContext(
                 axis = ResolutionAxis.HORIZONTAL,
                 container = CurrentContainerConstraints(availableWidth = maxWidth, availableHeight = maxHeight)
             )
-            val childScope = scope.withResolutionContext(childContext)
+            val childScope = scope.withResolutionContext(localContext)
+
+            val arrangementRes = LayoutResolver.resolveColumnArrangement(template.arrangement, template.gap, localContext)
+            if (arrangementRes !is ResolutionResult.Resolved) {
+                UnsupportedFallback.renderUnsupportedTemplate(template, scope)
+                return@BoxWithConstraints
+            }
 
             Column(
                 verticalArrangement = arrangementRes.value,

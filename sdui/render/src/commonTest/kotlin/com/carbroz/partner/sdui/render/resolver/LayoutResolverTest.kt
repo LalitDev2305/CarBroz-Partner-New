@@ -164,4 +164,44 @@ class LayoutResolverTest {
         assertTrue(smallerRes is ResolutionResult.Resolved)
         assertNotEquals(localRes.value, smallerRes.value)
     }
+
+    @Test
+    fun testAdaptiveRowGapUsesNestedContainerAvailableWidthNotRoot() {
+        val rContext = ResolutionContext(
+            axis = ResolutionAxis.HORIZONTAL,
+            container = CurrentContainerConstraints(availableWidth = 400.dp, availableHeight = 800.dp)
+        )
+        val nestedContext = ResolutionContext(
+            axis = ResolutionAxis.HORIZONTAL,
+            container = CurrentContainerConstraints(availableWidth = 200.dp, availableHeight = 400.dp)
+        )
+
+        val spec = SpacingSpec.Adaptive(16.dp)
+        val rootGapRes = LayoutResolver.resolveGap(spec, rContext)
+        val nestedGapRes = LayoutResolver.resolveGap(spec, nestedContext)
+
+        assertTrue(rootGapRes is ResolutionResult.Resolved)
+        assertTrue(nestedGapRes is ResolutionResult.Resolved)
+        assertNotEquals(rootGapRes.value, nestedGapRes.value)
+    }
+
+    @Test
+    fun testAdaptiveColumnGapUsesNestedContainerAvailableHeightNotRoot() {
+        val rContext = ResolutionContext(
+            axis = ResolutionAxis.VERTICAL,
+            container = CurrentContainerConstraints(availableWidth = 400.dp, availableHeight = 800.dp)
+        )
+        val nestedContext = ResolutionContext(
+            axis = ResolutionAxis.VERTICAL,
+            container = CurrentContainerConstraints(availableWidth = 200.dp, availableHeight = 400.dp)
+        )
+
+        val spec = SpacingSpec.Adaptive(16.dp)
+        val rootGapRes = LayoutResolver.resolveGap(spec, rContext)
+        val nestedGapRes = LayoutResolver.resolveGap(spec, nestedContext)
+
+        assertTrue(rootGapRes is ResolutionResult.Resolved)
+        assertTrue(nestedGapRes is ResolutionResult.Resolved)
+        assertNotEquals(rootGapRes.value, nestedGapRes.value)
+    }
 }

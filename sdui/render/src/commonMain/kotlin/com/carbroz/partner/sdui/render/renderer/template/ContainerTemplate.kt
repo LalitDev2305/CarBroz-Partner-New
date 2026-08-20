@@ -29,14 +29,14 @@ public object ContainerTemplate : TemplateRenderer {
         val paddingMod = LayoutResolver.resolvePadding(marginMod, template.padding)
 
         BoxWithConstraints(modifier = paddingMod) {
-            val childContext = ResolutionContext(
+            val localContext = ResolutionContext(
                 axis = ResolutionAxis.HORIZONTAL,
                 container = CurrentContainerConstraints(availableWidth = maxWidth, availableHeight = maxHeight)
             )
-            val childScope = scope.withResolutionContext(childContext)
+            val childScope = scope.withResolutionContext(localContext)
 
             if (template.axis == LayoutAxis.HORIZONTAL) {
-                val arrangementRes = LayoutResolver.resolveRowArrangement(template.arrangement, template.gap, scope.resolutionContext)
+                val arrangementRes = LayoutResolver.resolveRowArrangement(template.arrangement, template.gap, localContext)
                 if (arrangementRes !is ResolutionResult.Resolved) {
                     UnsupportedFallback.renderUnsupportedTemplate(template, scope)
                     return@BoxWithConstraints
@@ -51,7 +51,7 @@ public object ContainerTemplate : TemplateRenderer {
                     }
                 }
             } else {
-                val arrangementRes = LayoutResolver.resolveColumnArrangement(template.arrangement, template.gap, scope.resolutionContext)
+                val arrangementRes = LayoutResolver.resolveColumnArrangement(template.arrangement, template.gap, localContext)
                 if (arrangementRes !is ResolutionResult.Resolved) {
                     UnsupportedFallback.renderUnsupportedTemplate(template, scope)
                     return@BoxWithConstraints
