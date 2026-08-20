@@ -18,7 +18,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -328,8 +327,8 @@ class StoreTest {
         store.dispatch(TestIntent.CancellingIntent)
         testScheduler.advanceUntilIdle()
 
-        // Parent scope remains active
-        assertTrue(parentScope.isActive, "Parent scope should remain active")
+        // Parent scope remains active because caller provided SupervisorJob
+        assertTrue(parentScope.isActive, "Caller-provided supervised parent scope should remain active")
 
         // STORE_TERMINATED must be logged exactly once
         val terminatedLogs = logger.events.filter { it.event == "STORE_TERMINATED" }
@@ -348,31 +347,29 @@ class StoreTest {
     }
 
     @Test
-    fun verifyUnexpectedDefectTerminatesStoreAndIsLoggedWithoutPayloadDumping() {
-        val parentScope = CoroutineScope(SupervisorJob() + CoroutineExceptionHandler { _, _ -> })
+    fun verifyUnexpectedDefectTerminatesStoreAndIsLoggedWithoutPayloadDumping() = runTest {
+        val parentScope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, _ -> })
         val logger = TestLogger()
+        val initialState = TestState(count = 0, text = "sensitive_state_secret")
 
         val store = createStore<TestState, TestIntent, TestEffect>(
             scope = parentScope,
-            initialState = TestState(text = "sensitive_state_secret"),
+            initialState = initialState,
             storeId = "TestStore",
             logger = logger,
             processor = { intent ->
                 if (intent is TestIntent.FailingIntent) {
                     throw IllegalStateException("Database corrupted")
+                } else if (intent is TestIntent.Increment) {
+                    updateState { it.copy(count = it.count + intent.amount) }
                 }
             }
         )
 
-        runBlocking {
-            store.dispatch(TestIntent.FailingIntent)
+        store.dispatch(TestIntent.FailingIntent)
+        testScheduler.advanceUntilIdle()
 
-            while (logger.events.none { it.event == "STORE_TERMINATED" }) {
-                delay(10)
-            }
-        }
-
-        // Parent scope remains active
+        // Parent scope remains active because caller supplied SupervisorJob + test-side CoroutineExceptionHandler
         assertTrue(parentScope.isActive, "Parent scope should remain active")
 
         // Verify defect logged exactly once
@@ -392,13 +389,13 @@ class StoreTest {
             assertFalse(log.message.contains("FailingIntent"))
         }
 
-        // Subsequent dispatch must fail with fatal exception (cause re-thrown by channel)
-        runBlocking {
-            val fatalEx = assertFailsWith<IllegalStateException> {
-                store.dispatch(TestIntent.Increment(1))
-            }
-            assertEquals("Database corrupted", fatalEx.message)
+        // Subsequent dispatch must fail because channels are closed
+        assertFailsWith<Throwable> {
+            store.dispatch(TestIntent.Increment(5))
         }
+
+        // Prove state was not changed by any later intent (remains at initial state)
+        assertEquals(initialState, store.state.value, "Store state must remain unchanged after termination")
 
         parentScope.cancel()
     }

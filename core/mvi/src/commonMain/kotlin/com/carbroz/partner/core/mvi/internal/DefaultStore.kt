@@ -8,9 +8,7 @@ import com.carbroz.partner.core.observability.logger.StructuredLogger
 import com.carbroz.partner.core.observability.model.LogCategory
 import com.carbroz.partner.core.observability.model.LogLevel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.Flow
@@ -19,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 
 private const val EFFECT_BUFFER_CAPACITY = 64
@@ -51,7 +48,7 @@ internal class DefaultStore<State, Intent, Effect>(
     override val currentState: State
         get() = _state.value
 
-    private val processorJob = scope.launch(SupervisorJob(scope.coroutineContext.job) + CoroutineExceptionHandler { _, _ -> }) {
+    private val processorJob = scope.launch {
         for (intent in intentChannel) {
             try {
                 boundLogger.debug(
