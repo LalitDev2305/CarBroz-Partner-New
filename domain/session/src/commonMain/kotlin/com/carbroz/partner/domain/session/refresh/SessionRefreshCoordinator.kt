@@ -15,7 +15,7 @@ public class SessionRefreshCoordinator(
     private val credentialPersistence: SessionCredentialPersistence,
     private val refreshGateway: SessionRefreshGateway,
     private val clearSession: ClearSession,
-    private val sessionStore: SessionStore? = null
+    private val sessionStore: SessionStore
 ) {
     private val mutex = Mutex()
 
@@ -31,7 +31,7 @@ public class SessionRefreshCoordinator(
 
             if (failedToken != null && currentCredentials.accessToken != failedToken) {
                 // Another concurrent request already refreshed credentials.
-                sessionStore?.markAuthenticated()
+                sessionStore.markAuthenticated()
                 return SessionRefreshOutcome.AlreadyRefreshed
             }
 
@@ -45,7 +45,7 @@ public class SessionRefreshCoordinator(
                 is SessionRefreshResult.Success -> {
                     when (credentialPersistence.save(result.credentials)) {
                         is CredentialPersistenceResult.Success -> {
-                            sessionStore?.markAuthenticated()
+                            sessionStore.markAuthenticated()
                             SessionRefreshOutcome.Refreshed
                         }
                         is CredentialPersistenceResult.Failure -> {

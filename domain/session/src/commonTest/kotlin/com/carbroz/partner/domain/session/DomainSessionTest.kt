@@ -222,6 +222,25 @@ class DomainSessionTest {
     }
 
     @Test
+    fun testSessionRefreshCoordinatorPersistenceFailureDoesNotMarkAuthenticated() = runTest {
+        val persistence = FakeSessionCredentialPersistence()
+        persistence.save(SessionCredentials(accessToken = "token_old", refreshToken = "refresh_old"))
+        persistence.failOnSave = true
+        val store = SessionStore()
+        val clearSession = ClearSession(persistence, store)
+
+        val gateway = SessionRefreshGateway { _ ->
+            SessionRefreshResult.Success(SessionCredentials(accessToken = "token_new", refreshToken = "refresh_new"))
+        }
+
+        val coordinator = SessionRefreshCoordinator(persistence, gateway, clearSession, store)
+        val outcome = coordinator.refresh("token_old")
+
+        assertEquals(SessionRefreshOutcome.PersistenceFailure, outcome)
+        assertEquals(SessionState.Unauthenticated, store.state.value)
+    }
+
+    @Test
     fun testSessionCredentialsToStringRedactsTokens() = runTest {
         val credentials = SessionCredentials(accessToken = "secret_access_123", refreshToken = "secret_refresh_456")
         val str = credentials.toString()

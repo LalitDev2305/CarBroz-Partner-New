@@ -7,6 +7,9 @@ import com.carbroz.partner.domain.session.credential.CredentialPersistenceResult
 import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.model.SessionState
+import com.carbroz.partner.domain.session.refresh.SessionRefreshGateway
+import com.carbroz.partner.domain.session.refresh.SessionRefreshOutcome
+import com.carbroz.partner.domain.session.refresh.SessionRefreshResult
 import com.carbroz.partner.engine.execution.action.ActionId
 import com.carbroz.partner.engine.execution.action.ActionParameters
 import com.carbroz.partner.engine.execution.action.ActionSpec
@@ -111,5 +114,29 @@ class AppGraphTest {
         assertTrue(result is ExecutionResult.Success)
         assertEquals(SessionState.Unauthenticated, graph.sessionStore.state.value)
         assertNull(graph.credentialProvider.getAccessToken())
+    }
+
+    @Test
+    fun testAppGraphRefreshCoordinatorSharesCanonicalSessionStore() = runTest {
+        val persistence = FakeCredentialPersistence(
+            SessionCredentials(accessToken = "token_old", refreshToken = "refresh_old")
+        )
+        val refreshGateway = SessionRefreshGateway {
+            SessionRefreshResult.Success(SessionCredentials("token_new", "refresh_new"))
+        }
+        val graph = AppGraph(
+            config = AppConfig(baseUrl = "https://api.carbroz.com"),
+            credentialPersistence = persistence,
+            refreshGateway = refreshGateway
+        )
+
+        assertEquals(SessionState.Unknown, graph.sessionStore.state.value)
+
+        val coordinator = graph.refreshCoordinator
+        assertNotNull(coordinator)
+        val outcome = coordinator.refresh("token_old")
+
+        assertEquals(SessionRefreshOutcome.Refreshed, outcome)
+        assertEquals(SessionState.Authenticated, graph.sessionStore.state.value)
     }
 }

@@ -53,7 +53,12 @@ public class AppGraph(
     public val clearSession: ClearSession = ClearSession(credentialPersistence, sessionStore)
     public val sessionRestorer: SessionRestorer = SessionRestorer(credentialPersistence, sessionStore)
     public val refreshCoordinator: SessionRefreshCoordinator? = refreshGateway?.let {
-        SessionRefreshCoordinator(credentialPersistence, it, clearSession)
+        SessionRefreshCoordinator(
+            credentialPersistence = credentialPersistence,
+            refreshGateway = it,
+            clearSession = clearSession,
+            sessionStore = sessionStore
+        )
     }
 
     public val networkClient: NetworkClient = KtorNetworkClient(
