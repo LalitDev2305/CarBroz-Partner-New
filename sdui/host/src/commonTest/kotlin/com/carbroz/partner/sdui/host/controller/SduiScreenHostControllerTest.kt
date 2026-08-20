@@ -1,12 +1,18 @@
 package com.carbroz.partner.sdui.host
 
-import com.carbroz.partner.core.navigation.command.NavCommand
-import com.carbroz.partner.core.navigation.destination.NavDestination
-import com.carbroz.partner.core.navigation.result.NavResult
-import com.carbroz.partner.core.navigation.router.Router
-import com.carbroz.partner.core.navigation.stack.NavEntry
-import com.carbroz.partner.core.navigation.stack.NavStack
-import com.carbroz.partner.core.navigation.state.NavState
+import com.carbroz.partner.core.navigation.NavCommand
+import com.carbroz.partner.core.navigation.NavDestination
+import com.carbroz.partner.core.navigation.NavEntry
+import com.carbroz.partner.core.navigation.NavResult
+import com.carbroz.partner.core.navigation.NavState
+import com.carbroz.partner.core.navigation.Router
+import com.carbroz.partner.core.navigation.createRouter
+import com.carbroz.partner.core.observability.logger.BoundLogger
+import com.carbroz.partner.core.observability.logger.StructuredLogger
+import com.carbroz.partner.core.observability.model.LogAttribute
+import com.carbroz.partner.core.observability.model.LogCategory
+import com.carbroz.partner.core.observability.model.LogLevel
+import com.carbroz.partner.core.observability.model.TraceContext
 import com.carbroz.partner.domain.actions.spec.ActionSpec
 import com.carbroz.partner.engine.execution.binding.BindingScope
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
@@ -16,7 +22,6 @@ import com.carbroz.partner.sdui.host.model.SduiHostState
 import com.carbroz.partner.sdui.host.repository.SduiScreenRepository
 import com.carbroz.partner.sdui.render.runtime.event.SduiUiEvent
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -47,19 +52,35 @@ class SduiScreenHostControllerTest {
         }
     }
 
+    private class NoOpLogger : StructuredLogger {
+        override fun isLevelEnabled(level: LogLevel): Boolean = true
+        override fun withSource(sourceClass: String, defaultTraceContext: TraceContext?): BoundLogger {
+            return object : BoundLogger {
+                override fun log(
+                    level: LogLevel,
+                    category: LogCategory,
+                    sourceFunction: String,
+                    event: String,
+                    message: String,
+                    attributes: Map<String, LogAttribute>,
+                    traceContext: TraceContext?,
+                    durationMs: Long?,
+                    throwable: Throwable?
+                ) {}
+            }
+        }
+    }
+
     private class FakeRouter : Router {
         var popCount = 0
-        private val dummyDestination = NavDestination.create("dummy")
-        private val dummyEntry = NavEntry("entry_1", dummyDestination)
-        private val dummyStack = NavStack.create(dummyEntry)
-        override val state: StateFlow<NavState> get() = MutableStateFlow(NavState(dummyStack))
-        override val currentState: NavState get() = NavState(dummyStack)
+        private val delegateRouter = createRouter(NavDestination.create("dummy"), NoOpLogger())
+        override val state: StateFlow<NavState> get() = delegateRouter.state
 
         override suspend fun execute(command: NavCommand): NavResult {
             if (command is NavCommand.Pop) {
                 popCount++
             }
-            return NavResult.Executed(dummyEntry)
+            return NavResult.Executed(NavEntry("entry_1", NavDestination.create("dummy")))
         }
     }
 
