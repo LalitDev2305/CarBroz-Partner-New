@@ -6,13 +6,6 @@ import com.carbroz.partner.core.navigation.NavEntry
 import com.carbroz.partner.core.navigation.NavResult
 import com.carbroz.partner.core.navigation.NavState
 import com.carbroz.partner.core.navigation.Router
-import com.carbroz.partner.core.navigation.createRouter
-import com.carbroz.partner.core.observability.logger.BoundLogger
-import com.carbroz.partner.core.observability.logger.StructuredLogger
-import com.carbroz.partner.core.observability.model.LogAttribute
-import com.carbroz.partner.core.observability.model.LogCategory
-import com.carbroz.partner.core.observability.model.LogLevel
-import com.carbroz.partner.core.observability.model.TraceContext
 import com.carbroz.partner.domain.actions.spec.ActionSpec
 import com.carbroz.partner.engine.execution.binding.BindingScope
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
@@ -52,29 +45,11 @@ class SduiScreenHostControllerTest {
         }
     }
 
-    private class NoOpLogger : StructuredLogger {
-        override fun isLevelEnabled(level: LogLevel): Boolean = true
-        override fun withSource(sourceClass: String, defaultTraceContext: TraceContext?): BoundLogger {
-            return object : BoundLogger {
-                override fun log(
-                    level: LogLevel,
-                    category: LogCategory,
-                    sourceFunction: String,
-                    event: String,
-                    message: String,
-                    attributes: Map<String, LogAttribute>,
-                    traceContext: TraceContext?,
-                    durationMs: Long?,
-                    throwable: Throwable?
-                ) {}
-            }
-        }
-    }
-
     private class FakeRouter : Router {
         var popCount = 0
-        private val delegateRouter = createRouter(NavDestination.create("dummy"), NoOpLogger())
-        override val state: StateFlow<NavState> get() = delegateRouter.state
+
+        override val state: StateFlow<NavState>
+            get() = error("State is not read by SduiScreenHostController")
 
         override suspend fun execute(command: NavCommand): NavResult {
             if (command is NavCommand.Pop) {
