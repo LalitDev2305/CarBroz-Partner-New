@@ -1,60 +1,52 @@
 package com.carbroz.partner.infrastructure.persistence
 
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
-import com.carbroz.partner.infrastructure.persistence.secure.DesktopSecureStorage
-import com.carbroz.partner.infrastructure.persistence.session.DefaultSessionCredentialPersistence
+import com.carbroz.partner.infrastructure.persistence.session.DesktopSessionCredentialPersistenceFactory
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class DefaultSessionCredentialPersistenceTest {
+class DesktopSessionCredentialPersistenceTest {
 
     @Test
-    fun load_returnsNotFound_whenCredentialsDoNotExist() = runTest {
-        val persistence = DefaultSessionCredentialPersistence(DesktopSecureStorage())
+    fun factory_returnsSessionCredentialPersistence() {
+        val persistence = DesktopSessionCredentialPersistenceFactory.create()
+        assertIs<SessionCredentialPersistence>(persistence)
+    }
+
+    @Test
+    fun load_returnsNotFound() = runTest {
+        val persistence = DesktopSessionCredentialPersistenceFactory.create()
         val result = persistence.load()
         assertIs<CredentialLoadResult.NotFound>(result)
     }
 
     @Test
-    fun save_storesCredentials_andLoadRetrievesThem() = runTest {
-        val persistence = DefaultSessionCredentialPersistence(DesktopSecureStorage())
+    fun save_returnsFalse_forUnsupportedDesktopPersistence() = runTest {
+        val persistence = DesktopSessionCredentialPersistenceFactory.create()
         val creds = SessionCredentials(accessToken = "access_123", refreshToken = "refresh_456")
         val saved = persistence.save(creds)
-        assertTrue(saved)
-
-        val loadResult = persistence.load()
-        assertIs<CredentialLoadResult.Found>(loadResult)
-        assertEquals(creds, loadResult.credentials)
+        assertFalse(saved, "Desktop credential persistence must return false when save is unsupported")
     }
 
     @Test
-    fun clear_removesStoredCredentials_andIsIdempotent() = runTest {
-        val persistence = DefaultSessionCredentialPersistence(DesktopSecureStorage())
-        val creds = SessionCredentials(accessToken = "access_123")
-
-        persistence.save(creds)
-        val clearedFirst = persistence.clear()
-        assertTrue(clearedFirst)
-
-        val loadResult = persistence.load()
-        assertIs<CredentialLoadResult.NotFound>(loadResult)
-
-        val clearedSecond = persistence.clear()
-        assertTrue(clearedSecond, "Clear must be idempotent success when already missing")
+    fun clear_returnsTrue() = runTest {
+        val persistence = DesktopSessionCredentialPersistenceFactory.create()
+        val cleared = persistence.clear()
+        assertTrue(cleared, "Clear must be idempotent success")
     }
 
     @Test
-    fun load_returnsFailure_whenPayloadIsCorrupted() = runTest {
-        val desktopStorage = DesktopSecureStorage()
-        val persistence = DefaultSessionCredentialPersistence(desktopStorage)
-
-        desktopStorage.write("session_credentials", "{ invalid json }")
-
-        val result = persistence.load()
-        assertIs<CredentialLoadResult.Failure>(result)
+    fun credentials_toString_doesNotLogRawSecrets() {
+        val creds = SessionCredentials(accessToken = "secret_access_token", refreshToken = "secret_refresh_token")
+        val str = creds.toString()
+        assertFalse(str.contains("secret_access_token"))
+        assertFalse(str.contains("secret_refresh_token"))
+        assertEquals("SessionCredentials(hasAccessToken=true, hasRefreshToken=true)", str)
     }
 }
