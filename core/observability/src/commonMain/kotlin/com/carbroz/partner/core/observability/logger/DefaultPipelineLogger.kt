@@ -1,7 +1,6 @@
 package com.carbroz.partner.core.observability.logger
 
 import com.carbroz.partner.core.observability.model.AttributeSensitivity
-import com.carbroz.partner.core.observability.model.Clock
 import com.carbroz.partner.core.observability.model.LogAttribute
 import com.carbroz.partner.core.observability.model.LogCategory
 import com.carbroz.partner.core.observability.model.LogEvent
@@ -11,13 +10,14 @@ import com.carbroz.partner.core.observability.model.TraceContext
 import com.carbroz.partner.core.observability.policy.ObservabilityConfig
 import com.carbroz.partner.core.observability.redaction.Redactor
 import com.carbroz.partner.core.observability.sink.LogSink
+import kotlin.time.Clock
 
 /**
  * Default pipeline implementation of [StructuredLogger] enforcing config filtering, security redaction, and isolated sink dispatch.
  */
 class DefaultPipelineLogger(
     private val config: ObservabilityConfig = ObservabilityConfig(),
-    private val clock: Clock = Clock { kotlin.time.Clock.System.now().toEpochMilliseconds() },
+    private val clock: Clock = Clock.System,
     sinks: List<LogSink>
 ) : StructuredLogger {
 
@@ -70,7 +70,7 @@ class DefaultPipelineLogger(
 
             // 3. Immutable LogEvent Assembly
             val logEvent = LogEvent(
-                timestampMs = clock.nowEpochMilliseconds(),
+                timestampMs = clock.now().toEpochMilliseconds(),
                 level = level,
                 category = category,
                 sourceClass = sourceClass,

@@ -2,7 +2,6 @@ package com.carbroz.partner.core.observability
 
 import com.carbroz.partner.core.observability.logger.DefaultPipelineLogger
 import com.carbroz.partner.core.observability.model.AttributeSensitivity
-import com.carbroz.partner.core.observability.model.Clock
 import com.carbroz.partner.core.observability.model.LogAttribute
 import com.carbroz.partner.core.observability.model.LogCategory
 import com.carbroz.partner.core.observability.model.LogEvent
@@ -15,7 +14,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class StructuredLoggerTest {
 
@@ -32,6 +34,25 @@ class StructuredLoggerTest {
         }
     }
 
+    private fun testClock(epochMs: Long = 1000L): Clock = object : Clock {
+        override fun now(): Instant = Instant.fromEpochMilliseconds(epochMs)
+    }
+
+    @Test
+    fun verifyObservabilityDisabledPreventsAllEvents() {
+        val sink = TestSink()
+        val logger = DefaultPipelineLogger(
+            config = ObservabilityConfig(isEnabled = false),
+            clock = testClock(),
+            sinks = listOf(sink)
+        )
+        val bound = logger.withSource("TestSource")
+
+        bound.info("testFunc", LogCategory.APP, "disabled_event", "Msg when disabled")
+
+        assertEquals(0, sink.events.size)
+    }
+
     @Test
     fun verifyOperationalSinkRequired() {
         assertFailsWith<IllegalArgumentException> {
@@ -44,7 +65,7 @@ class StructuredLoggerTest {
         val sink = TestSink()
         val logger = DefaultPipelineLogger(
             config = ObservabilityConfig(minLevel = LogLevel.INFO),
-            clock = Clock { 1000L },
+            clock = testClock(1000L),
             sinks = listOf(sink)
         )
         val bound = logger.withSource("TestSource")
@@ -66,7 +87,7 @@ class StructuredLoggerTest {
                 allowDetailedDiagnostics = false,
                 allowPayloadLogging = false
             ),
-            clock = Clock { 1000L },
+            clock = testClock(1000L),
             sinks = listOf(sink)
         )
         val bound = logger.withSource("TestSource")
@@ -87,7 +108,7 @@ class StructuredLoggerTest {
     }
 
     @Test
-    fun verifyRecursiveSensitivityPolicyFiltering() {
+    fun verifyRecursiveSensitivityPolicyFilteringStructure() {
         val sink = TestSink()
         val logger = DefaultPipelineLogger(
             config = ObservabilityConfig(
@@ -95,7 +116,7 @@ class StructuredLoggerTest {
                 allowDetailedDiagnostics = false,
                 allowPayloadLogging = false
             ),
-            clock = Clock { 1000L },
+            clock = testClock(1000L),
             sinks = listOf(sink)
         )
         val bound = logger.withSource("TestSource")
@@ -119,11 +140,85 @@ class StructuredLoggerTest {
     }
 
     @Test
+    fun verifyRecursiveSensitivityPolicyFilteringCollectionToStructure() {
+        val sink = TestSink()
+        val logger = DefaultPipelineLogger(
+            config = ObservabilityConfig(
+                minLevel = LogLevel.DEBUG,
+                allowDetailedDiagnostics = false,
+                allowPayloadLogging = false
+            ),
+            clock = testClock(1000L),
+            sinks = listOf(sink)
+        )
+        val bound = logger.withSource("TestSource")
+
+        val innerStruct = LogValue.Structure(
+            mapOf(
+                "publicChild" to LogAttribute(LogValue.Text("pub"), AttributeSensitivity.PUBLIC),
+                "detailChild" to LogAttribute(LogValue.Text("detail"), AttributeSensitivity.DETAIL),
+                "payloadChild" to LogAttribute(LogValue.Text("payload"), AttributeSensitivity.PAYLOAD)
+            )
+        )
+        val collection = LogValue.Collection(listOf(innerStruct))
+        val attributes = mapOf("topCollection" to LogAttribute(collection, AttributeSensitivity.PUBLIC))
+
+        bound.info("testFunc", LogCategory.APP, "coll_struct_event", "Collection Structure msg", attributes = attributes)
+
+        assertEquals(1, sink.events.size)
+        val topColl = sink.events[0].attributes["topCollection"] as LogValue.Collection
+        assertEquals(1, topColl.items.size)
+        val structItem = topColl.items[0] as LogValue.Structure
+        assertTrue(structItem.attributes.containsKey("publicChild"))
+        assertEquals(false, structItem.attributes.containsKey("detailChild"))
+        assertEquals(false, structItem.attributes.containsKey("payloadChild"))
+    }
+
+    @Test
+    fun verifyPerformanceTimingConfigControl() {
+        val sink = TestSink()
+        val disabledLogger = DefaultPipelineLogger(
+            config = ObservabilityConfig(enablePerformanceTiming = false),
+            clock = testClock(1000L),
+            sinks = listOf(sink)
+        )
+        disabledLogger.withSource("TestSource").log(
+            level = LogLevel.INFO,
+            category = LogCategory.APP,
+            sourceFunction = "testFunc",
+            event = "timing_disabled",
+            message = "Timing disabled test",
+            durationMs = 123L
+        )
+
+        assertEquals(1, sink.events.size)
+        assertNull(sink.events[0].durationMs)
+
+        val enabledSink = TestSink()
+        val enabledLogger = DefaultPipelineLogger(
+            config = ObservabilityConfig(enablePerformanceTiming = true),
+            clock = testClock(1000L),
+            sinks = listOf(enabledSink)
+        )
+        enabledLogger.withSource("TestSource").log(
+            level = LogLevel.INFO,
+            category = LogCategory.APP,
+            sourceFunction = "testFunc",
+            event = "timing_enabled",
+            message = "Timing enabled test",
+            durationMs = 123L
+        )
+
+        assertEquals(1, enabledSink.events.size)
+        assertEquals(123L, enabledSink.events[0].durationMs)
+    }
+
+    @Test
     fun verifyBoundLoggerIdentityAndContextEnrichment() {
         val sink = TestSink()
         val logger = DefaultPipelineLogger(
             config = ObservabilityConfig(minLevel = LogLevel.INFO),
-            clock = Clock { 5000L },
+            clock = testClock(5000L),
             sinks = listOf(sink)
         )
         val bound = logger.withSource("SplashStore")
@@ -150,7 +245,7 @@ class StructuredLoggerTest {
 
         val logger = DefaultPipelineLogger(
             config = ObservabilityConfig(minLevel = LogLevel.INFO),
-            clock = Clock { 2000L },
+            clock = testClock(2000L),
             sinks = listOf(healthySink1, throwingSink, healthySink2)
         )
         val bound = logger.withSource("TestSource")
@@ -169,7 +264,7 @@ class StructuredLoggerTest {
                 minLevel = LogLevel.INFO,
                 enabledCategories = setOf(LogCategory.UI, LogCategory.MVI)
             ),
-            clock = Clock { 1000L },
+            clock = testClock(1000L),
             sinks = listOf(sink)
         )
         val bound = logger.withSource("TestSource")
@@ -182,7 +277,7 @@ class StructuredLoggerTest {
 
         val emptyLogger = DefaultPipelineLogger(
             config = ObservabilityConfig(enabledCategories = emptySet()),
-            clock = Clock { 1000L },
+            clock = testClock(1000L),
             sinks = listOf(sink)
         )
         emptyLogger.withSource("TestSource").info("testFunc", LogCategory.UI, "ui_event", "UI msg")
@@ -197,7 +292,7 @@ class StructuredLoggerTest {
                 minLevel = LogLevel.DEBUG,
                 allowPayloadLogging = true
             ),
-            clock = Clock { 1000L },
+            clock = testClock(1000L),
             sinks = listOf(sink)
         )
         val bound = logger.withSource("TestSource")
@@ -224,7 +319,7 @@ class StructuredLoggerTest {
         val sink = TestSink()
         val logger = DefaultPipelineLogger(
             config = ObservabilityConfig(minLevel = LogLevel.INFO),
-            clock = Clock { 1000L },
+            clock = testClock(1000L),
             sinks = listOf(sink)
         )
         val baseContext = TraceContext(traceId = "trace-A", screenId = "screen-A", operationId = "op-A")
@@ -250,7 +345,7 @@ class StructuredLoggerTest {
 
         val logger = DefaultPipelineLogger(
             config = ObservabilityConfig(minLevel = LogLevel.INFO),
-            clock = Clock { 2000L },
+            clock = testClock(2000L),
             sinks = listOf(sinkA, sinkB, sinkC, sinkD)
         )
         val bound = logger.withSource("TestSource")
@@ -266,7 +361,7 @@ class StructuredLoggerTest {
         val sink = TestSink()
         val logger = DefaultPipelineLogger(
             config = ObservabilityConfig(minLevel = LogLevel.INFO),
-            clock = Clock { 1000L },
+            clock = testClock(1000L),
             sinks = listOf(sink)
         )
         val bound = logger.withSource("TestSource")

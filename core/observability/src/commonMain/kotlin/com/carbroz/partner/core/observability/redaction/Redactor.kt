@@ -20,13 +20,15 @@ internal object Redactor {
     private val PII_PHONE_REGEX = Regex("(?:\\+91|\\+1|\\+44|\\+33|\\+49|\\+81|\\+86|\\+61)\\d{8,12}|(?:\\bphone\\b|\\bmobile\\b|\\bcontact\\b)\\s*[:=]?\\s*\\+?\\d{10,12}", RegexOption.IGNORE_CASE)
 
     private val CREDENTIAL_PATTERNS = listOf(
-        Regex("(?i)\\bauthorization\\s*:\\s*bearer\\s+[^\\s,;\"]+", RegexOption.IGNORE_CASE) to "Authorization: Bearer [REDACTED_SECRET]",
-        Regex("(?i)\\bauthorization\\s*=\\s*[^\\s,;\"]+", RegexOption.IGNORE_CASE) to "authorization=[REDACTED_SECRET]",
-        Regex("(?i)\\bpassword\\s*[:=]\\s*[^\\s,;\"]+", RegexOption.IGNORE_CASE) to "password=[REDACTED_SECRET]",
-        Regex("(?i)\\baccess_?token\\s*[:=]\\s*[^\\s,;\"]+", RegexOption.IGNORE_CASE) to "access_token=[REDACTED_SECRET]",
-        Regex("(?i)\\brefresh_?token\\s*[:=]\\s*[^\\s,;\"]+", RegexOption.IGNORE_CASE) to "refresh_token=[REDACTED_SECRET]",
-        Regex("(?i)\\bapi_?key\\s*[:=]\\s*[^\\s,;\"]+", RegexOption.IGNORE_CASE) to "api_key=[REDACTED_SECRET]",
-        Regex("(?i)\\bsecret\\s*[:=]\\s*[^\\s,;\"]+", RegexOption.IGNORE_CASE) to "secret=[REDACTED_SECRET]"
+        Regex("(?i)\\bauthorization\\s*:\\s*bearer\\s+[^\\s,;\"]+") to "Authorization: Bearer [REDACTED_SECRET]",
+        Regex("(?i)\\bauthorization\\s*=\\s*(?:bearer\\s+)?[^\\s,;\"]+") to "authorization=[REDACTED_SECRET]",
+        Regex("(?i)\\bpassword\\s*[:=]\\s*[^\\s,;\"]+") to "password=[REDACTED_SECRET]",
+        Regex("(?i)\\baccess[_-]?token\\s*[:=]\\s*[^\\s,;\"]+") to "access_token=[REDACTED_SECRET]",
+        Regex("(?i)\\brefresh[_-]?token\\s*[:=]\\s*[^\\s,;\"]+") to "refresh_token=[REDACTED_SECRET]",
+        Regex("(?i)\\bapi[_-]?key\\s*[:=]\\s*[^\\s,;\"]+") to "api_key=[REDACTED_SECRET]",
+        Regex("(?i)\\bsecret\\s*[:=]\\s*[^\\s,;\"]+") to "secret=[REDACTED_SECRET]",
+        Regex("(?i)\\bset[_-]?cookie\\s*[:=]\\s*[^\\s,;\"]+") to "set-cookie=[REDACTED_SECRET]",
+        Regex("(?i)\\bcookie\\s*[:=]\\s*[^\\s,;\"]+") to "cookie=[REDACTED_SECRET]"
     )
 
     fun sanitizeAttributes(attributes: Map<String, LogAttribute>): Map<String, LogValue> {
