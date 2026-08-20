@@ -1,7 +1,8 @@
 package com.carbroz.partner.engine.execution.executor
 
+import com.carbroz.partner.domain.session.credential.CredentialLoadResult
+import com.carbroz.partner.domain.session.credential.CredentialPersistenceResult
 import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
-import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.model.SessionState
 import com.carbroz.partner.domain.session.operation.ClearSession
@@ -24,13 +25,13 @@ class LogoutActionExecutorTest {
             val c = stored ?: return CredentialLoadResult.NotFound
             return CredentialLoadResult.Found(c)
         }
-        override suspend fun save(credentials: SessionCredentials): Boolean {
+        override suspend fun save(credentials: SessionCredentials): CredentialPersistenceResult {
             stored = credentials
-            return true
+            return CredentialPersistenceResult.Success
         }
-        override suspend fun clear(): Boolean {
+        override suspend fun clear(): CredentialPersistenceResult {
             stored = null
-            return true
+            return CredentialPersistenceResult.Success
         }
     }
 

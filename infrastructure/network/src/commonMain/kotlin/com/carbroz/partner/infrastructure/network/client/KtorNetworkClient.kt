@@ -2,6 +2,7 @@ package com.carbroz.partner.infrastructure.network.client
 
 import com.carbroz.partner.domain.session.provider.SessionCredentialProvider
 import com.carbroz.partner.domain.session.refresh.SessionRefreshCoordinator
+import com.carbroz.partner.domain.session.refresh.SessionRefreshOutcome
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.plugin
@@ -127,20 +128,21 @@ public class KtorNetworkClient(
                 }
 
                 val coordinator = refreshCoordinator ?: return@intercept originalCall
-                val refreshed = coordinator.refresh(tokenUsedForAttemptOne)
+                val outcome = coordinator.refresh(tokenUsedForAttemptOne)
 
-                if (!refreshed) {
-                    return@intercept originalCall
+                return@intercept when (outcome) {
+                    is SessionRefreshOutcome.Refreshed, is SessionRefreshOutcome.AlreadyRefreshed -> {
+                        val newToken = credentialProvider.getAccessToken()
+                        if (!newToken.isNullOrBlank()) {
+                            requestBuilder.headers.remove(HttpHeaders.Authorization)
+                            requestBuilder.header(HttpHeaders.Authorization, "Bearer $newToken")
+                        }
+                        execute(requestBuilder)
+                    }
+                    is SessionRefreshOutcome.Rejected, is SessionRefreshOutcome.Unavailable, is SessionRefreshOutcome.PersistenceFailure -> {
+                        originalCall
+                    }
                 }
-
-                val newToken = credentialProvider.getAccessToken()
-                if (!newToken.isNullOrBlank()) {
-                    requestBuilder.headers.remove(HttpHeaders.Authorization)
-                    requestBuilder.header(HttpHeaders.Authorization, "Bearer $newToken")
-                }
-
-                // Execute Attempt 2 exactly once
-                return@intercept execute(requestBuilder)
             }
             return client
         }

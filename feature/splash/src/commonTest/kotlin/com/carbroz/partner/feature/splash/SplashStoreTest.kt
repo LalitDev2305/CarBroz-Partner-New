@@ -6,8 +6,9 @@ import com.carbroz.partner.core.observability.model.LogAttribute
 import com.carbroz.partner.core.observability.model.LogCategory
 import com.carbroz.partner.core.observability.model.LogLevel
 import com.carbroz.partner.core.observability.model.TraceContext
+import com.carbroz.partner.domain.session.credential.CredentialLoadResult
+import com.carbroz.partner.domain.session.credential.CredentialPersistenceResult
 import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
-import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.restore.SessionRestorer
 import com.carbroz.partner.domain.session.store.SessionStore
@@ -53,8 +54,8 @@ class SplashStoreTest {
 
     private class FakeCredentialPersistence : SessionCredentialPersistence {
         override suspend fun load(): CredentialLoadResult = CredentialLoadResult.NotFound
-        override suspend fun save(credentials: SessionCredentials): Boolean = true
-        override suspend fun clear(): Boolean = true
+        override suspend fun save(credentials: SessionCredentials): CredentialPersistenceResult = CredentialPersistenceResult.Success
+        override suspend fun clear(): CredentialPersistenceResult = CredentialPersistenceResult.Success
     }
 
     @Test

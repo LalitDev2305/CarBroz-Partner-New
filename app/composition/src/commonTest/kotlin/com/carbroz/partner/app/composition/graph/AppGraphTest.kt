@@ -2,8 +2,9 @@ package com.carbroz.partner.app.composition.graph
 
 import com.carbroz.partner.app.composition.config.AppConfig
 import com.carbroz.partner.app.composition.config.SduiEndpointConfig
+import com.carbroz.partner.domain.session.credential.CredentialLoadResult
+import com.carbroz.partner.domain.session.credential.CredentialPersistenceResult
 import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
-import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.model.SessionState
 import com.carbroz.partner.engine.execution.action.ActionId
@@ -32,14 +33,14 @@ class AppGraphTest {
             return if (c != null) CredentialLoadResult.Found(c) else CredentialLoadResult.NotFound
         }
 
-        override suspend fun save(credentials: SessionCredentials): Boolean {
+        override suspend fun save(credentials: SessionCredentials): CredentialPersistenceResult {
             this.credentials = credentials
-            return true
+            return CredentialPersistenceResult.Success
         }
 
-        override suspend fun clear(): Boolean {
+        override suspend fun clear(): CredentialPersistenceResult {
             this.credentials = null
-            return true
+            return CredentialPersistenceResult.Success
         }
     }
 
@@ -82,7 +83,7 @@ class AppGraphTest {
         assertEquals("token_abc", graph.credentialProvider.getAccessToken())
 
         // 2. Startup restoration invokes real SessionRestorer and updates sessionStore state
-        assertEquals(SessionState.Unauthenticated, graph.sessionStore.state.value)
+        assertEquals(SessionState.Unknown, graph.sessionStore.state.value)
         graph.startupOrchestrator.initialize()
         assertEquals(SessionState.Authenticated, graph.sessionStore.state.value)
     }

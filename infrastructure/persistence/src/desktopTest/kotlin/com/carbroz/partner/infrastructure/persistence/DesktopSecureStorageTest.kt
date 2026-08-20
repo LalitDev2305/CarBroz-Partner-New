@@ -1,7 +1,8 @@
 package com.carbroz.partner.infrastructure.persistence
 
+import com.carbroz.partner.domain.session.credential.CredentialLoadResult
+import com.carbroz.partner.domain.session.credential.CredentialPersistenceResult
 import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
-import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.infrastructure.persistence.session.DesktopSessionCredentialPersistenceFactory
 import kotlinx.coroutines.test.runTest
@@ -27,18 +28,18 @@ class DesktopSessionCredentialPersistenceTest {
     }
 
     @Test
-    fun save_returnsFalse_forUnsupportedDesktopPersistence() = runTest {
+    fun save_returnsFailure_forUnsupportedDesktopPersistence() = runTest {
         val persistence = DesktopSessionCredentialPersistenceFactory.create()
         val creds = SessionCredentials(accessToken = "access_123", refreshToken = "refresh_456")
         val saved = persistence.save(creds)
-        assertFalse(saved, "Desktop credential persistence must return false when save is unsupported")
+        assertIs<CredentialPersistenceResult.Failure>(saved, "Desktop credential persistence must return Failure when save is unsupported")
     }
 
     @Test
-    fun clear_returnsTrue() = runTest {
+    fun clear_returnsSuccess() = runTest {
         val persistence = DesktopSessionCredentialPersistenceFactory.create()
         val cleared = persistence.clear()
-        assertTrue(cleared, "Clear must be idempotent success")
+        assertIs<CredentialPersistenceResult.Success>(cleared, "Clear must be idempotent success")
     }
 
     @Test

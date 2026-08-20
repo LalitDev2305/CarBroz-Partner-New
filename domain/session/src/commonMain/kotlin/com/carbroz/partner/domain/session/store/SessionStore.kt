@@ -5,9 +5,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * State store managing application session state.
+ */
 public class SessionStore {
 
-    private val _state = MutableStateFlow<SessionState>(SessionState.Unauthenticated)
+    private val _state = MutableStateFlow<SessionState>(SessionState.Unknown)
     public val state: StateFlow<SessionState> = _state.asStateFlow()
 
     public fun markAuthenticated() {
@@ -16,5 +19,9 @@ public class SessionStore {
 
     public fun markUnauthenticated() {
         _state.value = SessionState.Unauthenticated
+    }
+
+    public fun markUnknown() {
+        _state.value = SessionState.Unknown
     }
 }

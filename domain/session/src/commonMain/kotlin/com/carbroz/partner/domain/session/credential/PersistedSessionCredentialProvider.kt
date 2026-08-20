@@ -1,6 +1,5 @@
 package com.carbroz.partner.domain.session.credential
 
-import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.provider.SessionCredentialProvider
 
 /**

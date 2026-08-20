@@ -1,14 +1,14 @@
 package com.carbroz.partner.infrastructure.network.client
 
-import com.carbroz.partner.domain.session.credential.PersistedSessionCredentialProvider
+import com.carbroz.partner.domain.session.credential.CredentialLoadResult
+import com.carbroz.partner.domain.session.credential.CredentialPersistenceResult
 import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
-import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
-import com.carbroz.partner.domain.session.model.SessionRefreshResult
 import com.carbroz.partner.domain.session.operation.ClearSession
 import com.carbroz.partner.domain.session.provider.SessionCredentialProvider
 import com.carbroz.partner.domain.session.refresh.SessionRefreshCoordinator
 import com.carbroz.partner.domain.session.refresh.SessionRefreshGateway
+import com.carbroz.partner.domain.session.refresh.SessionRefreshResult
 import com.carbroz.partner.domain.session.store.SessionStore
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -29,13 +29,13 @@ class KtorNetworkClientAuthTest {
             val c = stored ?: return CredentialLoadResult.NotFound
             return CredentialLoadResult.Found(c)
         }
-        override suspend fun save(credentials: SessionCredentials): Boolean {
+        override suspend fun save(credentials: SessionCredentials): CredentialPersistenceResult {
             stored = credentials
-            return true
+            return CredentialPersistenceResult.Success
         }
-        override suspend fun clear(): Boolean {
+        override suspend fun clear(): CredentialPersistenceResult {
             stored = null
-            return true
+            return CredentialPersistenceResult.Success
         }
     }
 
@@ -123,7 +123,7 @@ class KtorNetworkClientAuthTest {
             SessionRefreshResult.Success(SessionCredentials("tok_refreshed", "ref_123"))
         }
 
-        val coordinator = SessionRefreshCoordinator(persistence, gateway, clear)
+        val coordinator = SessionRefreshCoordinator(persistence, gateway, clear, store)
         val client = KtorNetworkClient(
             baseUrl = "https://api.test.com",
             credentialProvider = provider,

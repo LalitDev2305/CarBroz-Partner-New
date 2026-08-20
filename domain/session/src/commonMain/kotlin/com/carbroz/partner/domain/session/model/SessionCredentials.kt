@@ -1,12 +1,11 @@
 package com.carbroz.partner.domain.session.model
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-
-@Serializable
+/**
+ * Pure domain representation of session authentication credentials.
+ */
 public data class SessionCredentials(
-    @SerialName("access_token") val accessToken: String,
-    @SerialName("refresh_token") val refreshToken: String? = null
+    val accessToken: String,
+    val refreshToken: String? = null
 ) {
     override fun toString(): String {
         val hasRefresh = !refreshToken.isNullOrEmpty()
