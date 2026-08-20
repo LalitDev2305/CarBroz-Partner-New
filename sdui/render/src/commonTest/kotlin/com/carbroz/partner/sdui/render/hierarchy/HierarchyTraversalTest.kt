@@ -2,6 +2,9 @@ package com.carbroz.partner.sdui.render.hierarchy
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
+import com.carbroz.partner.core.ui.adaptive.context.CurrentContainerConstraints
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionAxis
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionContext
 import com.carbroz.partner.core.ui.adaptive.spec.DimensionSpec
 import com.carbroz.partner.core.ui.adaptive.spec.SpacingSpec
 import com.carbroz.partner.sdui.engine.model.LayoutAxis
@@ -26,10 +29,14 @@ import com.carbroz.partner.sdui.render.runtime.event.SduiUiEventSink
 import com.carbroz.partner.sdui.render.runtime.snapshot.SduiRenderSnapshot
 import com.carbroz.partner.sdui.render.scope.DefaultRenderScope
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class HierarchyTraversalTest {
+
+    private val testContext = ResolutionContext(
+        axis = ResolutionAxis.HORIZONTAL,
+        container = CurrentContainerConstraints(360.dp, 640.dp)
+    )
 
     @Test
     fun testFullHierarchyAndDirectBranchResolution() {
@@ -37,7 +44,7 @@ class HierarchyTraversalTest {
         val sink = SduiUiEventSink { events.add(it) }
 
         var textRendered = false
-        val mockTextRenderer = ChildrenDataRenderer { cd, snapshot, eventSink ->
+        val mockTextRenderer = ChildrenDataRenderer { cd, scope ->
             textRendered = true
         }
 
@@ -48,6 +55,7 @@ class HierarchyTraversalTest {
         val cdReg = ChildrenDataRendererRegistry(mapOf("text" to mockTextRenderer))
 
         val scope = DefaultRenderScope(
+            resolutionContext = testContext,
             templateRegistry = templateReg,
             componentRegistry = compReg,
             subComponentRegistry = subReg,

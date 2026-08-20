@@ -1,11 +1,14 @@
 package com.carbroz.partner.sdui.render.renderer.screen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.carbroz.partner.core.ui.adaptive.context.CurrentContainerConstraints
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionAxis
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionContext
 import com.carbroz.partner.core.ui.color.ColorParser
 import com.carbroz.partner.sdui.engine.assembly.AssembledSduiScreen
 import com.carbroz.partner.sdui.render.registry.ChildRendererRegistry
@@ -29,23 +32,32 @@ public fun SduiScreenRenderer(
     eventSink: SduiUiEventSink,
     modifier: Modifier = Modifier
 ) {
-    val scope = DefaultRenderScope(
-        templateRegistry = templateRegistry,
-        componentRegistry = componentRegistry,
-        subComponentRegistry = subComponentRegistry,
-        childRegistry = childRegistry,
-        childrenDataRegistry = childrenDataRegistry,
-        snapshot = snapshot,
-        eventSink = eventSink
-    )
-
     val bgColor = ColorParser.parseHexColor(
         colorHex = assembledScreen.screen.theme?.backgroundColor,
         fallback = Color.Unspecified
     )
     val bgModifier = if (bgColor != Color.Unspecified) modifier.background(bgColor) else modifier
 
-    Box(modifier = bgModifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = bgModifier.fillMaxSize()) {
+        val rootResolutionContext = ResolutionContext(
+            axis = ResolutionAxis.HORIZONTAL,
+            container = CurrentContainerConstraints(
+                availableWidth = maxWidth,
+                availableHeight = maxHeight
+            )
+        )
+
+        val scope = DefaultRenderScope(
+            resolutionContext = rootResolutionContext,
+            templateRegistry = templateRegistry,
+            componentRegistry = componentRegistry,
+            subComponentRegistry = subComponentRegistry,
+            childRegistry = childRegistry,
+            childrenDataRegistry = childrenDataRegistry,
+            snapshot = snapshot,
+            eventSink = eventSink
+        )
+
         scope.renderTemplate(assembledScreen.screen.template)
     }
 }
