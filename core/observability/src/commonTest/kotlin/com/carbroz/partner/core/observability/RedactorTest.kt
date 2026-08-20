@@ -6,6 +6,7 @@ import com.carbroz.partner.core.observability.redaction.Redactor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertFalse
 
 class RedactorTest {
 
@@ -44,6 +45,43 @@ class RedactorTest {
     }
 
     @Test
+    fun verifyFreeTextCredentialSanitizationMatrix() {
+        val cases = listOf(
+            "Authorization: Bearer abc.def.ghi" to "Authorization: Bearer [REDACTED_SECRET]",
+            "authorization=Bearer abc123" to "authorization=[REDACTED_SECRET]",
+            "password=abc123" to "password=[REDACTED_SECRET]",
+            "password: abc123" to "password=[REDACTED_SECRET]",
+            "access_token=abc123" to "access_token=[REDACTED_SECRET]",
+            "accessToken=abc123" to "access_token=[REDACTED_SECRET]",
+            "refresh_token=abc123" to "refresh_token=[REDACTED_SECRET]",
+            "refreshToken=abc123" to "refresh_token=[REDACTED_SECRET]",
+            "api_key=abc123" to "api_key=[REDACTED_SECRET]",
+            "apiKey=abc123" to "api_key=[REDACTED_SECRET]",
+            "secret=abc123" to "secret=[REDACTED_SECRET]",
+            "secret: abc123" to "secret=[REDACTED_SECRET]",
+            "cookie=sessionId=abc123" to "cookie=[REDACTED_SECRET]",
+            "set-cookie=sessionId=abc123" to "set-cookie=[REDACTED_SECRET]"
+        )
+
+        for ((input, expected) in cases) {
+            assertEquals(expected, Redactor.sanitizeText(input), "Failed free-text redaction for input: $input")
+        }
+    }
+
+    @Test
+    fun verifyCredentialFalsePositivesPreserved() {
+        val falsePositives = listOf(
+            "token count is 42",
+            "password policy enforced",
+            "secret feature enabled"
+        )
+
+        for (text in falsePositives) {
+            assertEquals(text, Redactor.sanitizeText(text), "False positive incorrectly redacted: $text")
+        }
+    }
+
+    @Test
     fun verifyNonPhoneDiagnosticNumbersNotMasked() {
         val diagnosticStrings = listOf(
             "status=200",
@@ -60,7 +98,6 @@ class RedactorTest {
             assertEquals(text, Redactor.sanitizeText(text), "Diagnostic string incorrectly redacted: $text")
         }
     }
-
 
     @Test
     fun verifyNestedStructureAndCollectionRedaction() {
@@ -93,18 +130,22 @@ class RedactorTest {
     }
 
     @Test
-    fun verifyThrowableSanitization() {
-        val exception = RuntimeException("Failed connect to user@carbroz.com with password secret123", IllegalStateException("Root cause phone: +919876543210"))
+    fun verifyHardenedThrowableSanitization() {
+        val cause = IllegalStateException("Cause user@example.com accessToken=xyz refresh_token=refresh123")
+        val exception = RuntimeException("Authorization: Bearer abc123 password=secret123", cause)
 
         val errorInfo = Redactor.sanitizeThrowable(exception)
 
         assertNotNull(errorInfo)
         assertEquals("RuntimeException", errorInfo.type)
-        assertEquals("Failed connect to [REDACTED_EMAIL] with password secret123", errorInfo.message)
+        assertEquals("Authorization: Bearer [REDACTED_SECRET] password=[REDACTED_SECRET]", errorInfo.message)
         assertEquals("IllegalStateException", errorInfo.causeType)
-        assertEquals("Root cause [REDACTED_PHONE]", errorInfo.causeMessage)
+        assertEquals("Cause [REDACTED_EMAIL] access_token=[REDACTED_SECRET] refresh_token=[REDACTED_SECRET]", errorInfo.causeMessage)
+
+        assertFalse(errorInfo.message!!.contains("abc123"))
+        assertFalse(errorInfo.message!!.contains("secret123"))
+        assertFalse(errorInfo.causeMessage!!.contains("user@example.com"))
+        assertFalse(errorInfo.causeMessage!!.contains("xyz"))
+        assertFalse(errorInfo.causeMessage!!.contains("refresh123"))
     }
-
-
-
 }

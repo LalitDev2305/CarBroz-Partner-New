@@ -1,27 +1,33 @@
 package com.carbroz.partner.core.observability.logger
 
 import com.carbroz.partner.core.observability.model.AttributeSensitivity
-import com.carbroz.partner.core.observability.model.Clock
 import com.carbroz.partner.core.observability.model.LogAttribute
 import com.carbroz.partner.core.observability.model.LogCategory
 import com.carbroz.partner.core.observability.model.LogEvent
 import com.carbroz.partner.core.observability.model.LogLevel
+import com.carbroz.partner.core.observability.model.LogValue
 import com.carbroz.partner.core.observability.model.TraceContext
 import com.carbroz.partner.core.observability.policy.ObservabilityConfig
 import com.carbroz.partner.core.observability.redaction.Redactor
 import com.carbroz.partner.core.observability.sink.LogSink
+import kotlin.time.Clock
 
 /**
  * Default pipeline implementation of [StructuredLogger] enforcing config filtering, security redaction, and isolated sink dispatch.
  */
 class DefaultPipelineLogger(
     private val config: ObservabilityConfig = ObservabilityConfig(),
-    private val clock: Clock = Clock { 0L },
-    sinks: List<LogSink> = emptyList()
+    private val clock: Clock = Clock.System,
+    sinks: List<LogSink>
 ) : StructuredLogger {
 
-    private val sinkSnapshot: List<LogSink> = sinks.toList()
+    init {
+        require(sinks.isNotEmpty()) {
+            "DefaultPipelineLogger requires at least one operational LogSink to prevent silent log drop."
+        }
+    }
 
+    private val sinkSnapshot: List<LogSink> = sinks.toList()
 
     override fun isLevelEnabled(level: LogLevel): Boolean {
         return config.isEnabled && level.ordinal >= config.minLevel.ordinal
@@ -51,7 +57,7 @@ class DefaultPipelineLogger(
                 return
             }
 
-            // 1. Sensitivity Policy Filtering
+            // 1. Recursive Sensitivity Policy Filtering
             val filteredAttributes = filterAttributesBySensitivity(attributes)
 
             // 2. Security Redaction & Error Conversion
@@ -64,7 +70,7 @@ class DefaultPipelineLogger(
 
             // 3. Immutable LogEvent Assembly
             val logEvent = LogEvent(
-                timestampMs = clock.nowEpochMilliseconds(),
+                timestampMs = clock.now().toEpochMilliseconds(),
                 level = level,
                 category = category,
                 sourceClass = sourceClass,
@@ -77,7 +83,6 @@ class DefaultPipelineLogger(
                 errorInfo = errorInfo
             )
 
-
             // 4. Isolated Multi-Sink Dispatch
             for (sink in sinkSnapshot) {
                 try {
@@ -86,79 +91,52 @@ class DefaultPipelineLogger(
                     // Sink failures are isolated to prevent application crashes or recursive failure loops
                 }
             }
-
-        }
-
-        override fun info(
-            sourceFunction: String,
-            category: LogCategory,
-            event: String,
-            message: String,
-            attributes: Map<String, LogAttribute>,
-            traceContext: TraceContext?
-        ) {
-            log(
-                level = LogLevel.INFO,
-                category = category,
-                sourceFunction = sourceFunction,
-                event = event,
-                message = message,
-                attributes = attributes,
-                traceContext = traceContext
-            )
-        }
-
-        override fun debug(
-            sourceFunction: String,
-            category: LogCategory,
-            event: String,
-            message: String,
-            attributes: Map<String, LogAttribute>,
-            traceContext: TraceContext?
-        ) {
-            log(
-                level = LogLevel.DEBUG,
-                category = category,
-                sourceFunction = sourceFunction,
-                event = event,
-                message = message,
-                attributes = attributes,
-                traceContext = traceContext
-            )
-        }
-
-        override fun error(
-            sourceFunction: String,
-            category: LogCategory,
-            event: String,
-            message: String,
-            throwable: Throwable?,
-            attributes: Map<String, LogAttribute>,
-            traceContext: TraceContext?
-        ) {
-            log(
-                level = LogLevel.ERROR,
-                category = category,
-                sourceFunction = sourceFunction,
-                event = event,
-                message = message,
-                attributes = attributes,
-                traceContext = traceContext,
-                throwable = throwable
-            )
         }
 
         private fun filterAttributesBySensitivity(attributes: Map<String, LogAttribute>): Map<String, LogAttribute> {
             if (attributes.isEmpty()) return attributes
             val result = LinkedHashMap<String, LogAttribute>(attributes.size)
             for ((key, attr) in attributes) {
-                when (attr.sensitivity) {
-                    AttributeSensitivity.PUBLIC -> result[key] = attr
-                    AttributeSensitivity.DETAIL -> if (config.allowDetailedDiagnostics) result[key] = attr
-                    AttributeSensitivity.PAYLOAD -> if (config.allowPayloadLogging) result[key] = attr
+                if (isSensitivityPermitted(attr.sensitivity)) {
+                    val filteredValue = filterLogValueSensitivity(attr.value)
+                    if (filteredValue != null) {
+                        result[key] = LogAttribute(filteredValue, attr.sensitivity)
+                    }
                 }
             }
             return result
+        }
+
+        private fun filterLogValueSensitivity(value: LogValue): LogValue? = when (value) {
+            is LogValue.Structure -> {
+                val filteredMap = LinkedHashMap<String, LogAttribute>(value.attributes.size)
+                for ((k, v) in value.attributes) {
+                    if (isSensitivityPermitted(v.sensitivity)) {
+                        val subVal = filterLogValueSensitivity(v.value)
+                        if (subVal != null) {
+                            filteredMap[k] = LogAttribute(subVal, v.sensitivity)
+                        }
+                    }
+                }
+                LogValue.Structure(filteredMap)
+            }
+            is LogValue.Collection -> {
+                val filteredList = ArrayList<LogValue>(value.items.size)
+                for (item in value.items) {
+                    val subVal = filterLogValueSensitivity(item)
+                    if (subVal != null) {
+                        filteredList.add(subVal)
+                    }
+                }
+                LogValue.Collection(filteredList)
+            }
+            else -> value
+        }
+
+        private fun isSensitivityPermitted(sensitivity: AttributeSensitivity): Boolean = when (sensitivity) {
+            AttributeSensitivity.PUBLIC -> true
+            AttributeSensitivity.DETAIL -> config.allowDetailedDiagnostics
+            AttributeSensitivity.PAYLOAD -> config.allowPayloadLogging
         }
     }
 }

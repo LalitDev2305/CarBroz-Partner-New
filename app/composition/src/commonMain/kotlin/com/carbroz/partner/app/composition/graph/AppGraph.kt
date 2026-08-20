@@ -39,7 +39,9 @@ public class AppGraph(
     public val sessionStore: com.carbroz.partner.domain.session.store.SessionStore = com.carbroz.partner.domain.session.store.SessionStore(),
     public val secureStorage: SecureStorageGateway = SecureStorageFactory.create(),
     public val networkClient: NetworkClient = KtorNetworkClient(config.baseUrl),
-    public val logger: StructuredLogger = DefaultPipelineLogger(),
+    public val logger: StructuredLogger = DefaultPipelineLogger(
+        sinks = listOf(com.carbroz.partner.core.observability.sink.ConsoleLogSink())
+    ),
     public val startupOrchestrator: StartupOrchestrator = ImmediateStartupOrchestrator()
 ) {
     public val sduiProcessor: SduiProcessor = SduiProcessor()

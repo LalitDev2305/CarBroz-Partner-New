@@ -5,7 +5,7 @@ import com.carbroz.partner.core.observability.model.LogAttribute
 import com.carbroz.partner.core.observability.model.LogValue
 
 /**
- * Single-owner security redaction engine enforcing Section 14 credential masking and PII redaction.
+ * Single-owner security redaction engine enforcing credential masking, PII redaction, and attribute sanitization.
  */
 internal object Redactor {
 
@@ -19,6 +19,17 @@ internal object Redactor {
     private val PII_EMAIL_REGEX = Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
     private val PII_PHONE_REGEX = Regex("(?:\\+91|\\+1|\\+44|\\+33|\\+49|\\+81|\\+86|\\+61)\\d{8,12}|(?:\\bphone\\b|\\bmobile\\b|\\bcontact\\b)\\s*[:=]?\\s*\\+?\\d{10,12}", RegexOption.IGNORE_CASE)
 
+    private val CREDENTIAL_PATTERNS = listOf(
+        Regex("(?i)\\bauthorization\\s*:\\s*bearer\\s+[^\\s,;\"]+") to "Authorization: Bearer [REDACTED_SECRET]",
+        Regex("(?i)\\bauthorization\\s*=\\s*(?:bearer\\s+)?[^\\s,;\"]+") to "authorization=[REDACTED_SECRET]",
+        Regex("(?i)\\bpassword\\s*[:=]\\s*[^\\s,;\"]+") to "password=[REDACTED_SECRET]",
+        Regex("(?i)\\baccess[_-]?token\\s*[:=]\\s*[^\\s,;\"]+") to "access_token=[REDACTED_SECRET]",
+        Regex("(?i)\\brefresh[_-]?token\\s*[:=]\\s*[^\\s,;\"]+") to "refresh_token=[REDACTED_SECRET]",
+        Regex("(?i)\\bapi[_-]?key\\s*[:=]\\s*[^\\s,;\"]+") to "api_key=[REDACTED_SECRET]",
+        Regex("(?i)\\bsecret\\s*[:=]\\s*[^\\s,;\"]+") to "secret=[REDACTED_SECRET]",
+        Regex("(?i)\\bset[_-]?cookie\\s*[:=]\\s*[^\\s,;\"]+") to "set-cookie=[REDACTED_SECRET]",
+        Regex("(?i)\\bcookie\\s*[:=]\\s*[^\\s,;\"]+") to "cookie=[REDACTED_SECRET]"
+    )
 
     fun sanitizeAttributes(attributes: Map<String, LogAttribute>): Map<String, LogValue> {
         val result = LinkedHashMap<String, LogValue>(attributes.size)
@@ -36,6 +47,9 @@ internal object Redactor {
         if (text == null) return null
         var sanitized = PII_EMAIL_REGEX.replace(text, "[REDACTED_EMAIL]")
         sanitized = PII_PHONE_REGEX.replace(sanitized, "[REDACTED_PHONE]")
+        for ((pattern, replacement) in CREDENTIAL_PATTERNS) {
+            sanitized = pattern.replace(sanitized, replacement)
+        }
         return sanitized
     }
 
@@ -50,7 +64,7 @@ internal object Redactor {
         )
     }
 
-    private fun isKeySensitive(key: String): Boolean {
+    fun isKeySensitive(key: String): Boolean {
         val normalized = key.lowercase().replace("_", "").replace("-", "")
         return SENSITIVE_KEYS.any { normalized.contains(it) }
     }
@@ -59,8 +73,11 @@ internal object Redactor {
         is LogValue.Text -> LogValue.Text(sanitizeText(value.value) ?: "")
         is LogValue.Structure -> LogValue.Structure(
             value.attributes.mapValues { (k, v) ->
-                if (isKeySensitive(k)) LogAttribute(LogValue.Text("[REDACTED_SECRET]"))
-                else LogAttribute(sanitizeValue(v.value))
+                if (isKeySensitive(k)) {
+                    LogAttribute(LogValue.Text("[REDACTED_SECRET]"), v.sensitivity)
+                } else {
+                    LogAttribute(sanitizeValue(v.value), v.sensitivity)
+                }
             }
         )
         is LogValue.Collection -> LogValue.Collection(

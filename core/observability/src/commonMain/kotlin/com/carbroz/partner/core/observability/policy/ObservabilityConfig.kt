@@ -10,7 +10,7 @@ data class ObservabilityConfig(
     val isEnabled: Boolean = true,
     val minLevel: LogLevel = LogLevel.INFO,
     val enabledCategories: Set<LogCategory> = LogCategory.entries.toSet(),
-    val allowDetailedDiagnostics: Boolean = true,
+    val allowDetailedDiagnostics: Boolean = false,
     val allowPayloadLogging: Boolean = false,
     val enablePerformanceTiming: Boolean = true
 )
