@@ -1,17 +1,12 @@
 package com.carbroz.partner.core.ui.tokens
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 
 /**
- * Focused typed token resolution interfaces decoupling visual token queries from god resolvers.
+ * Focused typed token resolution interfaces decoupling visual token queries.
  */
-interface ColorTokenResolver {
-    fun resolveColor(key: String): Color?
-}
-
 interface DimensionTokenResolver {
     fun resolveDimension(key: String): Dp?
 }

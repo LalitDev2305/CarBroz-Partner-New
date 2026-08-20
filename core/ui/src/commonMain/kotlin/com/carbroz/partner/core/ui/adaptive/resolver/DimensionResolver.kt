@@ -10,7 +10,6 @@ import com.carbroz.partner.core.ui.adaptive.scaling.DesignReferenceSpace
 import com.carbroz.partner.core.ui.adaptive.spec.DimensionSpec
 import com.carbroz.partner.core.ui.adaptive.spec.LayoutConstraintSpec
 import com.carbroz.partner.core.ui.tokens.DimensionTokenResolver
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 object DimensionResolver {
@@ -22,23 +21,8 @@ object DimensionResolver {
         policy: AdaptiveScalePolicy? = null,
         tokenResolver: DimensionTokenResolver? = null
     ): ResolutionResult<ResolvedDimension> {
-        if (constraint != null && constraint.minDp != null && constraint.maxDp != null && constraint.minDp > constraint.maxDp) {
-            return ResolutionResult.Invalid("Contradictory bounds: minDp > maxDp")
-        }
-
         val rawResolved: ResolutionResult<ResolvedDimension> = when (spec) {
-            is DimensionSpec.Fixed -> {
-                val value = spec.valueDp
-                if (value.value < 0f || value.value.isNaN() || value.value.isInfinite()) {
-                    ResolutionResult.Recovered(
-                        value = ResolvedDimension.Exact(0.dp),
-                        fallbackValue = ResolvedDimension.Exact(0.dp),
-                        reason = "Negative or invalid fixed DP set to 0.dp"
-                    )
-                } else {
-                    ResolutionResult.Resolved(ResolvedDimension.Exact(value))
-                }
-            }
+            is DimensionSpec.Fixed -> ResolutionResult.Resolved(ResolvedDimension.Exact(spec.valueDp))
 
             is DimensionSpec.Adaptive -> {
                 val available = if (context.axis == ResolutionAxis.HORIZONTAL) {
@@ -67,21 +51,13 @@ object DimensionResolver {
             }
 
             is DimensionSpec.Fraction -> {
-                val p = spec.percentage
-                if (p.isNaN() || p.isInfinite() || p < 0f || p > 1f) {
-                    val clamped = p.coerceIn(0f, 1f)
-                    val safeP = if (clamped.isNaN()) 0f else clamped
-                    val avail = if (context.axis == ResolutionAxis.HORIZONTAL) context.container.availableWidth else context.container.availableHeight
-                    val valDp = (avail.value * safeP).dp
-                    ResolutionResult.Recovered(
-                        value = ResolvedDimension.Exact(valDp),
-                        fallbackValue = ResolvedDimension.Exact(valDp),
-                        reason = "Fraction percentage out of bounds [0, 1]"
-                    )
+                val avail = if (context.axis == ResolutionAxis.HORIZONTAL) {
+                    context.container.availableWidth
                 } else {
-                    val avail = if (context.axis == ResolutionAxis.HORIZONTAL) context.container.availableWidth else context.container.availableHeight
-                    ResolutionResult.Resolved(ResolvedDimension.Exact((avail.value * p).dp))
+                    context.container.availableHeight
                 }
+                val valDp = (avail.value * spec.percentage).dp
+                ResolutionResult.Resolved(ResolvedDimension.Exact(valDp))
             }
 
             is DimensionSpec.Fill -> ResolutionResult.Resolved(ResolvedDimension.Fill)

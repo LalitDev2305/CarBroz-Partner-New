@@ -2,6 +2,9 @@ package com.carbroz.partner.sdui.render.renderer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
+import com.carbroz.partner.core.ui.adaptive.context.CurrentContainerConstraints
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionAxis
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionContext
 import com.carbroz.partner.core.ui.adaptive.spec.DimensionSpec
 import com.carbroz.partner.core.ui.adaptive.spec.SpacingSpec
 import com.carbroz.partner.sdui.engine.model.LayoutAxis
@@ -32,6 +35,11 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class ContainerRenderersTest {
+
+    private val testContext = ResolutionContext(
+        axis = ResolutionAxis.HORIZONTAL,
+        container = CurrentContainerConstraints(360.dp, 640.dp)
+    )
 
     private fun createTemplate(
         id: String = "tpl_1",
@@ -116,7 +124,6 @@ class ContainerRenderersTest {
         acceptsParentAction = false
     )
 
-
     private fun createChildrenData(
         id: String = "cd_1"
     ) = SduiChildrenData(
@@ -184,7 +191,7 @@ class ContainerRenderersTest {
     @Test
     fun testFullDefaultHierarchyTraversal() {
         val renderLog = mutableListOf<String>()
-        val mockTextRenderer = ChildrenDataRenderer { cd, _, _ ->
+        val mockTextRenderer = ChildrenDataRenderer { cd, _ ->
             renderLog.add("childrenData:${cd.id}")
         }
 
@@ -195,6 +202,7 @@ class ContainerRenderersTest {
         val cdReg = ChildrenDataRendererRegistry(mapOf("text" to mockTextRenderer))
 
         val scope = DefaultRenderScope(
+            resolutionContext = testContext,
             templateRegistry = templateReg,
             componentRegistry = compReg,
             subComponentRegistry = subReg,
@@ -220,11 +228,12 @@ class ContainerRenderersTest {
     @Test
     fun testComponentDirectChildrenDataTraversal() {
         val renderLog = mutableListOf<String>()
-        val mockTextRenderer = ChildrenDataRenderer { cd, _, _ ->
+        val mockTextRenderer = ChildrenDataRenderer { cd, _ ->
             renderLog.add("childrenData:${cd.id}")
         }
 
         val scope = DefaultRenderScope(
+            resolutionContext = testContext,
             templateRegistry = SduiRenderers.defaultTemplates,
             componentRegistry = SduiRenderers.defaultComponents,
             subComponentRegistry = SduiRenderers.defaultSubComponents,
@@ -246,6 +255,7 @@ class ContainerRenderersTest {
     @Test
     fun testSubComponentDirectChildrenDataTraversal() {
         val scope = DefaultRenderScope(
+            resolutionContext = testContext,
             templateRegistry = SduiRenderers.defaultTemplates,
             componentRegistry = SduiRenderers.defaultComponents,
             subComponentRegistry = SduiRenderers.defaultSubComponents,
@@ -267,6 +277,7 @@ class ContainerRenderersTest {
     @Test
     fun testChildChildrenDataTraversal() {
         val scope = DefaultRenderScope(
+            resolutionContext = testContext,
             templateRegistry = SduiRenderers.defaultTemplates,
             componentRegistry = SduiRenderers.defaultComponents,
             subComponentRegistry = SduiRenderers.defaultSubComponents,
@@ -288,6 +299,7 @@ class ContainerRenderersTest {
     @Test
     fun testRenderingOrderDeterministic() {
         val scope = DefaultRenderScope(
+            resolutionContext = testContext,
             templateRegistry = SduiRenderers.defaultTemplates,
             componentRegistry = SduiRenderers.defaultComponents,
             subComponentRegistry = SduiRenderers.defaultSubComponents,

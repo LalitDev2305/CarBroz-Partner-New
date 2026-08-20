@@ -1,6 +1,5 @@
 package com.carbroz.partner.core.ui.adaptive.resolver
 
-import com.carbroz.partner.core.ui.adaptive.context.ResolutionContext
 import com.carbroz.partner.core.ui.adaptive.result.ResolutionResult
 import com.carbroz.partner.core.ui.adaptive.spec.RadiusSpec
 import com.carbroz.partner.core.ui.tokens.RadiusTokenResolver
@@ -11,7 +10,6 @@ object RadiusResolver {
 
     fun resolve(
         spec: RadiusSpec,
-        context: ResolutionContext,
         tokenResolver: RadiusTokenResolver? = null
     ): ResolutionResult<Shape> {
         return when (spec) {

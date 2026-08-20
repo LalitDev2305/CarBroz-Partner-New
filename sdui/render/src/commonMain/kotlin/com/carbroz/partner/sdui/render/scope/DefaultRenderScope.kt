@@ -1,6 +1,7 @@
 package com.carbroz.partner.sdui.render.scope
 
 import androidx.compose.runtime.Composable
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionContext
 import com.carbroz.partner.sdui.engine.model.SduiChild
 import com.carbroz.partner.sdui.engine.model.SduiChildrenData
 import com.carbroz.partner.sdui.engine.model.SduiComponent
@@ -16,14 +17,26 @@ import com.carbroz.partner.sdui.render.runtime.event.SduiUiEventSink
 import com.carbroz.partner.sdui.render.runtime.snapshot.SduiRenderSnapshot
 
 public class DefaultRenderScope(
+    override val resolutionContext: ResolutionContext,
     private val templateRegistry: TemplateRendererRegistry,
     private val componentRegistry: ComponentRendererRegistry,
     private val subComponentRegistry: SubComponentRendererRegistry,
     private val childRegistry: ChildRendererRegistry,
     private val childrenDataRegistry: ChildrenDataRendererRegistry,
-    private val snapshot: SduiRenderSnapshot,
-    private val eventSink: SduiUiEventSink
+    override val snapshot: SduiRenderSnapshot,
+    override val eventSink: SduiUiEventSink
 ) : RenderScope {
+
+    override fun withResolutionContext(resolutionContext: ResolutionContext): RenderScope = DefaultRenderScope(
+        resolutionContext = resolutionContext,
+        templateRegistry = templateRegistry,
+        componentRegistry = componentRegistry,
+        subComponentRegistry = subComponentRegistry,
+        childRegistry = childRegistry,
+        childrenDataRegistry = childrenDataRegistry,
+        snapshot = snapshot,
+        eventSink = eventSink
+    )
 
     @Composable
     override fun renderTemplate(template: SduiTemplate) {
@@ -73,7 +86,7 @@ public class DefaultRenderScope(
         if (!snapshot.isNodeVisible(childrenData.id, childrenData.visible)) return
         val renderer = childrenDataRegistry.resolve(childrenData.childrenDataType)
         if (renderer != null) {
-            renderer.render(childrenData, snapshot, eventSink)
+            renderer.render(childrenData, this)
         } else {
             UnsupportedFallback.renderUnsupportedChildrenData(childrenData.childrenDataType)
         }

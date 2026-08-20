@@ -1,10 +1,16 @@
 package com.carbroz.partner.sdui.render.renderer.component
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
+import com.carbroz.partner.core.ui.adaptive.context.CurrentContainerConstraints
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionAxis
+import com.carbroz.partner.core.ui.adaptive.context.ResolutionContext
+import com.carbroz.partner.core.ui.adaptive.result.ResolutionResult
 import com.carbroz.partner.sdui.engine.model.LayoutAxis
 import com.carbroz.partner.sdui.engine.model.SduiComponent
+import com.carbroz.partner.sdui.render.fallback.UnsupportedFallback
 import com.carbroz.partner.sdui.render.resolver.LayoutResolver
 import com.carbroz.partner.sdui.render.scope.RenderScope
 
@@ -13,39 +19,59 @@ public object ContainerComponent : ComponentRenderer {
     override fun render(component: SduiComponent, scope: RenderScope) {
         if (!component.visible) return
 
-        val widthMod = LayoutResolver.resolveWidth(component.width)
-        val heightMod = LayoutResolver.resolveHeight(component.height)
-        val marginMod = LayoutResolver.resolveMargin(widthMod.then(heightMod), component.margin)
+        val widthRes = LayoutResolver.resolveWidth(component.width, scope.resolutionContext)
+        val heightRes = LayoutResolver.resolveHeight(component.height, scope.resolutionContext)
+
+        if (widthRes !is ResolutionResult.Resolved || heightRes !is ResolutionResult.Resolved) {
+            UnsupportedFallback.renderUnsupportedComponent(component, scope)
+            return
+        }
+
+        val marginMod = LayoutResolver.resolveMargin(widthRes.value.then(heightRes.value), component.margin)
         val paddingMod = LayoutResolver.resolvePadding(marginMod, component.padding)
 
-        if (component.axis == LayoutAxis.HORIZONTAL) {
-            val horizontalAlignment = LayoutResolver.resolveRowAlignment(component.alignment)
-            val horizontalArrangement = LayoutResolver.resolveRowArrangement(component.arrangement, component.gap)
-            Row(
-                modifier = paddingMod,
-                horizontalArrangement = horizontalArrangement,
-                verticalAlignment = horizontalAlignment
-            ) {
-                for (sub in component.subcomponents) {
-                    scope.renderSubComponent(sub)
+        BoxWithConstraints(modifier = paddingMod) {
+            val localContext = ResolutionContext(
+                axis = ResolutionAxis.HORIZONTAL,
+                container = CurrentContainerConstraints(availableWidth = maxWidth, availableHeight = maxHeight)
+            )
+            val childScope = scope.withResolutionContext(localContext)
+
+            if (component.axis == LayoutAxis.HORIZONTAL) {
+                val arrangementRes = LayoutResolver.resolveRowArrangement(component.arrangement, component.gap, localContext)
+                if (arrangementRes !is ResolutionResult.Resolved) {
+                    UnsupportedFallback.renderUnsupportedComponent(component, scope)
+                    return@BoxWithConstraints
                 }
-                for (cd in component.childrenData) {
-                    scope.renderChildrenData(cd)
+                val horizontalAlignment = LayoutResolver.resolveRowAlignment(component.alignment)
+                Row(
+                    horizontalArrangement = arrangementRes.value,
+                    verticalAlignment = horizontalAlignment
+                ) {
+                    for (sub in component.subcomponents) {
+                        childScope.renderSubComponent(sub)
+                    }
+                    for (cd in component.childrenData) {
+                        childScope.renderChildrenData(cd)
+                    }
                 }
-            }
-        } else {
-            val verticalAlignment = LayoutResolver.resolveColumnAlignment(component.alignment)
-            val verticalArrangement = LayoutResolver.resolveColumnArrangement(component.arrangement, component.gap)
-            Column(
-                modifier = paddingMod,
-                verticalArrangement = verticalArrangement,
-                horizontalAlignment = verticalAlignment
-            ) {
-                for (sub in component.subcomponents) {
-                    scope.renderSubComponent(sub)
+            } else {
+                val arrangementRes = LayoutResolver.resolveColumnArrangement(component.arrangement, component.gap, localContext)
+                if (arrangementRes !is ResolutionResult.Resolved) {
+                    UnsupportedFallback.renderUnsupportedComponent(component, scope)
+                    return@BoxWithConstraints
                 }
-                for (cd in component.childrenData) {
-                    scope.renderChildrenData(cd)
+                val verticalAlignment = LayoutResolver.resolveColumnAlignment(component.alignment)
+                Column(
+                    verticalArrangement = arrangementRes.value,
+                    horizontalAlignment = verticalAlignment
+                ) {
+                    for (sub in component.subcomponents) {
+                        childScope.renderSubComponent(sub)
+                    }
+                    for (cd in component.childrenData) {
+                        childScope.renderChildrenData(cd)
+                    }
                 }
             }
         }

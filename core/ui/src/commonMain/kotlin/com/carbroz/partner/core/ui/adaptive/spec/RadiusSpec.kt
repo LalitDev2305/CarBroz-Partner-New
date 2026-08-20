@@ -5,6 +5,19 @@ import androidx.compose.ui.unit.Dp
 
 @Immutable
 sealed interface RadiusSpec {
-    data class Fixed(val radiusDp: Dp) : RadiusSpec
-    data class Token(val key: String) : RadiusSpec
+    data class Fixed(val radiusDp: Dp) : RadiusSpec {
+        init {
+            require(radiusDp.value >= 0f && !radiusDp.value.isNaN() && !radiusDp.value.isInfinite()) {
+                "Fixed radius must be non-negative and finite"
+            }
+        }
+    }
+
+    data class Token(val key: String) : RadiusSpec {
+        init {
+            require(key.isNotBlank()) {
+                "Token key cannot be blank"
+            }
+        }
+    }
 }
