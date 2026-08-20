@@ -1,5 +1,11 @@
 package com.carbroz.partner.feature.splash
 
+import com.carbroz.partner.core.observability.logger.BoundLogger
+import com.carbroz.partner.core.observability.logger.StructuredLogger
+import com.carbroz.partner.core.observability.model.LogAttribute
+import com.carbroz.partner.core.observability.model.LogCategory
+import com.carbroz.partner.core.observability.model.LogLevel
+import com.carbroz.partner.core.observability.model.TraceContext
 import com.carbroz.partner.feature.splash.orchestrator.ImmediateStartupOrchestrator
 import com.carbroz.partner.feature.splash.orchestrator.StartupDestination
 import com.carbroz.partner.feature.splash.orchestrator.StartupOrchestrator
@@ -21,11 +27,31 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class SplashStoreTest {
 
+    private class NoOpLogger : StructuredLogger {
+        override fun isLevelEnabled(level: LogLevel): Boolean = false
+        override fun withSource(sourceClass: String, defaultTraceContext: TraceContext?): BoundLogger {
+            return object : BoundLogger {
+                override fun log(
+                    level: LogLevel,
+                    category: LogCategory,
+                    sourceFunction: String,
+                    event: String,
+                    message: String,
+                    attributes: Map<String, LogAttribute>,
+                    traceContext: TraceContext?,
+                    durationMs: Long?,
+                    throwable: Throwable?
+                ) {}
+            }
+        }
+    }
+
     @Test
     fun testInitializationSuccessEmitsNavigateEffect() = runTest {
         val testScope = TestScope(UnconfinedTestDispatcher(testScheduler))
         val store = SplashStore(
             scope = testScope,
+            logger = NoOpLogger(),
             orchestrator = ImmediateStartupOrchestrator()
         )
 
@@ -55,6 +81,7 @@ class SplashStoreTest {
 
         val store = SplashStore(
             scope = testScope,
+            logger = NoOpLogger(),
             orchestrator = failingOrchestrator
         )
 
