@@ -5,6 +5,10 @@ import com.carbroz.partner.app.composition.config.SduiEndpointConfig
 import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
+import com.carbroz.partner.domain.session.model.SessionState
+import com.carbroz.partner.engine.execution.action.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionType
+import com.carbroz.partner.engine.execution.result.ExecutionResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -12,14 +16,29 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppGraphTest {
 
-    private class FakeCredentialPersistence : SessionCredentialPersistence {
-        override suspend fun load(): CredentialLoadResult = CredentialLoadResult.NotFound
-        override suspend fun save(credentials: SessionCredentials): Boolean = true
-        override suspend fun clear(): Boolean = true
+    private class FakeCredentialPersistence(
+        private var credentials: SessionCredentials? = null
+    ) : SessionCredentialPersistence {
+        override suspend fun load(): CredentialLoadResult {
+            val c = credentials
+            return if (c != null) CredentialLoadResult.Found(c) else CredentialLoadResult.NotFound
+        }
+
+        override suspend fun save(credentials: SessionCredentials): Boolean {
+            this.credentials = credentials
+            return true
+        }
+
+        override suspend fun clear(): Boolean {
+            this.credentials = null
+            return true
+        }
     }
 
     @Test
@@ -45,5 +64,45 @@ class AppGraphTest {
         assertNotNull(controller)
         assertEquals("splash", graph.router.currentState.activeEntry.destination.route)
         assertEquals(SduiEndpointConfig.ROOT_SDUI_ENDPOINT, graph.endpointConfig.entryEndpoint)
+    }
+
+    @Test
+    fun testAppGraphWiresCanonicalCredentialProviderAndRestorer() = runTest {
+        val persistence = FakeCredentialPersistence(
+            SessionCredentials(accessToken = "token_abc", refreshToken = "refresh_xyz")
+        )
+        val graph = AppGraph(
+            config = AppConfig(baseUrl = "https://api.carbroz.com"),
+            credentialPersistence = persistence
+        )
+
+        // 1. Persisted credentials available through canonical provider
+        assertEquals("token_abc", graph.credentialProvider.getAccessToken())
+
+        // 2. Startup restoration invokes real SessionRestorer and updates sessionStore state
+        assertEquals(SessionState.Unauthenticated, graph.sessionStore.state.value)
+        graph.startupOrchestrator.initialize()
+        assertEquals(SessionState.Authenticated, graph.sessionStore.state.value)
+    }
+
+    @Test
+    fun testAppGraphWiresLogoutClearingCanonicalCredentials() = runTest {
+        val persistence = FakeCredentialPersistence(
+            SessionCredentials(accessToken = "token_abc", refreshToken = "refresh_xyz")
+        )
+        val graph = AppGraph(
+            config = AppConfig(baseUrl = "https://api.carbroz.com"),
+            credentialPersistence = persistence
+        )
+
+        graph.sessionRestorer.restore()
+        assertEquals(SessionState.Authenticated, graph.sessionStore.state.value)
+
+        val logoutAction = ActionSpec.create(ActionType.AUTH_LOGOUT)
+        val result = graph.actionDispatcher.dispatch(logoutAction)
+
+        assertTrue(result is ExecutionResult.Success)
+        assertEquals(SessionState.Unauthenticated, graph.sessionStore.state.value)
+        assertNull(graph.credentialProvider.getAccessToken())
     }
 }
