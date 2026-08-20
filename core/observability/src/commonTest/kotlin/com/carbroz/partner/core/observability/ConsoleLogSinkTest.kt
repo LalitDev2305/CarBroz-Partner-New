@@ -8,6 +8,7 @@ import com.carbroz.partner.core.observability.model.LogValue
 import com.carbroz.partner.core.observability.model.TraceContext
 import com.carbroz.partner.core.observability.sink.formatLogEvent
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ConsoleLogSinkTest {
@@ -21,7 +22,7 @@ class ConsoleLogSinkTest {
             sourceClass = "TestClass",
             sourceFunction = "testFunction",
             event = "user_login",
-            message = "User user@carbroz.com logged in",
+            message = "User [REDACTED_EMAIL] logged in",
             attributes = mapOf(
                 "userId" to LogValue.Text("usr_123"),
                 "password" to LogValue.Text("[REDACTED_SECRET]")
@@ -37,7 +38,7 @@ class ConsoleLogSinkTest {
         assertTrue(formatted.contains("[INFO]"))
         assertTrue(formatted.contains("[APP]"))
         assertTrue(formatted.contains("[TestClass::testFunction]"))
-        assertTrue(formatted.contains("user_login: User user@carbroz.com logged in"))
+        assertTrue(formatted.contains("user_login: User [REDACTED_EMAIL] logged in"))
         assertTrue(formatted.contains("attributes="))
         assertTrue(formatted.contains("userId"))
         assertTrue(formatted.contains("[REDACTED_SECRET]"))
@@ -46,5 +47,8 @@ class ConsoleLogSinkTest {
         assertTrue(formatted.contains("durationMs=42"))
         assertTrue(formatted.contains("errorInfo="))
         assertTrue(formatted.contains("RuntimeException"))
+
+        assertFalse(formatted.contains("user@carbroz.com"))
+        assertFalse(formatted.contains("raw_secret"))
     }
 }

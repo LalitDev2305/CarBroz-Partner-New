@@ -388,4 +388,48 @@ class StructuredLoggerTest {
         assertEquals(1, sink.events.size)
         assertTrue(sink.events[0].timestampMs > 0L)
     }
+
+    @Test
+    fun verifyEndToEndPipelineSanitization() {
+        val sink = TestSink()
+        val logger = DefaultPipelineLogger(
+            config = ObservabilityConfig(minLevel = LogLevel.INFO),
+            clock = testClock(1000L),
+            sinks = listOf(sink)
+        )
+        val bound = logger.withSource("AuthStore")
+
+        val rawAttributes = mapOf(
+            "userPassword" to LogAttribute(LogValue.Text("rawPass123")),
+            "sessionToken" to LogAttribute(LogValue.Text("token_abc_456"))
+        )
+
+        bound.error(
+            sourceFunction = "login",
+            category = LogCategory.SECURITY,
+            event = "auth_failed",
+            message = "Login failed for raw.user@carbroz.com using password=rawPass123 Authorization: Bearer bearer_secret_token",
+            throwable = RuntimeException("Connect error for raw.user@carbroz.com accessToken=secret_jwt_xyz"),
+            attributes = rawAttributes
+        )
+
+        assertEquals(1, sink.events.size)
+        val event = sink.events[0]
+
+        assertTrue(event.message.contains("[REDACTED_EMAIL]"))
+        assertTrue(event.message.contains("password=[REDACTED_SECRET]"))
+        assertTrue(event.message.contains("Authorization: Bearer [REDACTED_SECRET]"))
+
+        kotlin.test.assertFalse(event.message.contains("raw.user@carbroz.com"))
+        kotlin.test.assertFalse(event.message.contains("rawPass123"))
+        kotlin.test.assertFalse(event.message.contains("bearer_secret_token"))
+
+        assertEquals(LogValue.Text("[REDACTED_SECRET]"), event.attributes["userPassword"])
+        assertEquals(LogValue.Text("[REDACTED_SECRET]"), event.attributes["sessionToken"])
+
+        assertNotNull(event.errorInfo)
+        assertTrue(event.errorInfo!!.message!!.contains("[REDACTED_EMAIL]"))
+        assertTrue(event.errorInfo!!.message!!.contains("access_token=[REDACTED_SECRET]"))
+        kotlin.test.assertFalse(event.errorInfo!!.message!!.contains("secret_jwt_xyz"))
+    }
 }
