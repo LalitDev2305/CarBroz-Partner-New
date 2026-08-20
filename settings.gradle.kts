@@ -26,7 +26,6 @@ include(":core:mvi")
 include(":core:navigation")
 
 // Domain Modules
-include(":domain:capabilities")
 include(":domain:storage")
 include(":domain:session")
 
@@ -45,7 +44,6 @@ include(":feature:splash")
 // Infrastructure Modules
 include(":infrastructure:network")
 include(":infrastructure:persistence")
-include(":infrastructure:capabilities")
 
 // Application Composition Root
 include(":app:composition")
