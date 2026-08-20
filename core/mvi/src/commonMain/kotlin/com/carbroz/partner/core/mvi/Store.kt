@@ -20,7 +20,14 @@ public interface Store<State, Intent, Effect> {
     /**
      * Volatile stream of presentation effects (e.g. snackbars, focus requests).
      *
-     * Semantics: Queued, single-consumption, FIFO delivery. Exactly ONE active presentation collector is supported per Store.
+     * Semantics:
+     * - Transient presentation effects intended for UI presentation.
+     * - Exactly one logical presentation collector is supported per Store instance.
+     * - Retained effects are delivered in FIFO order.
+     * - Consumed effects are not replayed to late collectors.
+     * - Queue is explicitly bounded; if full, the newest effect is dropped (DROP_NEWEST).
+     * - Overflow does not block intent processing or state updates.
+     * - Does not support broadcast or fan-out semantics.
      */
     public val effects: Flow<Effect>
 

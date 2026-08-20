@@ -8,6 +8,7 @@ import com.carbroz.partner.core.observability.model.LogEvent
 import com.carbroz.partner.core.observability.model.LogLevel
 import com.carbroz.partner.core.observability.model.TraceContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -17,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -283,17 +285,23 @@ class StoreTest {
     fun verifyParentCancellationTerminatesStoreAndRejectsDispatch() = runTest {
         val job = SupervisorJob()
         val customScope = CoroutineScope(job + UnconfinedTestDispatcher(testScheduler))
+        val logger = TestLogger()
 
         val store = createStore<TestState, TestIntent, TestEffect>(
             scope = customScope,
             initialState = TestState(),
             storeId = "TestStore",
-            logger = TestLogger(),
+            logger = logger,
             processor = {}
         )
 
         customScope.cancel()
         testScheduler.advanceUntilIdle()
+
+        // STORE_TERMINATED must be logged exactly once
+        val terminatedLogs = logger.events.filter { it.event == "STORE_TERMINATED" }
+        assertEquals(1, terminatedLogs.size, "STORE_TERMINATED must be emitted exactly once")
+        assertEquals("onProcessorCompletion", terminatedLogs[0].sourceFunction)
 
         assertFailsWith<CancellationException> {
             store.dispatch(TestIntent.Increment(1))
@@ -323,21 +331,25 @@ class StoreTest {
         // Parent scope remains active
         assertTrue(parentScope.isActive, "Parent scope should remain active")
 
-        // Subsequent dispatch MUST fail and NOT hang
-        assertFailsWith<CancellationException> {
-            store.dispatch(TestIntent.Increment(1))
-        }
+        // STORE_TERMINATED must be logged exactly once
+        val terminatedLogs = logger.events.filter { it.event == "STORE_TERMINATED" }
+        assertEquals(1, terminatedLogs.size, "STORE_TERMINATED must be emitted exactly once")
 
         // CancellationException must NOT be logged as INTENT_PROCESSING_FAILED
         val failedLogs = logger.events.filter { it.event == "INTENT_PROCESSING_FAILED" }
         assertEquals(0, failedLogs.size)
 
+        // Subsequent dispatch MUST fail and NOT hang
+        assertFailsWith<CancellationException> {
+            store.dispatch(TestIntent.Increment(1))
+        }
+
         parentScope.cancel()
     }
 
     @Test
-    fun verifyUnexpectedDefectTerminatesStoreAndIsLoggedWithoutPayloadDumping() = runTest {
-        val parentScope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+    fun verifyUnexpectedDefectTerminatesStoreAndIsLoggedWithoutPayloadDumping() {
+        val parentScope = CoroutineScope(SupervisorJob() + CoroutineExceptionHandler { _, _ -> })
         val logger = TestLogger()
 
         val store = createStore<TestState, TestIntent, TestEffect>(
@@ -352,17 +364,27 @@ class StoreTest {
             }
         )
 
-        store.dispatch(TestIntent.FailingIntent)
-        testScheduler.advanceUntilIdle()
+        runBlocking {
+            store.dispatch(TestIntent.FailingIntent)
+
+            while (logger.events.none { it.event == "STORE_TERMINATED" }) {
+                delay(10)
+            }
+        }
 
         // Parent scope remains active
         assertTrue(parentScope.isActive, "Parent scope should remain active")
 
-        // Verify defect logged
-        val failedLog = logger.events.firstOrNull { it.event == "INTENT_PROCESSING_FAILED" }
-        assertNotNull(failedLog)
-        assertEquals("Uncaught error during intent processing", failedLog!!.message)
-        assertEquals("IllegalStateException", failedLog.errorInfo?.type)
+        // Verify defect logged exactly once
+        val failedLogs = logger.events.filter { it.event == "INTENT_PROCESSING_FAILED" }
+        assertEquals(1, failedLogs.size)
+        assertEquals("Uncaught error during intent processing", failedLogs[0].message)
+        assertEquals("IllegalStateException", failedLogs[0].errorInfo?.type)
+
+        // STORE_TERMINATED must be logged exactly once
+        val terminatedLogs = logger.events.filter { it.event == "STORE_TERMINATED" }
+        assertEquals(1, terminatedLogs.size, "STORE_TERMINATED must be emitted exactly once")
+        assertEquals("onProcessorCompletion", terminatedLogs[0].sourceFunction)
 
         // Verify payload values (state/intent) are NOT dumped into log messages
         for (log in logger.events) {
@@ -370,9 +392,12 @@ class StoreTest {
             assertFalse(log.message.contains("FailingIntent"))
         }
 
-        // Subsequent dispatch must fail with fatal exception
-        assertFailsWith<IllegalStateException> {
-            store.dispatch(TestIntent.Increment(1))
+        // Subsequent dispatch must fail with fatal exception (cause re-thrown by channel)
+        runBlocking {
+            val fatalEx = assertFailsWith<IllegalStateException> {
+                store.dispatch(TestIntent.Increment(1))
+            }
+            assertEquals("Database corrupted", fatalEx.message)
         }
 
         parentScope.cancel()

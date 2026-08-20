@@ -21,7 +21,11 @@ public interface StoreScope<State, Effect> {
     public fun updateState(transform: (State) -> State)
 
     /**
-     * Emits a volatile presentation effect to active consumers.
+     * Attempts to enqueue a transient presentation effect.
+     *
+     * - If capacity is available: effect is retained until consumed.
+     * - If buffer is full: newest effect is dropped according to Store policy.
+     * - If Store is terminated: emission fails.
      *
      * @param effect Transient event to emit.
      */

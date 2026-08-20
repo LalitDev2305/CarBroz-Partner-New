@@ -8,7 +8,9 @@ import com.carbroz.partner.core.observability.logger.StructuredLogger
 import com.carbroz.partner.core.observability.model.LogCategory
 import com.carbroz.partner.core.observability.model.LogLevel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 
 private const val EFFECT_BUFFER_CAPACITY = 64
@@ -25,7 +28,7 @@ private const val EFFECT_BUFFER_CAPACITY = 64
  * Internal canonical implementation of [Store] and [StoreScope].
  *
  * Enforces sequential intent processing, atomic state updates via [MutableStateFlow.update],
- * single-consumer bounded effect emission with non-blocking overflow, and processor-job lifecycle teardown.
+ * single-consumer bounded effect emission with non-blocking overflow, and single processor-job lifecycle teardown.
  */
 internal class DefaultStore<State, Intent, Effect>(
     scope: CoroutineScope,
@@ -48,7 +51,7 @@ internal class DefaultStore<State, Intent, Effect>(
     override val currentState: State
         get() = _state.value
 
-    private val processorJob = scope.launch {
+    private val processorJob = scope.launch(SupervisorJob(scope.coroutineContext.job) + CoroutineExceptionHandler { _, _ -> }) {
         for (intent in intentChannel) {
             try {
                 boundLogger.debug(
@@ -65,19 +68,16 @@ internal class DefaultStore<State, Intent, Effect>(
                     message = "Completed processing intent"
                 )
             } catch (t: Throwable) {
-                if (t is CancellationException) {
-                    throw t
+                if (t !is CancellationException) {
+                    boundLogger.error(
+                        sourceFunction = "processIntent",
+                        category = LogCategory.MVI,
+                        event = "INTENT_PROCESSING_FAILED",
+                        message = "Uncaught error during intent processing",
+                        throwable = t
+                    )
                 }
-                boundLogger.error(
-                    sourceFunction = "processIntent",
-                    category = LogCategory.MVI,
-                    event = "INTENT_PROCESSING_FAILED",
-                    message = "Uncaught error during intent processing",
-                    throwable = t
-                )
-                intentChannel.close(t)
-                effectChannel.close(t)
-                return@launch
+                throw t
             }
         }
     }
@@ -94,10 +94,10 @@ internal class DefaultStore<State, Intent, Effect>(
             intentChannel.close(cause)
             effectChannel.close(cause)
             boundLogger.info(
-                sourceFunction = "onCompletion",
+                sourceFunction = "onProcessorCompletion",
                 category = LogCategory.MVI,
-                event = "STORE_SCOPE_COMPLETED",
-                message = "Store processing job completed and channels closed"
+                event = "STORE_TERMINATED",
+                message = "Store processing terminated and channels closed"
             )
         }
     }
