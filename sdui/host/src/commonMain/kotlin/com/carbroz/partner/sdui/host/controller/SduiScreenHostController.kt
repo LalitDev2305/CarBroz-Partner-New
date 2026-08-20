@@ -1,7 +1,7 @@
 package com.carbroz.partner.sdui.host.controller
 
-import com.carbroz.partner.core.navigation.command.NavCommand
-import com.carbroz.partner.core.navigation.router.Router
+import com.carbroz.partner.core.navigation.NavCommand
+import com.carbroz.partner.core.navigation.Router
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
 import com.carbroz.partner.sdui.engine.processor.SduiProcessor
 import com.carbroz.partner.sdui.engine.result.SduiParseResult
@@ -20,7 +20,7 @@ public class SduiScreenHostController(
     private val endpoint: String,
     private val repository: SduiScreenRepository,
     private val actionDispatcher: ActionDispatcher,
-    private val router: Router? = null,
+    private val router: Router,
     private val processor: SduiProcessor = SduiProcessor()
 ) {
     private val _hostState = MutableStateFlow<SduiHostState>(SduiHostState.Loading)
@@ -58,7 +58,7 @@ public class SduiScreenHostController(
 
     private fun handleBackRequested() {
         val currentContent = _hostState.value as? SduiHostState.Content ?: run {
-            scope.launch { router?.execute(NavCommand.Pop) }
+            scope.launch { router.execute(NavCommand.Pop) }
             return
         }
         val backPolicy = currentContent.assembledScreen.screen.back
@@ -85,7 +85,7 @@ public class SduiScreenHostController(
                     }
             }
         } else {
-            scope.launch { router?.execute(NavCommand.Pop) }
+            scope.launch { router.execute(NavCommand.Pop) }
         }
     }
 

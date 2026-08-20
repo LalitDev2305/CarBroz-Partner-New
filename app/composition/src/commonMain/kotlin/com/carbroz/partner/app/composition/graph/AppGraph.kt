@@ -2,9 +2,9 @@ package com.carbroz.partner.app.composition.graph
 
 import com.carbroz.partner.app.composition.config.AppConfig
 import com.carbroz.partner.app.composition.config.SduiEndpointConfig
-import com.carbroz.partner.core.navigation.destination.NavDestination
-import com.carbroz.partner.core.navigation.router.DefaultRouter
-import com.carbroz.partner.core.navigation.router.Router
+import com.carbroz.partner.core.navigation.NavDestination
+import com.carbroz.partner.core.navigation.Router
+import com.carbroz.partner.core.navigation.createRouter
 import com.carbroz.partner.core.observability.logger.DefaultPipelineLogger
 import com.carbroz.partner.core.observability.logger.StructuredLogger
 import com.carbroz.partner.domain.storage.secure.SecureStorageGateway
@@ -45,7 +45,7 @@ public class AppGraph(
     public val startupOrchestrator: StartupOrchestrator = ImmediateStartupOrchestrator()
 ) {
     public val sduiProcessor: SduiProcessor = SduiProcessor()
-    public val router: Router = DefaultRouter(
+    public val router: Router = createRouter(
         initialDestination = NavDestination.create("splash"),
         logger = logger
     )
