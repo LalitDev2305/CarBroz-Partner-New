@@ -17,7 +17,7 @@ import kotlin.coroutines.cancellation.CancellationException
 /**
  * Standard implementation of ActionDispatcher orchestrating lookup, recursive parameter binding resolution, and execution.
  */
-class DefaultActionDispatcher(
+public class DefaultActionDispatcher(
     private val registry: ActionRegistry,
     private val bindingResolver: BindingResolver,
     logger: StructuredLogger
@@ -71,7 +71,7 @@ class DefaultActionDispatcher(
             sourceFunction = "dispatch",
             category = LogCategory.EXECUTION,
             event = "action_dispatch_start",
-            message = "Dispatching action id='${action.id.value}', type='${action.type.rawValue}'"
+            message = "Dispatching action type='${action.type.rawValue}'"
         )
 
         return try {
@@ -81,13 +81,13 @@ class DefaultActionDispatcher(
                     sourceFunction = "dispatch",
                     category = LogCategory.EXECUTION,
                     event = "action_execution_success",
-                    message = "Action execution succeeded id='${action.id.value}'"
+                    message = "Action execution succeeded"
                 )
                 is ExecutionResult.Failure -> boundLogger.info(
                     sourceFunction = "dispatch",
                     category = LogCategory.EXECUTION,
                     event = "action_execution_failure",
-                    message = "Action execution failed id='${action.id.value}', code='${result.failure.code}'"
+                    message = "Action execution failed code='${result.failure.code}'"
                 )
             }
             result
@@ -98,7 +98,7 @@ class DefaultActionDispatcher(
                 sourceFunction = "dispatch",
                 category = LogCategory.EXECUTION,
                 event = "action_executor_unexpected_error",
-                message = "Unexpected executor exception for action id='${action.id.value}'"
+                message = "Unexpected action executor exception"
             )
             ExecutionResult.Failure(
                 ExecutionFailure(

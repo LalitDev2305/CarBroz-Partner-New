@@ -42,7 +42,7 @@ public sealed interface ActionValue {
         }
 
         override fun hashCode(): Int = properties.hashCode()
-        override fun toString(): String = "Object(size=${properties.size}, keys=${properties.keys})"
+        override fun toString(): String = "Object(size=${properties.size})"
 
         public companion object {
             public fun create(properties: Map<String, ActionValue> = emptyMap()): Object = Object(properties)

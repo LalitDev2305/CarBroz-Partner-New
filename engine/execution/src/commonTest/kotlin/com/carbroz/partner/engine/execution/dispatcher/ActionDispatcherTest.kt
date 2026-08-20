@@ -409,11 +409,13 @@ class ActionDispatcherTest {
                 "password" to ActionValue.Text(fakePassword)
             )
         )
-        val spec = ActionSpec.create(ActionId("act_9"), type, params)
+        val fakeActionId = "act_sensitive_999"
+        val spec = ActionSpec.create(ActionId(fakeActionId), type, params)
 
         dispatcher.dispatch(spec)
 
         for (msg in logger.loggedMessages) {
+            assertFalse(msg.contains(fakeActionId))
             assertFalse(msg.contains(fakeOtp))
             assertFalse(msg.contains(fakeToken))
             assertFalse(msg.contains(fakePassword))

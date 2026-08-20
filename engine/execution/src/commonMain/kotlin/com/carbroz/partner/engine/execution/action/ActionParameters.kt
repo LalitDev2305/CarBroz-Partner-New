@@ -24,7 +24,7 @@ public class ActionParameters private constructor(
 
     override fun hashCode(): Int = entries.hashCode()
 
-    override fun toString(): String = "ActionParameters(size=$size, keys=${entries.keys})"
+    override fun toString(): String = "ActionParameters(size=$size)"
 
     public companion object {
         public val EMPTY: ActionParameters = ActionParameters(emptyMap())

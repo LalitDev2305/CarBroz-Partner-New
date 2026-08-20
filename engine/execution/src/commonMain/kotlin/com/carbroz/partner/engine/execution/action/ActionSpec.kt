@@ -24,7 +24,7 @@ public class ActionSpec private constructor(
     }
 
     override fun toString(): String {
-        return "ActionSpec(id=${id.value}, type=${type.rawValue}, parameters=$parameters)"
+        return "ActionSpec(type=${type.rawValue}, parameterCount=${parameters.size})"
     }
 
     public companion object {

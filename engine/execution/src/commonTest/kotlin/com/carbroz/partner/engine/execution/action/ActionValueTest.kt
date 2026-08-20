@@ -115,7 +115,8 @@ class ActionValueTest {
 
         val str = params.toString()
         assertFalse(str.contains(secretValue))
-        assertEquals(true, str.contains("keys=[otp]"))
+        assertFalse(str.contains("otp"))
+        assertEquals("ActionParameters(size=1)", str)
 
         assertFailsWith<IllegalArgumentException> {
             ActionParameters.create(mapOf("" to ActionValue.Text("val")))
