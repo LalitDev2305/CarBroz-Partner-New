@@ -1,4 +1,4 @@
-package com.carbroz.partner.domain.actions.binding
+package com.carbroz.partner.engine.execution.binding
 
 import kotlin.jvm.JvmInline
 
@@ -6,7 +6,7 @@ import kotlin.jvm.JvmInline
  * Pure declarative representation of a runtime binding expression (e.g. "${session.partnerId}").
  */
 @JvmInline
-value class BindingExpression(val rawExpression: String) {
+public value class BindingExpression(public val rawExpression: String) {
     init {
         require(rawExpression.isNotBlank()) { "BindingExpression rawExpression must not be blank" }
         val trimmed = rawExpression.trim()

@@ -1,12 +1,11 @@
 package com.carbroz.partner.sdui.runtime.bridge
 
-import com.carbroz.partner.domain.actions.binding.BindingExpression
-import com.carbroz.partner.domain.actions.model.ActionId
-import com.carbroz.partner.domain.actions.model.ActionType
-import com.carbroz.partner.domain.actions.spec.ActionMetadata
-import com.carbroz.partner.domain.actions.spec.ActionSpec
-import com.carbroz.partner.domain.actions.value.ActionParameters
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionId
+import com.carbroz.partner.engine.execution.action.ActionParameters
+import com.carbroz.partner.engine.execution.action.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionType
+import com.carbroz.partner.engine.execution.action.ActionValue
+import com.carbroz.partner.engine.execution.binding.BindingExpression
 import com.carbroz.partner.sdui.engine.model.SduiAction
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -33,8 +32,7 @@ public class SduiActionMapper {
         return ActionSpec.create(
             id = ActionId("act_$triggerNodeId"),
             type = ActionType.API_REQUEST,
-            parameters = ActionParameters.create(paramMap),
-            metadata = ActionMetadata.DEFAULT
+            parameters = ActionParameters.create(paramMap)
         )
     }
 
@@ -45,7 +43,7 @@ public class SduiActionMapper {
                 if (str.startsWith("\${") && str.endsWith("}")) {
                     try {
                         return ActionValue.Binding(BindingExpression(str))
-                    } catch (_: Exception) {
+                    } catch (_: IllegalArgumentException) {
                         return ActionValue.Text(str)
                     }
                 }

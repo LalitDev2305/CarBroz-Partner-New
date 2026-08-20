@@ -1,6 +1,6 @@
 package com.carbroz.partner.engine.execution.binding
 
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionValue
 
 /**
  * Universal sealed outcome hierarchy for runtime expression binding resolution.

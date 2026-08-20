@@ -3,9 +3,9 @@ package com.carbroz.partner.engine.execution.dispatcher
 import com.carbroz.partner.core.observability.logger.BoundLogger
 import com.carbroz.partner.core.observability.logger.StructuredLogger
 import com.carbroz.partner.core.observability.model.LogCategory
-import com.carbroz.partner.domain.actions.spec.ActionSpec
-import com.carbroz.partner.domain.actions.value.ActionParameters
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionParameters
+import com.carbroz.partner.engine.execution.action.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionValue
 import com.carbroz.partner.engine.execution.binding.BindingResolver
 import com.carbroz.partner.engine.execution.binding.BindingResult
 import com.carbroz.partner.engine.execution.binding.BindingScope
@@ -17,7 +17,7 @@ import kotlin.coroutines.cancellation.CancellationException
 /**
  * Standard implementation of ActionDispatcher orchestrating lookup, recursive parameter binding resolution, and execution.
  */
-class DefaultActionDispatcher(
+public class DefaultActionDispatcher(
     private val registry: ActionRegistry,
     private val bindingResolver: BindingResolver,
     logger: StructuredLogger
@@ -64,15 +64,14 @@ class DefaultActionDispatcher(
         val resolvedAction = ActionSpec.create(
             id = action.id,
             type = action.type,
-            parameters = resolvedParameters,
-            metadata = action.metadata
+            parameters = resolvedParameters
         )
 
         boundLogger.info(
             sourceFunction = "dispatch",
             category = LogCategory.EXECUTION,
             event = "action_dispatch_start",
-            message = "Dispatching action id='${action.id.value}', type='${action.type.rawValue}'"
+            message = "Dispatching action type='${action.type.rawValue}'"
         )
 
         return try {
@@ -82,13 +81,13 @@ class DefaultActionDispatcher(
                     sourceFunction = "dispatch",
                     category = LogCategory.EXECUTION,
                     event = "action_execution_success",
-                    message = "Action execution succeeded id='${action.id.value}'"
+                    message = "Action execution succeeded"
                 )
                 is ExecutionResult.Failure -> boundLogger.info(
                     sourceFunction = "dispatch",
                     category = LogCategory.EXECUTION,
                     event = "action_execution_failure",
-                    message = "Action execution failed id='${action.id.value}', code='${result.failure.code}'"
+                    message = "Action execution failed code='${result.failure.code}'"
                 )
             }
             result
@@ -99,7 +98,7 @@ class DefaultActionDispatcher(
                 sourceFunction = "dispatch",
                 category = LogCategory.EXECUTION,
                 event = "action_executor_unexpected_error",
-                message = "Unexpected executor exception for action id='${action.id.value}'"
+                message = "Unexpected action executor exception"
             )
             ExecutionResult.Failure(
                 ExecutionFailure(

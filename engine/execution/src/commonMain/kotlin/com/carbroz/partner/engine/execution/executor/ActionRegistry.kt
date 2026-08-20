@@ -1,6 +1,6 @@
 package com.carbroz.partner.engine.execution.executor
 
-import com.carbroz.partner.domain.actions.model.ActionType
+import com.carbroz.partner.engine.execution.action.ActionType
 
 /**
  * Immutable lookup registry mapping ActionType to corresponding ActionExecutor implementations.

@@ -6,12 +6,12 @@ import com.carbroz.partner.core.observability.model.LogAttribute
 import com.carbroz.partner.core.observability.model.LogCategory
 import com.carbroz.partner.core.observability.model.LogLevel
 import com.carbroz.partner.core.observability.model.TraceContext
-import com.carbroz.partner.domain.actions.binding.BindingExpression
-import com.carbroz.partner.domain.actions.model.ActionId
-import com.carbroz.partner.domain.actions.model.ActionType
-import com.carbroz.partner.domain.actions.spec.ActionSpec
-import com.carbroz.partner.domain.actions.value.ActionParameters
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionId
+import com.carbroz.partner.engine.execution.action.ActionParameters
+import com.carbroz.partner.engine.execution.action.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionType
+import com.carbroz.partner.engine.execution.action.ActionValue
+import com.carbroz.partner.engine.execution.binding.BindingExpression
 import com.carbroz.partner.engine.execution.binding.BindingScope
 import com.carbroz.partner.engine.execution.binding.DefaultBindingResolver
 import com.carbroz.partner.engine.execution.executor.ActionExecutor
@@ -409,11 +409,13 @@ class ActionDispatcherTest {
                 "password" to ActionValue.Text(fakePassword)
             )
         )
-        val spec = ActionSpec.create(ActionId("act_9"), type, params)
+        val fakeActionId = "act_sensitive_999"
+        val spec = ActionSpec.create(ActionId(fakeActionId), type, params)
 
         dispatcher.dispatch(spec)
 
         for (msg in logger.loggedMessages) {
+            assertFalse(msg.contains(fakeActionId))
             assertFalse(msg.contains(fakeOtp))
             assertFalse(msg.contains(fakeToken))
             assertFalse(msg.contains(fakePassword))

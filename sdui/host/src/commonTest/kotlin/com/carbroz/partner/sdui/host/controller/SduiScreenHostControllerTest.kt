@@ -6,7 +6,7 @@ import com.carbroz.partner.core.navigation.NavEntry
 import com.carbroz.partner.core.navigation.NavResult
 import com.carbroz.partner.core.navigation.NavState
 import com.carbroz.partner.core.navigation.Router
-import com.carbroz.partner.domain.actions.spec.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionSpec
 import com.carbroz.partner.engine.execution.binding.BindingScope
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
 import com.carbroz.partner.engine.execution.result.ExecutionResult

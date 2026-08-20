@@ -3,8 +3,8 @@ package com.carbroz.partner.sdui.runtime
 import androidx.compose.ui.unit.dp
 import com.carbroz.partner.core.ui.adaptive.spec.DimensionSpec
 import com.carbroz.partner.core.ui.adaptive.spec.SpacingSpec
-import com.carbroz.partner.domain.actions.model.ActionType
-import com.carbroz.partner.domain.actions.spec.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionType
 import com.carbroz.partner.engine.execution.binding.BindingScope
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
 import com.carbroz.partner.engine.execution.result.ExecutionResult
