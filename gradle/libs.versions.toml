@@ -3,14 +3,12 @@ kotlin = "2.4.10"
 compose-multiplatform = "1.11.1"
 agp = "9.3.1"
 androidx-activityCompose = "1.10.1"
-androidx-securityCrypto = "1.1.0-alpha06"
 coroutines = "1.10.1"
 serialization = "1.8.0"
 ktor = "3.1.1"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
-androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "androidx-securityCrypto" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
