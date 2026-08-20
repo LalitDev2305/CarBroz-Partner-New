@@ -14,6 +14,7 @@ public interface RenderScope {
     public val resolutionContext: ResolutionContext
     public val snapshot: SduiRenderSnapshot
     public val eventSink: SduiUiEventSink
+    public fun withResolutionContext(resolutionContext: ResolutionContext): RenderScope
     @Composable public fun renderTemplate(template: SduiTemplate)
     @Composable public fun renderComponent(component: SduiComponent)
     @Composable public fun renderSubComponent(subComponent: SduiSubComponent)

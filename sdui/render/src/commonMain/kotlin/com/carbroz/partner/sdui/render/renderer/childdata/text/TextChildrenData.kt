@@ -2,6 +2,7 @@ package com.carbroz.partner.sdui.render.renderer.childdata.text
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.carbroz.partner.core.ui.adaptive.result.ResolutionResult
 import com.carbroz.partner.sdui.engine.model.SduiChildrenData
 import com.carbroz.partner.sdui.render.fallback.UnsupportedFallback
 import com.carbroz.partner.sdui.render.renderer.childdata.ChildrenDataRenderer
@@ -23,16 +24,12 @@ public object TextChildrenData : ChildrenDataRenderer {
         val widthRes = LayoutResolver.resolveWidth(childrenData.width, scope.resolutionContext)
         val heightRes = LayoutResolver.resolveHeight(childrenData.height, scope.resolutionContext)
 
-        if (widthRes is LayoutResolver.LayoutModifierResult.UnsupportedToken ||
-            heightRes is LayoutResolver.LayoutModifierResult.UnsupportedToken
-        ) {
+        if (widthRes !is ResolutionResult.Resolved || heightRes !is ResolutionResult.Resolved) {
             UnsupportedFallback.renderUnsupportedChildrenData(childrenData.childrenDataType)
             return
         }
 
-        val widthMod = (widthRes as LayoutResolver.LayoutModifierResult.Resolved).modifier
-        val heightMod = (heightRes as LayoutResolver.LayoutModifierResult.Resolved).modifier
-        val marginMod = LayoutResolver.resolveMargin(widthMod.then(heightMod), childrenData.margin)
+        val marginMod = LayoutResolver.resolveMargin(widthRes.value.then(heightRes.value), childrenData.margin)
         val paddingMod = LayoutResolver.resolvePadding(marginMod, childrenData.padding)
 
         Text(

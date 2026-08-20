@@ -27,40 +27,22 @@ import com.carbroz.partner.sdui.engine.model.SduiEdgeSpacing
 
 public object LayoutResolver {
 
-    public sealed interface LayoutModifierResult {
-        public data class Resolved(val modifier: Modifier) : LayoutModifierResult
-        public data class UnsupportedToken(val reason: String) : LayoutModifierResult
-    }
-
-    public sealed interface LayoutSpacingResult {
-        public data class Resolved(val dpSpec: DpSpec) : LayoutSpacingResult
-        public data class UnsupportedToken(val reason: String) : LayoutSpacingResult
-    }
-
-    public sealed interface LayoutArrangementResult {
-        public sealed interface Vertical {
-            public data class Resolved(val arrangement: Arrangement.Vertical) : Vertical
-            public data class UnsupportedToken(val reason: String) : Vertical
-        }
-        public sealed interface Horizontal {
-            public data class Resolved(val arrangement: Arrangement.Horizontal) : Horizontal
-            public data class UnsupportedToken(val reason: String) : Horizontal
-        }
-    }
-
     public fun resolveWidth(
         spec: DimensionSpec,
         context: ResolutionContext,
         tokenResolver: DimensionTokenResolver? = null
-    ): LayoutModifierResult {
+    ): ResolutionResult<Modifier> {
         val hContext = if (context.axis == ResolutionAxis.HORIZONTAL) context else context.copy(axis = ResolutionAxis.HORIZONTAL)
         return when (val result = DimensionResolver.resolve(spec, hContext, tokenResolver = tokenResolver)) {
-            is ResolutionResult.Resolved -> when (val dim = result.value) {
-                is ResolvedDimension.Exact -> LayoutModifierResult.Resolved(Modifier.width(dim.valueDp))
-                is ResolvedDimension.Fill -> LayoutModifierResult.Resolved(Modifier.fillMaxWidth())
-                is ResolvedDimension.Wrap -> LayoutModifierResult.Resolved(Modifier)
+            is ResolutionResult.Resolved -> {
+                val modifier = when (val dim = result.value) {
+                    is ResolvedDimension.Exact -> Modifier.width(dim.valueDp)
+                    is ResolvedDimension.Fill -> Modifier.fillMaxWidth()
+                    is ResolvedDimension.Wrap -> Modifier
+                }
+                ResolutionResult.Resolved(modifier)
             }
-            is ResolutionResult.Unsupported -> LayoutModifierResult.UnsupportedToken("Layout dimension token could not be resolved")
+            is ResolutionResult.Unsupported -> ResolutionResult.Unsupported(result.tokenKey)
         }
     }
 
@@ -68,15 +50,18 @@ public object LayoutResolver {
         spec: DimensionSpec,
         context: ResolutionContext,
         tokenResolver: DimensionTokenResolver? = null
-    ): LayoutModifierResult {
+    ): ResolutionResult<Modifier> {
         val vContext = if (context.axis == ResolutionAxis.VERTICAL) context else context.copy(axis = ResolutionAxis.VERTICAL)
         return when (val result = DimensionResolver.resolve(spec, vContext, tokenResolver = tokenResolver)) {
-            is ResolutionResult.Resolved -> when (val dim = result.value) {
-                is ResolvedDimension.Exact -> LayoutModifierResult.Resolved(Modifier.height(dim.valueDp))
-                is ResolvedDimension.Fill -> LayoutModifierResult.Resolved(Modifier.fillMaxHeight())
-                is ResolvedDimension.Wrap -> LayoutModifierResult.Resolved(Modifier)
+            is ResolutionResult.Resolved -> {
+                val modifier = when (val dim = result.value) {
+                    is ResolvedDimension.Exact -> Modifier.height(dim.valueDp)
+                    is ResolvedDimension.Fill -> Modifier.fillMaxHeight()
+                    is ResolvedDimension.Wrap -> Modifier
+                }
+                ResolutionResult.Resolved(modifier)
             }
-            is ResolutionResult.Unsupported -> LayoutModifierResult.UnsupportedToken("Layout dimension token could not be resolved")
+            is ResolutionResult.Unsupported -> ResolutionResult.Unsupported(result.tokenKey)
         }
     }
 
@@ -97,11 +82,8 @@ public object LayoutResolver {
         spec: SpacingSpec,
         context: ResolutionContext,
         tokenResolver: SpacingTokenResolver? = null
-    ): LayoutSpacingResult {
-        return when (val result = SpacingResolver.resolve(spec, context, tokenResolver = tokenResolver)) {
-            is ResolutionResult.Resolved -> LayoutSpacingResult.Resolved(DpSpec(result.value))
-            is ResolutionResult.Unsupported -> LayoutSpacingResult.UnsupportedToken("Layout spacing token could not be resolved")
-        }
+    ): ResolutionResult<Dp> {
+        return SpacingResolver.resolve(spec, context, tokenResolver = tokenResolver)
     }
 
     public fun resolveColumnAlignment(alignment: LayoutAlignment): Alignment.Horizontal = when (alignment) {
@@ -121,11 +103,11 @@ public object LayoutResolver {
         gap: SpacingSpec,
         context: ResolutionContext,
         tokenResolver: SpacingTokenResolver? = null
-    ): LayoutArrangementResult.Vertical {
+    ): ResolutionResult<Arrangement.Vertical> {
         val vContext = if (context.axis == ResolutionAxis.VERTICAL) context else context.copy(axis = ResolutionAxis.VERTICAL)
         return when (val gapRes = resolveGap(gap, vContext, tokenResolver)) {
-            is LayoutSpacingResult.Resolved -> {
-                val spacing = gapRes.dpSpec.value
+            is ResolutionResult.Resolved -> {
+                val spacing = gapRes.value
                 val arr = when (arrangement) {
                     LayoutArrangement.CENTER -> Arrangement.Center
                     LayoutArrangement.END -> Arrangement.Bottom
@@ -134,9 +116,9 @@ public object LayoutResolver {
                     LayoutArrangement.SPACE_EVENLY -> Arrangement.SpaceEvenly
                     else -> Arrangement.spacedBy(spacing)
                 }
-                LayoutArrangementResult.Vertical.Resolved(arr)
+                ResolutionResult.Resolved(arr)
             }
-            is LayoutSpacingResult.UnsupportedToken -> LayoutArrangementResult.Vertical.UnsupportedToken(gapRes.reason)
+            is ResolutionResult.Unsupported -> ResolutionResult.Unsupported(gapRes.tokenKey)
         }
     }
 
@@ -145,11 +127,11 @@ public object LayoutResolver {
         gap: SpacingSpec,
         context: ResolutionContext,
         tokenResolver: SpacingTokenResolver? = null
-    ): LayoutArrangementResult.Horizontal {
+    ): ResolutionResult<Arrangement.Horizontal> {
         val hContext = if (context.axis == ResolutionAxis.HORIZONTAL) context else context.copy(axis = ResolutionAxis.HORIZONTAL)
         return when (val gapRes = resolveGap(gap, hContext, tokenResolver)) {
-            is LayoutSpacingResult.Resolved -> {
-                val spacing = gapRes.dpSpec.value
+            is ResolutionResult.Resolved -> {
+                val spacing = gapRes.value
                 val arr = when (arrangement) {
                     LayoutArrangement.CENTER -> Arrangement.Center
                     LayoutArrangement.END -> Arrangement.End
@@ -158,11 +140,9 @@ public object LayoutResolver {
                     LayoutArrangement.SPACE_EVENLY -> Arrangement.SpaceEvenly
                     else -> Arrangement.spacedBy(spacing)
                 }
-                LayoutArrangementResult.Horizontal.Resolved(arr)
+                ResolutionResult.Resolved(arr)
             }
-            is LayoutSpacingResult.UnsupportedToken -> LayoutArrangementResult.Horizontal.UnsupportedToken(gapRes.reason)
+            is ResolutionResult.Unsupported -> ResolutionResult.Unsupported(gapRes.tokenKey)
         }
     }
-
-    public data class DpSpec(val value: Dp)
 }

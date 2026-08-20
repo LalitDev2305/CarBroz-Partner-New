@@ -27,6 +27,17 @@ public class DefaultRenderScope(
     override val eventSink: SduiUiEventSink
 ) : RenderScope {
 
+    override fun withResolutionContext(resolutionContext: ResolutionContext): RenderScope = DefaultRenderScope(
+        resolutionContext = resolutionContext,
+        templateRegistry = templateRegistry,
+        componentRegistry = componentRegistry,
+        subComponentRegistry = subComponentRegistry,
+        childRegistry = childRegistry,
+        childrenDataRegistry = childrenDataRegistry,
+        snapshot = snapshot,
+        eventSink = eventSink
+    )
+
     @Composable
     override fun renderTemplate(template: SduiTemplate) {
         val renderer = templateRegistry.resolve(template.templateType)

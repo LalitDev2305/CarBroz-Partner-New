@@ -1,9 +1,11 @@
 package com.carbroz.partner.sdui.render.resolver
 
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.carbroz.partner.core.ui.adaptive.context.CurrentContainerConstraints
 import com.carbroz.partner.core.ui.adaptive.context.ResolutionAxis
 import com.carbroz.partner.core.ui.adaptive.context.ResolutionContext
+import com.carbroz.partner.core.ui.adaptive.result.ResolutionResult
 import com.carbroz.partner.core.ui.adaptive.spec.DimensionSpec
 import com.carbroz.partner.core.ui.adaptive.spec.SpacingSpec
 import com.carbroz.partner.core.ui.tokens.DimensionTokenResolver
@@ -16,14 +18,19 @@ import kotlin.test.assertTrue
 
 class LayoutResolverTest {
 
-    private val context400 = ResolutionContext(
+    private val rootContext = ResolutionContext(
         axis = ResolutionAxis.HORIZONTAL,
-        container = CurrentContainerConstraints(availableWidth = 400.dp, availableHeight = 800.dp)
+        container = CurrentContainerConstraints(availableWidth = 800.dp, availableHeight = 1200.dp)
     )
 
-    private val context800 = ResolutionContext(
+    private val localParentContext = ResolutionContext(
         axis = ResolutionAxis.HORIZONTAL,
-        container = CurrentContainerConstraints(availableWidth = 800.dp, availableHeight = 800.dp)
+        container = CurrentContainerConstraints(availableWidth = 400.dp, availableHeight = 600.dp)
+    )
+
+    private val smallerLocalParentContext = ResolutionContext(
+        axis = ResolutionAxis.HORIZONTAL,
+        container = CurrentContainerConstraints(availableWidth = 200.dp, availableHeight = 300.dp)
     )
 
     private object DummySpacingTokenResolver : SpacingTokenResolver {
@@ -47,76 +54,114 @@ class LayoutResolverTest {
     }
 
     @Test
-    fun testA_FixedWidthResolvesCorrectlyWithRealContext() {
-        val res = LayoutResolver.resolveWidth(DimensionSpec.Fixed(100.dp), context400)
-        assertTrue(res is LayoutResolver.LayoutModifierResult.Resolved)
+    fun test1_FixedWidthResolvesCorrectly() {
+        val res = LayoutResolver.resolveWidth(DimensionSpec.Fixed(100.dp), localParentContext)
+        assertTrue(res is ResolutionResult.Resolved)
     }
 
     @Test
-    fun testB_FractionWidthHalfProducesExact200Dp() {
-        val res = LayoutResolver.resolveWidth(DimensionSpec.Fraction(0.5f), context400)
-        assertTrue(res is LayoutResolver.LayoutModifierResult.Resolved)
+    fun test2_FixedHeightResolvesCorrectly() {
+        val res = LayoutResolver.resolveHeight(DimensionSpec.Fixed(100.dp), localParentContext)
+        assertTrue(res is ResolutionResult.Resolved)
     }
 
     @Test
-    fun testC_AdaptiveWidthChangesWhenAvailableWidthChanges() {
+    fun test3_FractionResolvesFromSuppliedLocalContainer() {
+        val spec = DimensionSpec.Fraction(0.5f)
+        val rootRes = LayoutResolver.resolveWidth(spec, rootContext)
+        val localRes = LayoutResolver.resolveWidth(spec, localParentContext)
+        assertTrue(rootRes is ResolutionResult.Resolved)
+        assertTrue(localRes is ResolutionResult.Resolved)
+        assertNotEquals(rootRes.value, localRes.value)
+    }
+
+    @Test
+    fun test4_AdaptiveResolvesFromSuppliedLocalContainer() {
         val spec = DimensionSpec.Adaptive(100.dp)
-        val res400 = LayoutResolver.resolveWidth(spec, context400)
-        val res800 = LayoutResolver.resolveWidth(spec, context800)
-        assertTrue(res400 is LayoutResolver.LayoutModifierResult.Resolved)
-        assertTrue(res800 is LayoutResolver.LayoutModifierResult.Resolved)
-        assertNotEquals(res400.modifier, res800.modifier)
+        val rootRes = LayoutResolver.resolveWidth(spec, rootContext)
+        val localRes = LayoutResolver.resolveWidth(spec, localParentContext)
+        assertTrue(rootRes is ResolutionResult.Resolved)
+        assertTrue(localRes is ResolutionResult.Resolved)
+        assertNotEquals(rootRes.value, localRes.value)
     }
 
     @Test
-    fun testD_AdaptiveWidthIsNotFillMaxWidth() {
-        val spec = DimensionSpec.Adaptive(100.dp)
-        val res = LayoutResolver.resolveWidth(spec, context400)
-        assertTrue(res is LayoutResolver.LayoutModifierResult.Resolved)
+    fun test5_FillPreserved() {
+        val res = LayoutResolver.resolveWidth(DimensionSpec.Fill, localParentContext)
+        assertTrue(res is ResolutionResult.Resolved)
     }
 
     @Test
-    fun testE_TokenWidthWithResolverProducesExactDimension() {
+    fun test6_WrapPreserved() {
+        val res = LayoutResolver.resolveWidth(DimensionSpec.Wrap, localParentContext)
+        assertTrue(res is ResolutionResult.Resolved)
+        assertEquals(Modifier, res.value)
+    }
+
+    @Test
+    fun test7_TokenDimensionResolverSuccess() {
         val spec = DimensionSpec.Token("custom_dim")
-        val res = LayoutResolver.resolveWidth(spec, context400, tokenResolver = DummyDimensionTokenResolver)
-        assertTrue(res is LayoutResolver.LayoutModifierResult.Resolved)
+        val res = LayoutResolver.resolveWidth(spec, localParentContext, tokenResolver = DummyDimensionTokenResolver)
+        assertTrue(res is ResolutionResult.Resolved)
     }
 
     @Test
-    fun testF_MissingTokenProducesExplicitUnsupportedHandling() {
+    fun test8_MissingTokenStaysUnsupported() {
         val spec = DimensionSpec.Token("unresolved_key")
-        val res = LayoutResolver.resolveWidth(spec, context400)
-        assertTrue(res is LayoutResolver.LayoutModifierResult.UnsupportedToken)
+        val res = LayoutResolver.resolveWidth(spec, localParentContext)
+        assertTrue(res is ResolutionResult.Unsupported)
+        assertEquals("unresolved_key", res.tokenKey)
     }
 
     @Test
-    fun testG_RowAdaptiveGapUsesHorizontalAvailableDimension() {
+    fun test9_AdaptiveRowGapUsesHorizontalLocalConstraint() {
         val spec = SpacingSpec.Adaptive(16.dp)
         val hContext = ResolutionContext(ResolutionAxis.HORIZONTAL, CurrentContainerConstraints(400.dp, 800.dp))
         val res = LayoutResolver.resolveGap(spec, hContext)
-        assertTrue(res is LayoutResolver.LayoutSpacingResult.Resolved)
+        assertTrue(res is ResolutionResult.Resolved)
     }
 
     @Test
-    fun testH_ColumnAdaptiveGapUsesVerticalAvailableDimension() {
+    fun test10_AdaptiveColumnGapUsesVerticalLocalConstraint() {
         val spec = SpacingSpec.Adaptive(16.dp)
         val vContext = ResolutionContext(ResolutionAxis.VERTICAL, CurrentContainerConstraints(400.dp, 800.dp))
         val res = LayoutResolver.resolveGap(spec, vContext)
-        assertTrue(res is LayoutResolver.LayoutSpacingResult.Resolved)
+        assertTrue(res is ResolutionResult.Resolved)
     }
 
     @Test
-    fun testI_TokenGapUsesProvidedResolver() {
+    fun test11_TokenGapSuccess() {
         val spec = SpacingSpec.Token("custom_gap")
-        val res = LayoutResolver.resolveGap(spec, context400, tokenResolver = DummySpacingTokenResolver)
-        assertTrue(res is LayoutResolver.LayoutSpacingResult.Resolved)
-        assertEquals(24.dp, res.dpSpec.value)
+        val res = LayoutResolver.resolveGap(spec, localParentContext, tokenResolver = DummySpacingTokenResolver)
+        assertTrue(res is ResolutionResult.Resolved)
+        assertEquals(24.dp, res.value)
     }
 
     @Test
-    fun testJ_MissingTokenGapProducesExplicitUnsupportedHandling() {
+    fun test12_MissingTokenGapStaysUnsupported() {
         val spec = SpacingSpec.Token("unresolved_gap")
-        val res = LayoutResolver.resolveGap(spec, context400)
-        assertTrue(res is LayoutResolver.LayoutSpacingResult.UnsupportedToken)
+        val res = LayoutResolver.resolveGap(spec, localParentContext)
+        assertTrue(res is ResolutionResult.Unsupported)
+        assertEquals("unresolved_gap", res.tokenKey)
+    }
+
+    @Test
+    fun test17_NestedFractionUsesParentContainerNotRoot() {
+        val spec = DimensionSpec.Fraction(0.5f)
+        val localRes = LayoutResolver.resolveWidth(spec, localParentContext)
+        val smallerRes = LayoutResolver.resolveWidth(spec, smallerLocalParentContext)
+        assertTrue(localRes is ResolutionResult.Resolved)
+        assertTrue(smallerRes is ResolutionResult.Resolved)
+        assertNotEquals(localRes.value, smallerRes.value)
+    }
+
+    @Test
+    fun test18_NestedAdaptiveUsesParentContainerNotRoot() {
+        val spec = DimensionSpec.Adaptive(100.dp)
+        val localRes = LayoutResolver.resolveWidth(spec, localParentContext)
+        val smallerRes = LayoutResolver.resolveWidth(spec, smallerLocalParentContext)
+        assertTrue(localRes is ResolutionResult.Resolved)
+        assertTrue(smallerRes is ResolutionResult.Resolved)
+        assertNotEquals(localRes.value, smallerRes.value)
     }
 }
