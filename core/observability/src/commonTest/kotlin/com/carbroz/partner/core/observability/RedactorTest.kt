@@ -44,6 +44,26 @@ class RedactorTest {
     }
 
     @Test
+    fun verifyFreeTextCredentialSanitization() {
+        val authHeaderMsg = "Header Authorization: Bearer secret_token_xyz"
+        val passMsg = "Login failed with password=mySecretPassword123"
+        val tokenMsg = "Received access_token=jwt_token_val_456"
+
+        assertEquals(
+            "Header Authorization: Bearer [REDACTED_SECRET]",
+            Redactor.sanitizeText(authHeaderMsg)
+        )
+        assertEquals(
+            "Login failed with password=[REDACTED_SECRET]",
+            Redactor.sanitizeText(passMsg)
+        )
+        assertEquals(
+            "Received access_token=[REDACTED_SECRET]",
+            Redactor.sanitizeText(tokenMsg)
+        )
+    }
+
+    @Test
     fun verifyNonPhoneDiagnosticNumbersNotMasked() {
         val diagnosticStrings = listOf(
             "status=200",
@@ -60,7 +80,6 @@ class RedactorTest {
             assertEquals(text, Redactor.sanitizeText(text), "Diagnostic string incorrectly redacted: $text")
         }
     }
-
 
     @Test
     fun verifyNestedStructureAndCollectionRedaction() {
@@ -94,17 +113,14 @@ class RedactorTest {
 
     @Test
     fun verifyThrowableSanitization() {
-        val exception = RuntimeException("Failed connect to user@carbroz.com with password secret123", IllegalStateException("Root cause phone: +919876543210"))
+        val exception = RuntimeException("Failed connect to user@carbroz.com with password=secret123", IllegalStateException("Root cause phone: +919876543210"))
 
         val errorInfo = Redactor.sanitizeThrowable(exception)
 
         assertNotNull(errorInfo)
         assertEquals("RuntimeException", errorInfo.type)
-        assertEquals("Failed connect to [REDACTED_EMAIL] with password secret123", errorInfo.message)
+        assertEquals("Failed connect to [REDACTED_EMAIL] with password=[REDACTED_SECRET]", errorInfo.message)
         assertEquals("IllegalStateException", errorInfo.causeType)
         assertEquals("Root cause [REDACTED_PHONE]", errorInfo.causeMessage)
     }
-
-
-
 }

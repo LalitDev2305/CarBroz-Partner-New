@@ -29,6 +29,14 @@ interface BoundLogger {
         message: String,
         attributes: Map<String, LogAttribute> = emptyMap(),
         traceContext: TraceContext? = null
+    ) = log(
+        level = LogLevel.INFO,
+        category = category,
+        sourceFunction = sourceFunction,
+        event = event,
+        message = message,
+        attributes = attributes,
+        traceContext = traceContext
     )
 
     fun debug(
@@ -38,6 +46,14 @@ interface BoundLogger {
         message: String,
         attributes: Map<String, LogAttribute> = emptyMap(),
         traceContext: TraceContext? = null
+    ) = log(
+        level = LogLevel.DEBUG,
+        category = category,
+        sourceFunction = sourceFunction,
+        event = event,
+        message = message,
+        attributes = attributes,
+        traceContext = traceContext
     )
 
     fun error(
@@ -48,5 +64,14 @@ interface BoundLogger {
         throwable: Throwable? = null,
         attributes: Map<String, LogAttribute> = emptyMap(),
         traceContext: TraceContext? = null
+    ) = log(
+        level = LogLevel.ERROR,
+        category = category,
+        sourceFunction = sourceFunction,
+        event = event,
+        message = message,
+        attributes = attributes,
+        traceContext = traceContext,
+        throwable = throwable
     )
 }
