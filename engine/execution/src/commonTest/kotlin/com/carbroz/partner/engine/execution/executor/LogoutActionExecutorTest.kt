@@ -1,6 +1,6 @@
 package com.carbroz.partner.engine.execution.executor
 
-import com.carbroz.partner.domain.session.credential.SessionCredentialStore
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.model.SessionState
@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 class LogoutActionExecutorTest {
 
-    private class FakeCredentialStore : SessionCredentialStore {
+    private class FakeCredentialPersistence : SessionCredentialPersistence {
         var stored: SessionCredentials? = null
         override suspend fun load(): CredentialLoadResult {
             val c = stored ?: return CredentialLoadResult.NotFound
@@ -36,11 +36,11 @@ class LogoutActionExecutorTest {
 
     @Test
     fun testLogoutExecutionClearsSessionAndMarksUnauthenticated() = runTest {
-        val credStore = FakeCredentialStore()
+        val persistence = FakeCredentialPersistence()
         val store = SessionStore()
-        val clear = ClearSession(credStore, store)
+        val clear = ClearSession(persistence, store)
 
-        credStore.save(SessionCredentials("tok_123"))
+        persistence.save(SessionCredentials("tok_123"))
         store.markAuthenticated()
 
         val executor = LogoutActionExecutor(clear)
@@ -53,6 +53,6 @@ class LogoutActionExecutorTest {
         val result = executor.execute(actionSpec)
         assertTrue(result is ExecutionResult.Success)
         assertEquals(SessionState.Unauthenticated, store.state.value)
-        assertTrue(credStore.load() is CredentialLoadResult.NotFound)
+        assertTrue(persistence.load() is CredentialLoadResult.NotFound)
     }
 }

@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.remember
 import com.carbroz.partner.app.composition.CarBrozPartnerRoot
-import com.carbroz.partner.infrastructure.persistence.session.AndroidSessionCredentialStoreFactory
+import com.carbroz.partner.infrastructure.persistence.session.AndroidSessionCredentialPersistenceFactory
 
 /**
  * Android Platform Host Activity.
@@ -16,10 +16,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val credentialStore = remember {
-                AndroidSessionCredentialStoreFactory.create(applicationContext)
+            val credentialPersistence = remember {
+                AndroidSessionCredentialPersistenceFactory.create(applicationContext)
             }
-            CarBrozPartnerRoot(credentialStore = credentialStore)
+            CarBrozPartnerRoot(credentialPersistence = credentialPersistence)
         }
     }
 }

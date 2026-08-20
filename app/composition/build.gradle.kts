@@ -32,11 +32,22 @@ kotlin {
             implementation(project(":sdui:engine"))
             implementation(project(":engine:execution"))
             implementation(project(":infrastructure:network"))
-            implementation(project(":infrastructure:persistence"))
             implementation(project(":core:navigation"))
             implementation(project(":core:observability"))
             implementation(project(":domain:session"))
             implementation(project(":feature:splash"))
+        }
+
+        val iosArm64Main by getting {
+            dependencies {
+                implementation(project(":infrastructure:persistence"))
+            }
+        }
+
+        val iosSimulatorArm64Main by getting {
+            dependencies {
+                implementation(project(":infrastructure:persistence"))
+            }
         }
 
         commonTest.dependencies {

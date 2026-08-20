@@ -7,7 +7,7 @@ import com.carbroz.partner.core.navigation.Router
 import com.carbroz.partner.core.navigation.createRouter
 import com.carbroz.partner.core.observability.logger.DefaultPipelineLogger
 import com.carbroz.partner.core.observability.logger.StructuredLogger
-import com.carbroz.partner.domain.session.credential.SessionCredentialStore
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.store.SessionStore
 import com.carbroz.partner.engine.execution.binding.DefaultBindingResolver
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
@@ -34,7 +34,7 @@ import kotlinx.coroutines.CoroutineScope
  */
 public class AppGraph(
     public val config: AppConfig,
-    public val credentialStore: SessionCredentialStore,
+    public val credentialPersistence: SessionCredentialPersistence,
     public val endpointConfig: SduiEndpointConfig = SduiEndpointConfig(),
     public val sessionStore: SessionStore = SessionStore(),
     public val networkClient: NetworkClient = KtorNetworkClient(config.baseUrl),

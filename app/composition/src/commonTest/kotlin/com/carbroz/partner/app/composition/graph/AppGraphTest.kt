@@ -2,7 +2,7 @@ package com.carbroz.partner.app.composition.graph
 
 import com.carbroz.partner.app.composition.config.AppConfig
 import com.carbroz.partner.app.composition.config.SduiEndpointConfig
-import com.carbroz.partner.domain.session.credential.SessionCredentialStore
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,7 +16,7 @@ import kotlin.test.assertNotNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppGraphTest {
 
-    private class FakeCredentialStore : SessionCredentialStore {
+    private class FakeCredentialPersistence : SessionCredentialPersistence {
         override suspend fun load(): CredentialLoadResult = CredentialLoadResult.NotFound
         override suspend fun save(credentials: SessionCredentials): Boolean = true
         override suspend fun clear(): Boolean = true
@@ -29,7 +29,7 @@ class AppGraphTest {
         val endpointConfig = SduiEndpointConfig()
         val graph = AppGraph(
             config = config,
-            credentialStore = FakeCredentialStore(),
+            credentialPersistence = FakeCredentialPersistence(),
             endpointConfig = endpointConfig
         )
 

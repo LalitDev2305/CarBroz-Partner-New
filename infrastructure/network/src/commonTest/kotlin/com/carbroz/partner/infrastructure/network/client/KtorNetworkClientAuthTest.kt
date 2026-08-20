@@ -1,6 +1,7 @@
 package com.carbroz.partner.infrastructure.network.client
 
-import com.carbroz.partner.domain.session.credential.SessionCredentialStore
+import com.carbroz.partner.domain.session.credential.PersistedSessionCredentialProvider
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.model.SessionRefreshResult
@@ -22,7 +23,7 @@ import kotlin.test.assertTrue
 
 class KtorNetworkClientAuthTest {
 
-    private class FakeCredentialStore : SessionCredentialStore {
+    private class FakeCredentialPersistence : SessionCredentialPersistence {
         var stored: SessionCredentials? = null
         override suspend fun load(): CredentialLoadResult {
             val c = stored ?: return CredentialLoadResult.NotFound
@@ -109,10 +110,10 @@ class KtorNetworkClientAuthTest {
             }
         }
 
-        val credStore = FakeCredentialStore()
+        val persistence = FakeCredentialPersistence()
         val store = SessionStore()
-        val clear = ClearSession(credStore, store)
-        credStore.save(SessionCredentials("tok_old", "ref_123"))
+        val clear = ClearSession(persistence, store)
+        persistence.save(SessionCredentials("tok_old", "ref_123"))
 
         var providerToken = "tok_old"
         val provider = SessionCredentialProvider { providerToken }
@@ -122,7 +123,7 @@ class KtorNetworkClientAuthTest {
             SessionRefreshResult.Success(SessionCredentials("tok_refreshed", "ref_123"))
         }
 
-        val coordinator = SessionRefreshCoordinator(credStore, gateway, clear)
+        val coordinator = SessionRefreshCoordinator(persistence, gateway, clear)
         val client = KtorNetworkClient(
             baseUrl = "https://api.test.com",
             credentialProvider = provider,

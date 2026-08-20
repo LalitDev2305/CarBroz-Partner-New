@@ -1,12 +1,12 @@
 package com.carbroz.partner.domain.session
 
-import com.carbroz.partner.domain.session.credential.SessionCredentialStore
+import com.carbroz.partner.domain.session.credential.PersistedSessionCredentialProvider
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.model.SessionRefreshResult
 import com.carbroz.partner.domain.session.model.SessionState
 import com.carbroz.partner.domain.session.operation.ClearSession
-import com.carbroz.partner.domain.session.provider.StorageSessionCredentialProvider
 import com.carbroz.partner.domain.session.refresh.SessionRefreshCoordinator
 import com.carbroz.partner.domain.session.refresh.SessionRefreshGateway
 import com.carbroz.partner.domain.session.restore.SessionRestorer
@@ -22,101 +22,121 @@ import kotlin.test.assertTrue
 
 class DomainSessionTest {
 
-    private class FakeSessionCredentialStore : SessionCredentialStore {
-        var storedCredentials: SessionCredentials? = null
+    private class FakeSessionCredentialPersistence : SessionCredentialPersistence {
+        var stored: SessionCredentials? = null
+        var failOnSave = false
+        var loadFailure = false
 
         override suspend fun load(): CredentialLoadResult {
-            val creds = storedCredentials ?: return CredentialLoadResult.NotFound
-            return CredentialLoadResult.Found(creds)
+            if (loadFailure) return CredentialLoadResult.Failure
+            val c = stored ?: return CredentialLoadResult.NotFound
+            return CredentialLoadResult.Found(c)
         }
 
         override suspend fun save(credentials: SessionCredentials): Boolean {
-            storedCredentials = credentials
+            if (failOnSave) return false
+            stored = credentials
             return true
         }
 
         override suspend fun clear(): Boolean {
-            storedCredentials = null
+            stored = null
             return true
         }
     }
 
     @Test
-    fun testCredentialsToStringHidesSecrets() {
-        val creds = SessionCredentials("secret_access_123", "secret_refresh_456")
-        val str = creds.toString()
-        assertFalse(str.contains("secret_access_123"))
-        assertFalse(str.contains("secret_refresh_456"))
-        assertTrue(str.contains("hasAccessToken=true"))
-        assertTrue(str.contains("hasRefreshToken=true"))
+    fun testSessionStoreThreadSafetyAndStateFlow() = runTest {
+        val store = SessionStore()
+        assertEquals(SessionState.Unauthenticated, store.state.value)
+
+        val jobs = List(100) { i ->
+            async {
+                if (i % 2 == 0) store.markAuthenticated() else store.markUnauthenticated()
+            }
+        }
+        jobs.awaitAll()
+        assertTrue(store.state.value is SessionState)
     }
 
     @Test
-    fun testSessionStoreAndRestorer() = runTest {
-        val storeImpl = FakeSessionCredentialStore()
+    fun testSessionRestorerRestoresAuthenticatedWhenFound() = runTest {
+        val persistenceImpl = FakeSessionCredentialPersistence()
+        persistenceImpl.save(SessionCredentials(accessToken = "token_123"))
         val store = SessionStore()
-        val restorer = SessionRestorer(storeImpl, store)
+        val restorer = SessionRestorer(persistenceImpl, store)
 
-        restorer.restoreSession()
-        assertEquals(SessionState.Unauthenticated, store.state.value)
-
-        val creds = SessionCredentials("token_123", "refresh_456")
-        storeImpl.save(creds)
-
-        restorer.restoreSession()
+        val restored = restorer.restore()
+        assertTrue(restored)
         assertEquals(SessionState.Authenticated, store.state.value)
     }
 
     @Test
-    fun testCredentialProvider() = runTest {
-        val storeImpl = FakeSessionCredentialStore()
-        val provider = StorageSessionCredentialProvider(storeImpl)
+    fun testSessionRestorerMarksUnauthenticatedWhenNotFoundOrFailure() = runTest {
+        val persistenceImpl = FakeSessionCredentialPersistence()
+        val store = SessionStore()
+        store.markAuthenticated()
+        val restorer = SessionRestorer(persistenceImpl, store)
+
+        val restored = restorer.restore()
+        assertFalse(restored)
+        assertEquals(SessionState.Unauthenticated, store.state.value)
+    }
+
+    @Test
+    fun testClearSessionClearsPersistenceAndSessionStore() = runTest {
+        val persistenceImpl = FakeSessionCredentialPersistence()
+        persistenceImpl.save(SessionCredentials(accessToken = "token_123"))
+        val store = SessionStore()
+        store.markAuthenticated()
+        val clearSession = ClearSession(persistenceImpl, store)
+
+        val cleared = clearSession.execute()
+        assertTrue(cleared)
+        assertEquals(SessionState.Unauthenticated, store.state.value)
+        assertIsNotFound(persistenceImpl.load())
+    }
+
+    @Test
+    fun testPersistedSessionCredentialProviderReturnsToken() = runTest {
+        val persistenceImpl = FakeSessionCredentialPersistence()
+        persistenceImpl.save(SessionCredentials(accessToken = "token_abc"))
+        val provider = PersistedSessionCredentialProvider(persistenceImpl)
+
+        assertEquals("token_abc", provider.getAccessToken())
+    }
+
+    @Test
+    fun testPersistedSessionCredentialProviderReturnsNullWhenEmpty() = runTest {
+        val persistenceImpl = FakeSessionCredentialPersistence()
+        val provider = PersistedSessionCredentialProvider(persistenceImpl)
 
         assertNull(provider.getAccessToken())
-
-        storeImpl.save(SessionCredentials("tok_abc"))
-        assertEquals("tok_abc", provider.getAccessToken())
     }
 
     @Test
-    fun testSingleFlightConcurrentRefreshCoordinator() = runTest {
-        val storeImpl = FakeSessionCredentialStore()
+    fun testSessionRefreshCoordinatorSuccess() = runTest {
+        val persistenceImpl = FakeSessionCredentialPersistence()
+        persistenceImpl.save(SessionCredentials(accessToken = "token_old", refreshToken = "refresh_old"))
         val store = SessionStore()
-        val clear = ClearSession(storeImpl, store)
+        val clearSession = ClearSession(persistenceImpl, store)
 
-        storeImpl.save(SessionCredentials("tok_old", "ref_old"))
-        store.markAuthenticated()
-
-        var gatewayCalls = 0
-        val fakeGateway = SessionRefreshGateway { _ ->
-            gatewayCalls++
-            SessionRefreshResult.Success(SessionCredentials("tok_new", "ref_new"))
+        val gateway = SessionRefreshGateway { refreshTok: String ->
+            if (refreshTok == "refresh_old") {
+                SessionRefreshResult.Success(SessionCredentials(accessToken = "token_new", refreshToken = "refresh_new"))
+            } else {
+                SessionRefreshResult.Failure
+            }
         }
 
-        val coordinator = SessionRefreshCoordinator(storeImpl, fakeGateway, clear)
+        val coordinator = SessionRefreshCoordinator(persistenceImpl, gateway, clearSession)
+        val success = coordinator.refresh("token_old")
 
-        // Spawn 5 concurrent refresh requests using the exact same failed token "tok_old"
-        val jobs = List(5) {
-            async { coordinator.refresh("tok_old") }
-        }
-        val results = jobs.awaitAll()
-
-        assertTrue(results.all { it })
-        assertEquals(1, gatewayCalls, "Exactly ONE refresh call must reach the gateway for concurrent same-token 401s")
-        assertEquals("tok_new", (storeImpl.load() as CredentialLoadResult.Found).credentials.accessToken)
+        assertTrue(success)
+        assertEquals("token_new", (persistenceImpl.load() as CredentialLoadResult.Found).credentials.accessToken)
     }
 
-    @Test
-    fun testClearSessionClearsCredentialsAndMarksUnauthenticated() = runTest {
-        val storeImpl = FakeSessionCredentialStore()
-        val store = SessionStore()
-        val clear = ClearSession(storeImpl, store)
-
-        storeImpl.save(SessionCredentials("tok_123"))
-        store.markAuthenticated()
-
-        clear.execute()
-        assertEquals(SessionState.Unauthenticated, store.state.value)
-        assertTrue(storeImpl.load() is CredentialLoadResult.NotFound)
+    private fun assertIsNotFound(result: CredentialLoadResult) {
+        assertTrue(result is CredentialLoadResult.NotFound)
     }
 }

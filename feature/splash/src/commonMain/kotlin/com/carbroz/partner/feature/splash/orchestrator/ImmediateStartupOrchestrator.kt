@@ -13,7 +13,7 @@ public class ImmediateStartupOrchestrator(
 ) : StartupOrchestrator {
 
     override suspend fun initialize(): StartupResult {
-        sessionRestorer?.restoreSession()
+        sessionRestorer?.restore()
         return StartupResult.Ready(destination = StartupDestination.ServerDrivenUi)
     }
 }

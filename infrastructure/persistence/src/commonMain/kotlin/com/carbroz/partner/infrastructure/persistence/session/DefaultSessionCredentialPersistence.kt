@@ -1,6 +1,6 @@
 package com.carbroz.partner.infrastructure.persistence.session
 
-import com.carbroz.partner.domain.session.credential.SessionCredentialStore
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.infrastructure.persistence.secure.SecureKeyValueStorage
@@ -9,12 +9,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 
 /**
- * Infrastructure implementation of [SessionCredentialStore] managing JSON serialization and key-value persistence.
+ * Infrastructure implementation of [SessionCredentialPersistence] managing JSON serialization and key-value persistence.
  */
-internal class PersistentSessionCredentialStore(
+internal class DefaultSessionCredentialPersistence(
     private val secureStorage: SecureKeyValueStorage,
     private val json: Json = Json { ignoreUnknownKeys = true }
-) : SessionCredentialStore {
+) : SessionCredentialPersistence {
 
     private companion object {
         private const val KEY_SESSION_CREDENTIALS: String = "session_credentials"
