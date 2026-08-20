@@ -1,7 +1,8 @@
 package com.carbroz.partner.feature.splash.store
 
-import com.carbroz.partner.core.mvi.store.Store
-import com.carbroz.partner.core.mvi.store.createStore
+import com.carbroz.partner.core.mvi.Store
+import com.carbroz.partner.core.mvi.createStore
+import com.carbroz.partner.core.observability.logger.StructuredLogger
 import com.carbroz.partner.feature.splash.orchestrator.ImmediateStartupOrchestrator
 import com.carbroz.partner.feature.splash.orchestrator.StartupDestination
 import com.carbroz.partner.feature.splash.orchestrator.StartupOrchestrator
@@ -38,11 +39,13 @@ public sealed interface SplashEffect {
  */
 public class SplashStore(
     scope: CoroutineScope,
+    logger: StructuredLogger,
     private val orchestrator: StartupOrchestrator = ImmediateStartupOrchestrator(),
     private val delegateStore: Store<SplashState, SplashIntent, SplashEffect> = createStore(
         scope = scope,
         initialState = SplashState.Initial,
         storeId = "SplashStore",
+        logger = logger,
         processor = { intent ->
             when (intent) {
                 is SplashIntent.Initialize, is SplashIntent.Retry -> {

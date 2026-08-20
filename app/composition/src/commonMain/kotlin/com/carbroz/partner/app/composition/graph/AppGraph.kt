@@ -68,6 +68,7 @@ public class AppGraph(
     public fun createSplashStore(scope: CoroutineScope): SplashStore {
         return SplashStore(
             scope = scope,
+            logger = logger,
             orchestrator = startupOrchestrator
         )
     }
