@@ -18,6 +18,7 @@ rootProject.name = "CarBroz-Partner"
 // Platform Hosts
 include(":androidApp")
 include(":desktopApp")
+include(":iosAppHost")
 
 // Core Foundation Modules
 include(":core:observability")
@@ -46,4 +47,3 @@ include(":infrastructure:persistence")
 
 // Application Composition Root
 include(":app:composition")
-
