@@ -58,7 +58,7 @@ internal class IosSecureStorage(
                     if (stringPayload != null) {
                         SecureStorageResult.Success(stringPayload)
                     } else {
-                        SecureStorageResult.Failure("Failed to decode Keychain data to UTF-8 String")
+                        SecureStorageResult.Failure
                     }
                 } else {
                     SecureStorageResult.NotFound
@@ -66,14 +66,14 @@ internal class IosSecureStorage(
             } else if (status == errSecItemNotFound) {
                 SecureStorageResult.NotFound
             } else {
-                SecureStorageResult.Failure("Keychain read failed with OSStatus $status")
+                SecureStorageResult.Failure
             }
         }
     }
 
     override suspend fun write(key: String, value: String): SecureStorageResult {
         val nsData = (value as NSString).dataUsingEncoding(NSUTF8StringEncoding)
-            ?: return SecureStorageResult.Failure("Failed to encode String payload to NSData")
+            ?: return SecureStorageResult.Failure
 
         val query = mapOf(
             kSecClass to kSecClassGenericPassword,
@@ -100,11 +100,11 @@ internal class IosSecureStorage(
             return if (addStatus == errSecSuccess) {
                 SecureStorageResult.Success()
             } else {
-                SecureStorageResult.Failure("Keychain write failed with OSStatus $addStatus")
+                SecureStorageResult.Failure
             }
         }
 
-        return SecureStorageResult.Failure("Keychain update failed with OSStatus $updateStatus")
+        return SecureStorageResult.Failure
     }
 
     override suspend fun remove(key: String): SecureStorageResult {
@@ -118,7 +118,7 @@ internal class IosSecureStorage(
         return if (status == errSecSuccess || status == errSecItemNotFound) {
             SecureStorageResult.Success()
         } else {
-            SecureStorageResult.Failure("Keychain delete failed with OSStatus $status")
+            SecureStorageResult.Failure
         }
     }
 }

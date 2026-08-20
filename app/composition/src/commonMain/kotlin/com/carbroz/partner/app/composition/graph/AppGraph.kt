@@ -19,7 +19,6 @@ import com.carbroz.partner.feature.splash.orchestrator.StartupOrchestrator
 import com.carbroz.partner.feature.splash.store.SplashStore
 import com.carbroz.partner.infrastructure.network.client.KtorNetworkClient
 import com.carbroz.partner.infrastructure.network.client.NetworkClient
-import com.carbroz.partner.infrastructure.persistence.secure.SecureStorageFactory
 import com.carbroz.partner.sdui.engine.processor.SduiProcessor
 import com.carbroz.partner.sdui.host.controller.SduiScreenHostController
 import com.carbroz.partner.sdui.host.repository.CachedSduiScreenRepository
@@ -35,9 +34,9 @@ import kotlinx.coroutines.CoroutineScope
  */
 public class AppGraph(
     public val config: AppConfig,
+    public val credentialStore: SessionCredentialStore,
     public val endpointConfig: SduiEndpointConfig = SduiEndpointConfig(),
     public val sessionStore: SessionStore = SessionStore(),
-    public val credentialStore: SessionCredentialStore = SecureStorageFactory.create(),
     public val networkClient: NetworkClient = KtorNetworkClient(config.baseUrl),
     public val logger: StructuredLogger = DefaultPipelineLogger(
         sinks = listOf(com.carbroz.partner.core.observability.sink.ConsoleLogSink())

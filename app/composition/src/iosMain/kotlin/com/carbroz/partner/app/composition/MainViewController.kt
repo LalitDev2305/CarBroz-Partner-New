@@ -1,7 +1,9 @@
 package com.carbroz.partner.app.composition
 
+import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
 import com.carbroz.partner.app.composition.config.AppConfig
+import com.carbroz.partner.infrastructure.persistence.session.IosSessionCredentialStoreFactory
 import platform.UIKit.UIViewController
 
 /**
@@ -10,5 +12,6 @@ import platform.UIKit.UIViewController
 public fun MainViewController(
     config: AppConfig = AppConfig.production()
 ): UIViewController = ComposeUIViewController {
-    CarBrozPartnerRoot(config = config)
+    val credentialStore = remember { IosSessionCredentialStoreFactory.create() }
+    CarBrozPartnerRoot(credentialStore = credentialStore, config = config)
 }

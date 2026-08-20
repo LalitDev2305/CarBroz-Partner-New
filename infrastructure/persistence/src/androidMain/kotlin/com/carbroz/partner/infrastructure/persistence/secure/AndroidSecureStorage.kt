@@ -40,8 +40,8 @@ internal class AndroidSecureStorage(
                         SecureStorageResult.NotFound
                     }
                 }
-            } catch (e: Exception) {
-                SecureStorageResult.Failure(e.message ?: "Failed to read secret from EncryptedSharedPreferences")
+            } catch (_: Exception) {
+                SecureStorageResult.Failure
             }
         }
     }
@@ -53,10 +53,10 @@ internal class AndroidSecureStorage(
                 if (success) {
                     SecureStorageResult.Success()
                 } else {
-                    SecureStorageResult.Failure("EncryptedSharedPreferences write commit returned false")
+                    SecureStorageResult.Failure
                 }
-            } catch (e: Exception) {
-                SecureStorageResult.Failure(e.message ?: "Failed to write secret to EncryptedSharedPreferences")
+            } catch (_: Exception) {
+                SecureStorageResult.Failure
             }
         }
     }
@@ -68,10 +68,10 @@ internal class AndroidSecureStorage(
                 if (success) {
                     SecureStorageResult.Success()
                 } else {
-                    SecureStorageResult.Failure("EncryptedSharedPreferences remove commit returned false")
+                    SecureStorageResult.Failure
                 }
-            } catch (e: Exception) {
-                SecureStorageResult.Failure(e.message ?: "Failed to remove secret from EncryptedSharedPreferences")
+            } catch (_: Exception) {
+                SecureStorageResult.Failure
             }
         }
     }

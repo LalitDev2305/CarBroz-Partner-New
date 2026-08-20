@@ -9,5 +9,5 @@ internal interface SecureKeyValueStorage {
 internal sealed interface SecureStorageResult {
     data class Success(val value: String = "") : SecureStorageResult
     data object NotFound : SecureStorageResult
-    data class Failure(val message: String) : SecureStorageResult
+    data object Failure : SecureStorageResult
 }

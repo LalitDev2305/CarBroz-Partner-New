@@ -11,13 +11,13 @@ import kotlinx.serialization.json.Json
 /**
  * Infrastructure implementation of [SessionCredentialStore] managing JSON serialization and key-value persistence.
  */
-public class PersistentSessionCredentialStore internal constructor(
+internal class PersistentSessionCredentialStore(
     private val secureStorage: SecureKeyValueStorage,
     private val json: Json = Json { ignoreUnknownKeys = true }
 ) : SessionCredentialStore {
 
-    public companion object {
-        public const val KEY_SESSION_CREDENTIALS: String = "session_credentials"
+    private companion object {
+        private const val KEY_SESSION_CREDENTIALS: String = "session_credentials"
     }
 
     override suspend fun load(): CredentialLoadResult {

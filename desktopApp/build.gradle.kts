@@ -13,6 +13,8 @@ kotlin {
         val desktopMain by getting {
             dependencies {
                 implementation(project(":app:composition"))
+                implementation(project(":domain:session"))
+                implementation(project(":infrastructure:persistence"))
                 implementation(compose.desktop.currentOs)
                 implementation(compose.runtime)
                 implementation(compose.foundation)

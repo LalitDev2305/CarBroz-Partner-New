@@ -52,7 +52,7 @@ class PersistentSessionCredentialStoreTest {
         val desktopStorage = DesktopSecureStorage()
         val store = PersistentSessionCredentialStore(desktopStorage)
 
-        desktopStorage.write(PersistentSessionCredentialStore.KEY_SESSION_CREDENTIALS, "{ invalid json }")
+        desktopStorage.write("session_credentials", "{ invalid json }")
 
         val result = store.load()
         assertIs<CredentialLoadResult.Failure>(result)
