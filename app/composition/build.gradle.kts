@@ -36,7 +36,6 @@ kotlin {
             implementation(project(":core:navigation"))
             implementation(project(":core:observability"))
             implementation(project(":domain:session"))
-            implementation(project(":domain:storage"))
             implementation(project(":feature:splash"))
         }
 

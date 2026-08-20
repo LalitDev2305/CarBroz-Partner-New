@@ -1,41 +1,60 @@
 package com.carbroz.partner.infrastructure.persistence
 
-import com.carbroz.partner.domain.storage.core.StorageResult
+import com.carbroz.partner.domain.session.model.CredentialLoadResult
+import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.infrastructure.persistence.secure.DesktopSecureStorage
+import com.carbroz.partner.infrastructure.persistence.session.PersistentSessionCredentialStore
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
-class DesktopSecureStorageTest {
+class PersistentSessionCredentialStoreTest {
 
     @Test
-    fun getSecret_returnsNotFound_whenKeyDoesNotExist() = runTest {
-        val storage = DesktopSecureStorage()
-        val result = storage.getSecret("non_existent_key")
-        assertIs<StorageResult.NotFound>(result)
+    fun load_returnsNotFound_whenCredentialsDoNotExist() = runTest {
+        val store = PersistentSessionCredentialStore(DesktopSecureStorage())
+        val result = store.load()
+        assertIs<CredentialLoadResult.NotFound>(result)
     }
 
     @Test
-    fun putSecret_storesValue_andGetSecretRetrievesIt() = runTest {
-        val storage = DesktopSecureStorage()
-        val putResult = storage.putSecret("key1", "secret_value_123")
-        assertIs<StorageResult.Success<Unit>>(putResult)
+    fun save_storesCredentials_andLoadRetrievesThem() = runTest {
+        val store = PersistentSessionCredentialStore(DesktopSecureStorage())
+        val creds = SessionCredentials(accessToken = "access_123", refreshToken = "refresh_456")
+        val saved = store.save(creds)
+        assertTrue(saved)
 
-        val getResult = storage.getSecret("key1")
-        assertIs<StorageResult.Success<String>>(getResult)
-        assertEquals("secret_value_123", getResult.value)
+        val loadResult = store.load()
+        assertIs<CredentialLoadResult.Found>(loadResult)
+        assertEquals(creds, loadResult.credentials)
     }
 
     @Test
-    fun removeSecret_removesStoredValue() = runTest {
-        val storage = DesktopSecureStorage()
-        storage.putSecret("key1", "secret_value_123")
+    fun clear_removesStoredCredentials_andIsIdempotent() = runTest {
+        val store = PersistentSessionCredentialStore(DesktopSecureStorage())
+        val creds = SessionCredentials(accessToken = "access_123")
 
-        val removeResult = storage.removeSecret("key1")
-        assertIs<StorageResult.Success<Unit>>(removeResult)
+        store.save(creds)
+        val clearedFirst = store.clear()
+        assertTrue(clearedFirst)
 
-        val getResult = storage.getSecret("key1")
-        assertIs<StorageResult.NotFound>(getResult)
+        val loadResult = store.load()
+        assertIs<CredentialLoadResult.NotFound>(loadResult)
+
+        val clearedSecond = store.clear()
+        assertTrue(clearedSecond, "Clear must be idempotent success when already missing")
+    }
+
+    @Test
+    fun load_returnsFailure_whenPayloadIsCorrupted() = runTest {
+        val desktopStorage = DesktopSecureStorage()
+        val store = PersistentSessionCredentialStore(desktopStorage)
+
+        desktopStorage.write(PersistentSessionCredentialStore.KEY_SESSION_CREDENTIALS, "{ invalid json }")
+
+        val result = store.load()
+        assertIs<CredentialLoadResult.Failure>(result)
     }
 }

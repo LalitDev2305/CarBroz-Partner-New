@@ -3,22 +3,16 @@ package com.carbroz.partner.infrastructure.persistence.secure
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.carbroz.partner.domain.storage.core.StorageFailure
-import com.carbroz.partner.domain.storage.core.StorageResult
-import com.carbroz.partner.domain.storage.secure.SecureStorageGateway
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Android KeyStore-backed [EncryptedSharedPreferences] implementation of [SecureStorageGateway].
- *
- * Credentials are stored encrypted on disk using AES-256 GCM authenticated encryption,
- * keyed by an AES-256 master key generated in Android KeyStore.
+ * Android KeyStore-backed [EncryptedSharedPreferences] implementation of [SecureKeyValueStorage].
  */
-public class AndroidSecureStorage(
+internal class AndroidSecureStorage(
     context: Context,
     fileName: String = "carbroz_partner_secure_session"
-) : SecureStorageGateway {
+) : SecureKeyValueStorage {
 
     private val mutex = Mutex()
     private val masterKey = MasterKey.Builder(context)
@@ -33,76 +27,51 @@ public class AndroidSecureStorage(
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    override suspend fun getSecret(key: String): StorageResult<String> {
+    override suspend fun read(key: String): SecureStorageResult {
         return mutex.withLock {
             try {
                 if (!sharedPreferences.contains(key)) {
-                    StorageResult.NotFound
+                    SecureStorageResult.NotFound
                 } else {
                     val value = sharedPreferences.getString(key, null)
                     if (value != null) {
-                        StorageResult.Success(value)
+                        SecureStorageResult.Success(value)
                     } else {
-                        StorageResult.NotFound
+                        SecureStorageResult.NotFound
                     }
                 }
             } catch (e: Exception) {
-                StorageResult.Failure(
-                    StorageFailure(
-                        code = StorageFailure.FailureCode.READ_FAILED,
-                        message = e.message ?: "Failed to read secret from EncryptedSharedPreferences"
-                    )
-                )
+                SecureStorageResult.Failure(e.message ?: "Failed to read secret from EncryptedSharedPreferences")
             }
         }
     }
 
-    override suspend fun putSecret(key: String, value: String): StorageResult<Unit> {
+    override suspend fun write(key: String, value: String): SecureStorageResult {
         return mutex.withLock {
             try {
                 val success = sharedPreferences.edit().putString(key, value).commit()
                 if (success) {
-                    StorageResult.Success(Unit)
+                    SecureStorageResult.Success()
                 } else {
-                    StorageResult.Failure(
-                        StorageFailure(
-                            code = StorageFailure.FailureCode.WRITE_FAILED,
-                            message = "EncryptedSharedPreferences write commit returned false"
-                        )
-                    )
+                    SecureStorageResult.Failure("EncryptedSharedPreferences write commit returned false")
                 }
             } catch (e: Exception) {
-                StorageResult.Failure(
-                    StorageFailure(
-                        code = StorageFailure.FailureCode.WRITE_FAILED,
-                        message = e.message ?: "Failed to write secret to EncryptedSharedPreferences"
-                    )
-                )
+                SecureStorageResult.Failure(e.message ?: "Failed to write secret to EncryptedSharedPreferences")
             }
         }
     }
 
-    override suspend fun removeSecret(key: String): StorageResult<Unit> {
+    override suspend fun remove(key: String): SecureStorageResult {
         return mutex.withLock {
             try {
                 val success = sharedPreferences.edit().remove(key).commit()
                 if (success) {
-                    StorageResult.Success(Unit)
+                    SecureStorageResult.Success()
                 } else {
-                    StorageResult.Failure(
-                        StorageFailure(
-                            code = StorageFailure.FailureCode.DELETE_FAILED,
-                            message = "EncryptedSharedPreferences remove commit returned false"
-                        )
-                    )
+                    SecureStorageResult.Failure("EncryptedSharedPreferences remove commit returned false")
                 }
             } catch (e: Exception) {
-                StorageResult.Failure(
-                    StorageFailure(
-                        code = StorageFailure.FailureCode.DELETE_FAILED,
-                        message = e.message ?: "Failed to remove secret from EncryptedSharedPreferences"
-                    )
-                )
+                SecureStorageResult.Failure(e.message ?: "Failed to remove secret from EncryptedSharedPreferences")
             }
         }
     }

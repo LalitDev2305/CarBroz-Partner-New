@@ -7,14 +7,14 @@ import com.carbroz.partner.core.navigation.Router
 import com.carbroz.partner.core.navigation.createRouter
 import com.carbroz.partner.core.observability.logger.DefaultPipelineLogger
 import com.carbroz.partner.core.observability.logger.StructuredLogger
-import com.carbroz.partner.domain.storage.secure.SecureStorageGateway
+import com.carbroz.partner.domain.session.credential.SessionCredentialStore
+import com.carbroz.partner.domain.session.store.SessionStore
 import com.carbroz.partner.engine.execution.binding.DefaultBindingResolver
 import com.carbroz.partner.engine.execution.dispatcher.ActionDispatcher
 import com.carbroz.partner.engine.execution.dispatcher.DefaultActionDispatcher
 import com.carbroz.partner.engine.execution.executor.ActionRegistry
 import com.carbroz.partner.engine.execution.executor.ApiActionExecutor
 import com.carbroz.partner.feature.splash.orchestrator.ImmediateStartupOrchestrator
-import com.carbroz.partner.feature.splash.orchestrator.StartupDestination
 import com.carbroz.partner.feature.splash.orchestrator.StartupOrchestrator
 import com.carbroz.partner.feature.splash.store.SplashStore
 import com.carbroz.partner.infrastructure.network.client.KtorNetworkClient
@@ -36,8 +36,8 @@ import kotlinx.coroutines.CoroutineScope
 public class AppGraph(
     public val config: AppConfig,
     public val endpointConfig: SduiEndpointConfig = SduiEndpointConfig(),
-    public val sessionStore: com.carbroz.partner.domain.session.store.SessionStore = com.carbroz.partner.domain.session.store.SessionStore(),
-    public val secureStorage: SecureStorageGateway = SecureStorageFactory.create(),
+    public val sessionStore: SessionStore = SessionStore(),
+    public val credentialStore: SessionCredentialStore = SecureStorageFactory.create(),
     public val networkClient: NetworkClient = KtorNetworkClient(config.baseUrl),
     public val logger: StructuredLogger = DefaultPipelineLogger(
         sinks = listOf(com.carbroz.partner.core.observability.sink.ConsoleLogSink())

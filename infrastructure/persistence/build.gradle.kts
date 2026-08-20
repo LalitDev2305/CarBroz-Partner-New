@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
+    alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
@@ -14,8 +15,9 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":domain:storage"))
+            implementation(project(":domain:session"))
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
         }
 
         commonTest.dependencies {
