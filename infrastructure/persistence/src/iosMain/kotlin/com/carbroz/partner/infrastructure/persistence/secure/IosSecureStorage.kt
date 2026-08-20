@@ -1,8 +1,5 @@
 package com.carbroz.partner.infrastructure.persistence.secure
 
-import com.carbroz.partner.domain.storage.core.StorageFailure
-import com.carbroz.partner.domain.storage.core.StorageResult
-import com.carbroz.partner.domain.storage.secure.SecureStorageGateway
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
@@ -35,16 +32,14 @@ import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 
 /**
- * iOS native Apple Keychain Services implementation of [SecureStorageGateway].
- *
- * Configured with [kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly] for device-bounded secure token persistence.
+ * iOS native Apple Keychain Services implementation of [SecureKeyValueStorage].
  */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-public class IosSecureStorage(
+internal class IosSecureStorage(
     private val serviceName: String = "com.carbroz.partner.secure"
-) : SecureStorageGateway {
+) : SecureKeyValueStorage {
 
-    override suspend fun getSecret(key: String): StorageResult<String> {
+    override suspend fun read(key: String): SecureStorageResult {
         val query = mapOf(
             kSecClass to kSecClassGenericPassword,
             kSecAttrService to serviceName,
@@ -61,39 +56,24 @@ public class IosSecureStorage(
                 if (nsData != null) {
                     val stringPayload = NSString.create(data = nsData, encoding = NSUTF8StringEncoding)?.toString()
                     if (stringPayload != null) {
-                        StorageResult.Success(stringPayload)
+                        SecureStorageResult.Success(stringPayload)
                     } else {
-                        StorageResult.Failure(
-                            StorageFailure(
-                                code = StorageFailure.FailureCode.READ_FAILED,
-                                message = "Failed to decode Keychain data to UTF-8 String"
-                            )
-                        )
+                        SecureStorageResult.Failure
                     }
                 } else {
-                    StorageResult.NotFound
+                    SecureStorageResult.NotFound
                 }
             } else if (status == errSecItemNotFound) {
-                StorageResult.NotFound
+                SecureStorageResult.NotFound
             } else {
-                StorageResult.Failure(
-                    StorageFailure(
-                        code = StorageFailure.FailureCode.READ_FAILED,
-                        message = "Keychain read failed with OSStatus $status"
-                    )
-                )
+                SecureStorageResult.Failure
             }
         }
     }
 
-    override suspend fun putSecret(key: String, value: String): StorageResult<Unit> {
+    override suspend fun write(key: String, value: String): SecureStorageResult {
         val nsData = (value as NSString).dataUsingEncoding(NSUTF8StringEncoding)
-            ?: return StorageResult.Failure(
-                StorageFailure(
-                    code = StorageFailure.FailureCode.WRITE_FAILED,
-                    message = "Failed to encode String payload to NSData"
-                )
-            )
+            ?: return SecureStorageResult.Failure
 
         val query = mapOf(
             kSecClass to kSecClassGenericPassword,
@@ -108,7 +88,7 @@ public class IosSecureStorage(
 
         val updateStatus = SecItemUpdate(query as CFDictionaryRef, updateFields as CFDictionaryRef)
         if (updateStatus == errSecSuccess) {
-            return StorageResult.Success(Unit)
+            return SecureStorageResult.Success()
         }
 
         if (updateStatus == errSecItemNotFound) {
@@ -118,26 +98,16 @@ public class IosSecureStorage(
             )
             val addStatus = SecItemAdd(addQuery as CFDictionaryRef, null)
             return if (addStatus == errSecSuccess) {
-                StorageResult.Success(Unit)
+                SecureStorageResult.Success()
             } else {
-                StorageResult.Failure(
-                    StorageFailure(
-                        code = StorageFailure.FailureCode.WRITE_FAILED,
-                        message = "Keychain write failed with OSStatus $addStatus"
-                    )
-                )
+                SecureStorageResult.Failure
             }
         }
 
-        return StorageResult.Failure(
-            StorageFailure(
-                code = StorageFailure.FailureCode.WRITE_FAILED,
-                message = "Keychain update failed with OSStatus $updateStatus"
-            )
-        )
+        return SecureStorageResult.Failure
     }
 
-    override suspend fun removeSecret(key: String): StorageResult<Unit> {
+    override suspend fun remove(key: String): SecureStorageResult {
         val query = mapOf(
             kSecClass to kSecClassGenericPassword,
             kSecAttrService to serviceName,
@@ -146,14 +116,9 @@ public class IosSecureStorage(
 
         val status = SecItemDelete(query as CFDictionaryRef)
         return if (status == errSecSuccess || status == errSecItemNotFound) {
-            StorageResult.Success(Unit)
+            SecureStorageResult.Success()
         } else {
-            StorageResult.Failure(
-                StorageFailure(
-                    code = StorageFailure.FailureCode.DELETE_FAILED,
-                    message = "Keychain delete failed with OSStatus $status"
-                )
-            )
+            SecureStorageResult.Failure
         }
     }
 }

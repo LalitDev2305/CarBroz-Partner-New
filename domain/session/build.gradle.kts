@@ -15,7 +15,6 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":domain:storage"))
             implementation(project(":core:observability"))
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)

@@ -1,5 +1,7 @@
 package com.carbroz.partner.infrastructure.network.client
 
+import com.carbroz.partner.domain.session.credential.PersistedSessionCredentialProvider
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.model.SessionRefreshResult
@@ -7,10 +9,7 @@ import com.carbroz.partner.domain.session.operation.ClearSession
 import com.carbroz.partner.domain.session.provider.SessionCredentialProvider
 import com.carbroz.partner.domain.session.refresh.SessionRefreshCoordinator
 import com.carbroz.partner.domain.session.refresh.SessionRefreshGateway
-import com.carbroz.partner.domain.session.storage.SessionCredentialStorage
 import com.carbroz.partner.domain.session.store.SessionStore
-import com.carbroz.partner.domain.storage.core.StorageResult
-import com.carbroz.partner.domain.storage.secure.SecureStorageGateway
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -24,19 +23,19 @@ import kotlin.test.assertTrue
 
 class KtorNetworkClientAuthTest {
 
-    private class FakeSecureStorage : SecureStorageGateway {
-        val map = mutableMapOf<String, String>()
-        override suspend fun getSecret(key: String): StorageResult<String> {
-            val v = map[key] ?: return StorageResult.NotFound
-            return StorageResult.Success(v)
+    private class FakeCredentialPersistence : SessionCredentialPersistence {
+        var stored: SessionCredentials? = null
+        override suspend fun load(): CredentialLoadResult {
+            val c = stored ?: return CredentialLoadResult.NotFound
+            return CredentialLoadResult.Found(c)
         }
-        override suspend fun putSecret(key: String, value: String): StorageResult<Unit> {
-            map[key] = value
-            return StorageResult.Success(Unit)
+        override suspend fun save(credentials: SessionCredentials): Boolean {
+            stored = credentials
+            return true
         }
-        override suspend fun removeSecret(key: String): StorageResult<Unit> {
-            map.remove(key)
-            return StorageResult.Success(Unit)
+        override suspend fun clear(): Boolean {
+            stored = null
+            return true
         }
     }
 
@@ -111,11 +110,10 @@ class KtorNetworkClientAuthTest {
             }
         }
 
-        val storage = FakeSecureStorage()
-        val credStorage = SessionCredentialStorage(storage)
+        val persistence = FakeCredentialPersistence()
         val store = SessionStore()
-        val clear = ClearSession(credStorage, store)
-        credStorage.saveCredentials(SessionCredentials("tok_old", "ref_123"))
+        val clear = ClearSession(persistence, store)
+        persistence.save(SessionCredentials("tok_old", "ref_123"))
 
         var providerToken = "tok_old"
         val provider = SessionCredentialProvider { providerToken }
@@ -125,7 +123,7 @@ class KtorNetworkClientAuthTest {
             SessionRefreshResult.Success(SessionCredentials("tok_refreshed", "ref_123"))
         }
 
-        val coordinator = SessionRefreshCoordinator(credStorage, gateway, clear)
+        val coordinator = SessionRefreshCoordinator(persistence, gateway, clear)
         val client = KtorNetworkClient(
             baseUrl = "https://api.test.com",
             credentialProvider = provider,

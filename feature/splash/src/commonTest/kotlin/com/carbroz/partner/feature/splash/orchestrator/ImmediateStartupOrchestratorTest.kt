@@ -1,6 +1,10 @@
 package com.carbroz.partner.feature.splash.orchestrator
 
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
+import com.carbroz.partner.domain.session.model.CredentialLoadResult
+import com.carbroz.partner.domain.session.model.SessionCredentials
 import com.carbroz.partner.domain.session.restore.SessionRestorer
+import com.carbroz.partner.domain.session.store.SessionStore
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,11 +12,19 @@ import kotlin.test.assertTrue
 
 class ImmediateStartupOrchestratorTest {
 
+    private class FakeCredentialPersistence : SessionCredentialPersistence {
+        override suspend fun load(): CredentialLoadResult = CredentialLoadResult.NotFound
+        override suspend fun save(credentials: SessionCredentials): Boolean = true
+        override suspend fun clear(): Boolean = true
+    }
+
     @Test
     fun testInitializeInvokesRestorerAndReturnsServerDrivenUi() = runTest {
-        var restored = false
+        val persistence = FakeCredentialPersistence()
+        val sessionStore = SessionStore()
+        val restorer = SessionRestorer(persistence, sessionStore)
         val orchestrator = ImmediateStartupOrchestrator(
-            sessionRestorer = null
+            sessionRestorer = restorer
         )
 
         val result = orchestrator.initialize()

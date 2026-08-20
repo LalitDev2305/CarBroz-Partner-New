@@ -7,6 +7,8 @@ plugins {
 kotlin {
     jvmToolchain(21)
 
+    applyDefaultHierarchyTemplate()
+
     listOf(
         iosArm64(),
         iosSimulatorArm64()
@@ -32,12 +34,16 @@ kotlin {
             implementation(project(":sdui:engine"))
             implementation(project(":engine:execution"))
             implementation(project(":infrastructure:network"))
-            implementation(project(":infrastructure:persistence"))
             implementation(project(":core:navigation"))
             implementation(project(":core:observability"))
             implementation(project(":domain:session"))
-            implementation(project(":domain:storage"))
             implementation(project(":feature:splash"))
+        }
+
+        val iosMain by getting {
+            dependencies {
+                implementation(project(":infrastructure:persistence"))
+            }
         }
 
         commonTest.dependencies {

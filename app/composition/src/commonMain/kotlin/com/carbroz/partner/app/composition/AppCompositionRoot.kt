@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.carbroz.partner.app.composition.config.AppConfig
 import com.carbroz.partner.app.composition.graph.AppGraph
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.feature.splash.orchestrator.StartupDestination
 import com.carbroz.partner.feature.splash.store.SplashEffect
 import com.carbroz.partner.feature.splash.ui.SplashScreen
@@ -24,10 +25,13 @@ import com.carbroz.partner.sdui.host.composable.SduiScreenHost
  */
 @Composable
 public fun CarBrozPartnerRoot(
+    credentialPersistence: SessionCredentialPersistence,
     config: AppConfig = AppConfig.production(),
     modifier: Modifier = Modifier
 ) {
-    val appGraph = remember(config) { AppGraph(config) }
+    val appGraph = remember(config, credentialPersistence) {
+        AppGraph(config = config, credentialPersistence = credentialPersistence)
+    }
     val scope = rememberCoroutineScope()
 
     val splashStore = remember(appGraph) { appGraph.createSplashStore(scope) }

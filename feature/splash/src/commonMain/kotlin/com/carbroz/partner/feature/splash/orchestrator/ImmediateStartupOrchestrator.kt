@@ -9,11 +9,11 @@ import com.carbroz.partner.domain.session.restore.SessionRestorer
  * returning [StartupDestination.ServerDrivenUi].
  */
 public class ImmediateStartupOrchestrator(
-    private val sessionRestorer: SessionRestorer? = null
+    private val sessionRestorer: SessionRestorer
 ) : StartupOrchestrator {
 
     override suspend fun initialize(): StartupResult {
-        sessionRestorer?.restoreSession()
+        sessionRestorer.restore()
         return StartupResult.Ready(destination = StartupDestination.ServerDrivenUi)
     }
 }

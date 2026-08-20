@@ -1,14 +1,14 @@
 package com.carbroz.partner.domain.session.refresh
 
+import com.carbroz.partner.domain.session.credential.SessionCredentialPersistence
 import com.carbroz.partner.domain.session.model.CredentialLoadResult
 import com.carbroz.partner.domain.session.model.SessionRefreshResult
 import com.carbroz.partner.domain.session.operation.ClearSession
-import com.carbroz.partner.domain.session.storage.SessionCredentialStorage
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 public class SessionRefreshCoordinator(
-    private val credentialStorage: SessionCredentialStorage,
+    private val credentialPersistence: SessionCredentialPersistence,
     private val refreshGateway: SessionRefreshGateway,
     private val clearSession: ClearSession
 ) {
@@ -17,7 +17,7 @@ public class SessionRefreshCoordinator(
 
     public suspend fun refresh(failedToken: String?): Boolean {
         return mutex.withLock {
-            val loadResult = credentialStorage.loadCredentials()
+            val loadResult = credentialPersistence.load()
             if (loadResult !is CredentialLoadResult.Found) {
                 clearSession.execute()
                 return false
@@ -38,7 +38,7 @@ public class SessionRefreshCoordinator(
 
             return when (val result = refreshGateway.refreshToken(refreshToken)) {
                 is SessionRefreshResult.Success -> {
-                    val saved = credentialStorage.saveCredentials(result.credentials)
+                    val saved = credentialPersistence.save(result.credentials)
                     if (saved) {
                         true
                     } else {

@@ -24,5 +24,7 @@ android {
 
 dependencies {
     implementation(project(":app:composition"))
+    implementation(project(":domain:session"))
+    implementation(project(":infrastructure:persistence"))
     implementation(libs.androidx.activity.compose)
 }
