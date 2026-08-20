@@ -5,21 +5,13 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(21)
-
     jvm("desktop")
 
     sourceSets {
         val desktopMain by getting {
             dependencies {
-                implementation(project(":app:composition"))
-                implementation(project(":domain:session"))
-                implementation(project(":infrastructure:persistence"))
+                implementation(project(":app:shared"))
                 implementation(compose.desktop.currentOs)
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material3)
-                implementation(compose.ui)
             }
         }
     }
@@ -27,10 +19,9 @@ kotlin {
 
 compose.desktop {
     application {
-        mainClass = "com.carbroz.partner.MainKt"
+        mainClass = "com.carbroz.partner.desktop.MainKt"
         nativeDistributions {
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
-            packageName = "CarBrozPartner"
+            packageName = "CarBroz Partner"
             packageVersion = "1.0.0"
         }
     }

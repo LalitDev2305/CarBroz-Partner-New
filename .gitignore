@@ -1,19 +1,10 @@
-# CarBroz Partner
-git-master.txt
 .gradle/
 .idea/
-build/
-bin/
-out/
-.DS_Store
-*.iml
-*.ipr
-*.iws
-.navigation/
-local.properties
 .kotlin/
-captures/
-.externalNativeBuild/
-.cxx/
-*.apk
-*.aab
+build/
+**/build/
+local.properties
+*.iml
+.DS_Store
+xcuserdata/
+DerivedData/
