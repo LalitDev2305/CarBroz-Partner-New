@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import com.carbroz.partner.core.ui.theme.ThemeResolver
+import com.carbroz.partner.core.ui.color.ColorParser
 import com.carbroz.partner.sdui.engine.assembly.AssembledSduiScreen
 import com.carbroz.partner.sdui.render.registry.ChildRendererRegistry
 import com.carbroz.partner.sdui.render.registry.ChildrenDataRendererRegistry
@@ -39,7 +39,7 @@ public fun SduiScreenRenderer(
         eventSink = eventSink
     )
 
-    val bgColor = ThemeResolver.parseHexColor(
+    val bgColor = ColorParser.parseHexColor(
         colorHex = assembledScreen.screen.theme?.backgroundColor,
         fallback = Color.Unspecified
     )
