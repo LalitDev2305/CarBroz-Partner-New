@@ -1,6 +1,6 @@
 package com.carbroz.partner.sdui.runtime.bridge
 
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionValue
 import com.carbroz.partner.engine.execution.binding.BindingScope
 
 public class SduiBindingScopeAdapter(

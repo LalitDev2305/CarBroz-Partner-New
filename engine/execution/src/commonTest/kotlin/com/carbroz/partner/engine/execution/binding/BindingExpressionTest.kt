@@ -1,4 +1,4 @@
-package com.carbroz.partner.domain.actions.binding
+package com.carbroz.partner.engine.execution.binding
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

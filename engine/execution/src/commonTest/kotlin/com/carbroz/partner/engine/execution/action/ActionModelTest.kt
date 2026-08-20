@@ -1,4 +1,4 @@
-package com.carbroz.partner.domain.actions.model
+package com.carbroz.partner.engine.execution.action
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,10 +30,12 @@ class ActionModelTest {
 
     @Test
     fun verifyActionTypeKnownAndUnknownExtensibility() {
-        val pushType = ActionType.NAVIGATION_PUSH
+        val apiType = ActionType.API_REQUEST
+        val logoutType = ActionType.AUTH_LOGOUT
         val customBackendType = ActionType("payment.upi_v2")
 
-        assertEquals("navigation.push", pushType.rawValue)
+        assertEquals("api.request", apiType.rawValue)
+        assertEquals("auth.logout", logoutType.rawValue)
         assertEquals("payment.upi_v2", customBackendType.rawValue)
         assertEquals(ActionType("payment.upi_v2"), customBackendType)
     }

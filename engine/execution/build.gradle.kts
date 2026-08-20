@@ -13,7 +13,6 @@ kotlin {
     jvm("desktop")
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":domain:actions"))
             implementation(project(":domain:session"))
             implementation(project(":infrastructure:network"))
             implementation(project(":core:observability"))

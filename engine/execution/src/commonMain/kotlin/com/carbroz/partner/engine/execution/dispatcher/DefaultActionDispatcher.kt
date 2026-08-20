@@ -3,9 +3,9 @@ package com.carbroz.partner.engine.execution.dispatcher
 import com.carbroz.partner.core.observability.logger.BoundLogger
 import com.carbroz.partner.core.observability.logger.StructuredLogger
 import com.carbroz.partner.core.observability.model.LogCategory
-import com.carbroz.partner.domain.actions.spec.ActionSpec
-import com.carbroz.partner.domain.actions.value.ActionParameters
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionParameters
+import com.carbroz.partner.engine.execution.action.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionValue
 import com.carbroz.partner.engine.execution.binding.BindingResolver
 import com.carbroz.partner.engine.execution.binding.BindingResult
 import com.carbroz.partner.engine.execution.binding.BindingScope
@@ -64,8 +64,7 @@ class DefaultActionDispatcher(
         val resolvedAction = ActionSpec.create(
             id = action.id,
             type = action.type,
-            parameters = resolvedParameters,
-            metadata = action.metadata
+            parameters = resolvedParameters
         )
 
         boundLogger.info(

@@ -26,7 +26,6 @@ include(":core:mvi")
 include(":core:navigation")
 
 // Domain Modules
-include(":domain:actions")
 include(":domain:capabilities")
 include(":domain:storage")
 include(":domain:session")

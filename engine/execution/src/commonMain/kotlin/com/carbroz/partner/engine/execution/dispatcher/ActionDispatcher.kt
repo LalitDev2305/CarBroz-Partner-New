@@ -1,6 +1,6 @@
 package com.carbroz.partner.engine.execution.dispatcher
 
-import com.carbroz.partner.domain.actions.spec.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionSpec
 import com.carbroz.partner.engine.execution.binding.BindingScope
 import com.carbroz.partner.engine.execution.result.ExecutionResult
 

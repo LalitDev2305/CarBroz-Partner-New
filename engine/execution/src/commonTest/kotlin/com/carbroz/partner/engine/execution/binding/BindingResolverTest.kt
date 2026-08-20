@@ -1,7 +1,7 @@
 package com.carbroz.partner.engine.execution.binding
 
-import com.carbroz.partner.domain.actions.binding.BindingExpression
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionValue
+import com.carbroz.partner.engine.execution.binding.BindingExpression
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

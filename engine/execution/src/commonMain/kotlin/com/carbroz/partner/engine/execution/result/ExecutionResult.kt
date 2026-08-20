@@ -1,6 +1,6 @@
 package com.carbroz.partner.engine.execution.result
 
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionValue
 
 /**
  * Universal sealed outcome hierarchy for dynamic action execution.

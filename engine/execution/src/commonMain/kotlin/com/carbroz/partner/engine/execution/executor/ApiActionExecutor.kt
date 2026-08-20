@@ -1,8 +1,8 @@
 package com.carbroz.partner.engine.execution.executor
 
-import com.carbroz.partner.domain.actions.model.ActionType
-import com.carbroz.partner.domain.actions.spec.ActionSpec
-import com.carbroz.partner.domain.actions.value.ActionValue
+import com.carbroz.partner.engine.execution.action.ActionSpec
+import com.carbroz.partner.engine.execution.action.ActionType
+import com.carbroz.partner.engine.execution.action.ActionValue
 import com.carbroz.partner.engine.execution.result.ExecutionFailure
 import com.carbroz.partner.engine.execution.result.ExecutionResult
 import com.carbroz.partner.infrastructure.network.client.NetworkClient

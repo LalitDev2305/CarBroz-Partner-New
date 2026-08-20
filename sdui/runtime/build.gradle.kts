@@ -19,7 +19,6 @@ kotlin {
             implementation(project(":sdui:render"))
             implementation(project(":sdui:engine"))
             implementation(project(":engine:execution"))
-            implementation(project(":domain:actions"))
             implementation(project(":core:mvi"))
             implementation(project(":core:ui"))
             implementation(project(":core:observability"))

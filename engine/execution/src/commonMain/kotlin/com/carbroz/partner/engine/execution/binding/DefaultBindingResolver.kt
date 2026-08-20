@@ -1,6 +1,6 @@
 package com.carbroz.partner.engine.execution.binding
 
-import com.carbroz.partner.domain.actions.binding.BindingExpression
+import com.carbroz.partner.engine.execution.binding.BindingExpression
 
 /**
  * Standard implementation of BindingResolver that extracts inner paths and delegates to BindingScope.

@@ -1,9 +1,10 @@
-package com.carbroz.partner.domain.actions.value
+package com.carbroz.partner.engine.execution.action
 
-import com.carbroz.partner.domain.actions.binding.BindingExpression
+import com.carbroz.partner.engine.execution.binding.BindingExpression
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class ActionValueTest {
 
@@ -59,7 +60,7 @@ class ActionValueTest {
     }
 
     @Test
-    fun verifyObjectDefensiveCopying() {
+    fun verifyObjectDefensiveCopyingAndBlankKeyRejection() {
         val mutableMap = mutableMapOf<String, ActionValue>("a" to ActionValue.Text("valA"))
         val obj = ActionValue.Object.create(mutableMap)
 
@@ -68,21 +69,40 @@ class ActionValueTest {
 
         assertEquals(ActionValue.Text("valA"), obj.properties["a"])
         assertEquals(1, obj.properties.size)
+
+        assertFailsWith<IllegalArgumentException> {
+            ActionValue.Object.create(mapOf("" to ActionValue.Text("val")))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ActionValue.Object.create(mapOf("  " to ActionValue.Text("val")))
+        }
     }
 
     @Test
-    fun verifyListDefensiveCopying() {
-        val mutableList = mutableListOf<ActionValue>(ActionValue.Integer(1), ActionValue.Integer(2))
+    fun verifyObjectToStringPrivacy() {
+        val secretValue = "SECRET_PASS"
+        val obj = ActionValue.Object.create(mapOf("pass" to ActionValue.Text(secretValue)))
+        val str = obj.toString()
+        assertFalse(str.contains(secretValue))
+    }
+
+    @Test
+    fun verifyListDefensiveCopyingAndToStringPrivacy() {
+        val secretValue = "SECRET_ITEM"
+        val mutableList = mutableListOf<ActionValue>(ActionValue.Text(secretValue), ActionValue.Integer(2))
         val list = ActionValue.List.create(mutableList)
 
         mutableList.clear()
 
         assertEquals(2, list.items.size)
-        assertEquals(ActionValue.Integer(1), list.items[0])
+        assertEquals(ActionValue.Text(secretValue), list.items[0])
+
+        val str = list.toString()
+        assertFalse(str.contains(secretValue))
     }
 
     @Test
-    fun verifyActionParametersDefensiveCopyingAndToStringSecurity() {
+    fun verifyActionParametersDefensiveCopyingAndBlankKeyRejection() {
         val secretValue = "SUPER_SECRET_OTP_9999"
         val mutableParams = mutableMapOf<String, ActionValue>(
             "otp" to ActionValue.Text(secretValue)
@@ -94,8 +114,15 @@ class ActionValueTest {
         assertEquals(ActionValue.Text(secretValue), params["otp"])
 
         val str = params.toString()
-        assertEquals(false, str.contains(secretValue))
+        assertFalse(str.contains(secretValue))
         assertEquals(true, str.contains("keys=[otp]"))
+
+        assertFailsWith<IllegalArgumentException> {
+            ActionParameters.create(mapOf("" to ActionValue.Text("val")))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ActionParameters.create(mapOf("   " to ActionValue.Text("val")))
+        }
     }
 
     @Test
@@ -116,4 +143,3 @@ class ActionValueTest {
         assertEquals(ActionValue.Text("deep_initial"), retrievedList.items[0])
     }
 }
-
