@@ -8,12 +8,10 @@ import com.carbroz.partner.core.observability.model.LogEvent
 import com.carbroz.partner.core.observability.model.LogLevel
 import com.carbroz.partner.core.observability.model.TraceContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.isActive
@@ -348,12 +346,12 @@ class StoreTest {
 
     @Test
     fun verifyUnexpectedDefectTerminatesStoreAndIsLoggedWithoutPayloadDumping() = runTest {
-        val parentScope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, _ -> })
+        val testScope = TestScope(UnconfinedTestDispatcher(testScheduler))
         val logger = TestLogger()
         val initialState = TestState(count = 0, text = "sensitive_state_secret")
 
         val store = createStore<TestState, TestIntent, TestEffect>(
-            scope = parentScope,
+            scope = testScope,
             initialState = initialState,
             storeId = "TestStore",
             logger = logger,
@@ -368,9 +366,6 @@ class StoreTest {
 
         store.dispatch(TestIntent.FailingIntent)
         testScheduler.advanceUntilIdle()
-
-        // Parent scope remains active because caller supplied SupervisorJob + test-side CoroutineExceptionHandler
-        assertTrue(parentScope.isActive, "Parent scope should remain active")
 
         // Verify defect logged exactly once
         val failedLogs = logger.events.filter { it.event == "INTENT_PROCESSING_FAILED" }
@@ -389,15 +384,14 @@ class StoreTest {
             assertFalse(log.message.contains("FailingIntent"))
         }
 
-        // Subsequent dispatch must fail because channels are closed
-        assertFailsWith<Throwable> {
+        // Subsequent dispatch must fail with original IllegalStateException cause preserved
+        val dispatchException = assertFailsWith<IllegalStateException> {
             store.dispatch(TestIntent.Increment(5))
         }
+        assertEquals("Database corrupted", dispatchException.message)
 
         // Prove state was not changed by any later intent (remains at initial state)
         assertEquals(initialState, store.state.value, "Store state must remain unchanged after termination")
-
-        parentScope.cancel()
     }
 
     @Test

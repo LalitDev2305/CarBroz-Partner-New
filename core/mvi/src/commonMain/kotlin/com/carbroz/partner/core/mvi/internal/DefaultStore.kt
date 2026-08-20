@@ -49,33 +49,51 @@ internal class DefaultStore<State, Intent, Effect>(
         get() = _state.value
 
     private val processorJob = scope.launch {
-        for (intent in intentChannel) {
-            try {
-                boundLogger.debug(
-                    sourceFunction = "processIntent",
-                    category = LogCategory.MVI,
-                    event = "INTENT_PROCESSING_STARTED",
-                    message = "Started processing intent"
-                )
-                processor.invoke(this@DefaultStore, intent)
-                boundLogger.debug(
-                    sourceFunction = "processIntent",
-                    category = LogCategory.MVI,
-                    event = "INTENT_PROCESSING_COMPLETED",
-                    message = "Completed processing intent"
-                )
-            } catch (t: Throwable) {
-                if (t !is CancellationException) {
+        var terminalCause: Throwable? = null
+        try {
+            for (intent in intentChannel) {
+                try {
+                    boundLogger.debug(
+                        sourceFunction = "processIntent",
+                        category = LogCategory.MVI,
+                        event = "INTENT_PROCESSING_STARTED",
+                        message = "Started processing intent"
+                    )
+                    processor.invoke(this@DefaultStore, intent)
+                    boundLogger.debug(
+                        sourceFunction = "processIntent",
+                        category = LogCategory.MVI,
+                        event = "INTENT_PROCESSING_COMPLETED",
+                        message = "Completed processing intent"
+                    )
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (failure: Throwable) {
                     boundLogger.error(
                         sourceFunction = "processIntent",
                         category = LogCategory.MVI,
                         event = "INTENT_PROCESSING_FAILED",
                         message = "Uncaught error during intent processing",
-                        throwable = t
+                        throwable = failure
                     )
+                    terminalCause = failure
+                    break
                 }
-                throw t
             }
+        } catch (cancellation: CancellationException) {
+            if (terminalCause == null) {
+                terminalCause = cancellation
+            }
+            throw cancellation
+        } finally {
+            intentChannel.close(terminalCause)
+            effectChannel.close(terminalCause)
+            boundLogger.info(
+                sourceFunction = "onProcessorCompletion",
+                category = LogCategory.MVI,
+                event = "STORE_TERMINATED",
+                message = "Store processing terminated and channels closed"
+            )
         }
     }
 
@@ -86,17 +104,6 @@ internal class DefaultStore<State, Intent, Effect>(
             event = "STORE_CREATED",
             message = "Store initialized"
         )
-
-        processorJob.invokeOnCompletion { cause ->
-            intentChannel.close(cause)
-            effectChannel.close(cause)
-            boundLogger.info(
-                sourceFunction = "onProcessorCompletion",
-                category = LogCategory.MVI,
-                event = "STORE_TERMINATED",
-                message = "Store processing terminated and channels closed"
-            )
-        }
     }
 
     override suspend fun dispatch(intent: Intent) {
