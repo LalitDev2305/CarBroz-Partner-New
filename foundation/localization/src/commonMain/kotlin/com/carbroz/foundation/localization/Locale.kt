@@ -13,7 +13,7 @@ data class AppLocale(
 ) {
     init {
         require(language.matches(Regex("^[a-zA-Z]{2,3}$"))) { "Language must contain 2-3 ASCII letters." }
-        require(region == null || region.matches(Regex("^[a-zA-Z]{2}|[0-9]{3}$"))) {
+        require(region == null || region.matches(Regex("^(?:[a-zA-Z]{2}|[0-9]{3})$"))) {
             "Region must contain 2 ASCII letters or 3 digits."
         }
     }
