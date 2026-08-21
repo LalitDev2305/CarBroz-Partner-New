@@ -28,6 +28,7 @@ class MutableClock(
 
     fun advanceBy(milliseconds: Long) {
         require(milliseconds >= 0L) { "Clock cannot be advanced by a negative duration." }
-        current = Math.addExact(current, milliseconds)
+        require(current <= Long.MAX_VALUE - milliseconds) { "Clock advancement overflow." }
+        current += milliseconds
     }
 }
