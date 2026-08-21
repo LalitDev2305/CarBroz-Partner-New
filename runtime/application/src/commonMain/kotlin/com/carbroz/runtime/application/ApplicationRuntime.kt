@@ -3,6 +3,7 @@ package com.carbroz.runtime.application
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,6 +52,9 @@ sealed interface ApplicationRuntimeState {
  * A mutex guarantees that concurrent startup/retry callers cannot execute the
  * bootstrap pipeline more than once at the same time. The coordinator remains
  * stateless; this class alone owns observable startup lifecycle state.
+ *
+ * Cancellation never leaves the runtime stranded in [ApplicationRuntimeState.Starting].
+ * The previous stable state is restored before cancellation is propagated.
  */
 class DefaultApplicationRuntime(
     private val startupCoordinator: StartupCoordinator,
@@ -62,7 +66,11 @@ class DefaultApplicationRuntime(
 
     override suspend fun start(): ApplicationRuntimeState = operationMutex.withLock {
         when (val current = mutableState.value) {
-            ApplicationRuntimeState.Idle -> executeAttempt(attempt = 1u)
+            ApplicationRuntimeState.Idle -> executeAttempt(
+                attempt = 1u,
+                fallbackState = current,
+            )
+
             else -> current
         }
     }
@@ -71,7 +79,10 @@ class DefaultApplicationRuntime(
         when (val current = mutableState.value) {
             is ApplicationRuntimeState.Failed -> {
                 if (current.failure.recoverable) {
-                    executeAttempt(attempt = current.attempt + 1u)
+                    executeAttempt(
+                        attempt = current.attempt + 1u,
+                        fallbackState = current,
+                    )
                 } else {
                     current
                 }
@@ -81,16 +92,24 @@ class DefaultApplicationRuntime(
         }
     }
 
-    private suspend fun executeAttempt(attempt: UInt): ApplicationRuntimeState {
+    private suspend fun executeAttempt(
+        attempt: UInt,
+        fallbackState: ApplicationRuntimeState,
+    ): ApplicationRuntimeState {
         mutableState.value = ApplicationRuntimeState.Starting(attempt)
 
-        val next = when (val result = startupCoordinator.run()) {
-            StartupResult.Ready -> ApplicationRuntimeState.Ready(attempt)
-            is StartupResult.Failed -> ApplicationRuntimeState.Failed(
-                taskId = result.taskId,
-                failure = result.failure,
-                attempt = attempt,
-            )
+        val next = try {
+            when (val result = startupCoordinator.run()) {
+                StartupResult.Ready -> ApplicationRuntimeState.Ready(attempt)
+                is StartupResult.Failed -> ApplicationRuntimeState.Failed(
+                    taskId = result.taskId,
+                    failure = result.failure,
+                    attempt = attempt,
+                )
+            }
+        } catch (cancellation: CancellationException) {
+            mutableState.value = fallbackState
+            throw cancellation
         }
 
         mutableState.value = next
