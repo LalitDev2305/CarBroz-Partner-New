@@ -4,11 +4,13 @@ import com.carbroz.runtime.application.startup.StartupCoordinator
 import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupTask
 import com.carbroz.runtime.application.startup.StartupTaskResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class DefaultApplicationRuntimeTest {
     @Test
@@ -67,6 +69,44 @@ class DefaultApplicationRuntimeTest {
 
         assertEquals(List(8) { ApplicationRuntimeState.Ready(1u) }, results)
         assertEquals(1, executions)
+    }
+
+    @Test
+    fun `cancelled initial startup restores idle state`() = runTest {
+        val runtime = DefaultApplicationRuntime(
+            StartupCoordinator(
+                listOf(
+                    task("configuration") { throw CancellationException("cancelled") },
+                ),
+            ),
+        )
+
+        assertFailsWith<CancellationException> { runtime.start() }
+        assertEquals(ApplicationRuntimeState.Idle, runtime.state.value)
+    }
+
+    @Test
+    fun `cancelled retry restores previous failure state`() = runTest {
+        var executions = 0
+        val failure = StartupFailure.Expected("TEMPORARY", recoverable = true)
+        val runtime = DefaultApplicationRuntime(
+            StartupCoordinator(
+                listOf(
+                    task("session") {
+                        executions += 1
+                        if (executions == 1) {
+                            StartupTaskResult.Failure(failure)
+                        } else {
+                            throw CancellationException("cancelled")
+                        }
+                    },
+                ),
+            ),
+        )
+
+        val failed = runtime.start()
+        assertFailsWith<CancellationException> { runtime.retry() }
+        assertEquals(failed, runtime.state.value)
     }
 
     private fun task(id: String, execute: suspend () -> StartupTaskResult): StartupTask = object : StartupTask {
