@@ -6,8 +6,7 @@ package com.carbroz.foundation.featurecontrol
  * Keys are explicit strings so remote providers can map their own storage model
  * without leaking Firebase/Remote Config/vendor types into foundation code.
  */
-@JvmInline
-value class FeatureFlag(val key: String) {
+data class FeatureFlag(val key: String) {
     init {
         require(key.matches(Regex("^[a-z][a-z0-9_.-]{2,63}$"))) {
             "Feature flag key must be 3-64 lowercase characters using letters, digits, dot, underscore, or dash."
