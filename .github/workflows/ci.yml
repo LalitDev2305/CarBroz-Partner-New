@@ -18,8 +18,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.0'
-      - name: Verify foundation and desktop
-        run: gradle :foundation:architecture:allTests :desktopApp:compileKotlinDesktop --stacktrace
+      - name: Verify common foundation and runtime tests
+        run: >-
+          gradle
+          :foundation:architecture:allTests
+          :foundation:lifecycle:allTests
+          :runtime:application:allTests
+          :desktopApp:compileKotlinDesktop
+          --stacktrace
       - name: Build Android host
         run: gradle :androidApp:assembleDebug --stacktrace
 
@@ -34,5 +40,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.0'
-      - name: Compile iOS simulator framework
-        run: gradle :app:shared:linkDebugFrameworkIosSimulatorArm64 --stacktrace
+      - name: Compile iOS runtime and simulator framework
+        run: >-
+          gradle
+          :foundation:lifecycle:compileKotlinIosSimulatorArm64
+          :runtime:application:compileKotlinIosSimulatorArm64
+          :app:shared:linkDebugFrameworkIosSimulatorArm64
+          --stacktrace
