@@ -8,11 +8,10 @@ import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
+import platform.CoreFoundation.CFDictionaryCreate
 import platform.CoreFoundation.CFDictionaryRef
 import platform.CoreFoundation.CFTypeRefVar
 import platform.Foundation.NSData
-import platform.Foundation.NSDictionary
-import platform.Foundation.NSMutableDictionary
 import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.create
@@ -65,23 +64,24 @@ class KeychainSecureStorage(
 
     override suspend fun write(key: SecureKey, value: String) {
         val data = value.encodeToByteArray().toNSData()
-        val updateAttributes = NSDictionary.dictionaryWithObject(data, forKey = kSecValueData)
         val updateStatus = SecItemUpdate(
             query(key),
-            updateAttributes,
+            dictionaryOf(kSecValueData to data),
         )
 
         when (updateStatus) {
             errSecSuccess -> Unit
             errSecItemNotFound -> {
-                val addQuery = NSMutableDictionary()
-                addQuery[kSecClass] = kSecClassGenericPassword
-                addQuery[kSecAttrService] = service
-                addQuery[kSecAttrAccount] = key.value
-                addQuery[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-                addQuery[kSecValueData] = data
-
-                val addStatus = SecItemAdd(addQuery, null)
+                val addStatus = SecItemAdd(
+                    dictionaryOf(
+                        kSecClass to kSecClassGenericPassword,
+                        kSecAttrService to service,
+                        kSecAttrAccount to key.value,
+                        kSecAttrAccessible to kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                        kSecValueData to data,
+                    ),
+                    null,
+                )
                 if (addStatus != errSecSuccess) keychainFailure("write", key, addStatus)
             }
             else -> keychainFailure("write", key, updateStatus)
@@ -96,30 +96,46 @@ class KeychainSecureStorage(
     }
 
     override suspend fun clear() {
-        val clearQuery = NSMutableDictionary()
-        clearQuery[kSecClass] = kSecClassGenericPassword
-        clearQuery[kSecAttrService] = service
-
-        val status = SecItemDelete(clearQuery)
+        val status = SecItemDelete(
+            dictionaryOf(
+                kSecClass to kSecClassGenericPassword,
+                kSecAttrService to service,
+            ),
+        )
         if (status != errSecSuccess && status != errSecItemNotFound) {
             error("Keychain clear failed with OSStatus $status.")
         }
     }
 
     private fun query(key: SecureKey, returnData: Boolean = false): CFDictionaryRef {
-        val query = NSMutableDictionary()
-        query[kSecClass] = kSecClassGenericPassword
-        query[kSecAttrService] = service
-        query[kSecAttrAccount] = key.value
+        val entries = mutableListOf<Pair<Any?, Any?>>(
+            kSecClass to kSecClassGenericPassword,
+            kSecAttrService to service,
+            kSecAttrAccount to key.value,
+        )
         if (returnData) {
-            query[kSecReturnData] = true
-            query[kSecMatchLimit] = kSecMatchLimitOne
+            entries += kSecReturnData to true
+            entries += kSecMatchLimit to kSecMatchLimitOne
         }
-        return query
+        return dictionaryOf(*entries.toTypedArray())
     }
 
     private fun keychainFailure(operation: String, key: SecureKey, status: Int): Nothing =
         error("Keychain $operation failed for '${key.value}' with OSStatus $status.")
+}
+
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+private fun dictionaryOf(vararg entries: Pair<Any?, Any?>): CFDictionaryRef = memScoped {
+    val keys = allocArrayOf(*entries.map { it.first }.toTypedArray())
+    val values = allocArrayOf(*entries.map { it.second }.toTypedArray())
+    CFDictionaryCreate(
+        allocator = null,
+        keys = keys,
+        values = values,
+        numValues = entries.size.toLong(),
+        keyCallBacks = null,
+        valueCallBacks = null,
+    ) ?: error("Unable to create Keychain dictionary.")
 }
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
