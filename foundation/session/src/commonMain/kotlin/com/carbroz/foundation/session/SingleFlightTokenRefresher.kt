@@ -1,5 +1,6 @@
 package com.carbroz.foundation.session
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -12,7 +13,8 @@ import kotlinx.coroutines.sync.withLock
  *
  * The underlying [TokenRefresher] is invoked at most once for a concurrently
  * overlapping refresh burst. Callers receive the same result. Cancellation of
- * one waiter does not cancel the shared refresh operation.
+ * one waiter does not cancel the shared refresh operation, while cancellation
+ * of the refresh scope itself is propagated to all waiters.
  */
 class SingleFlightTokenRefresher(
     private val delegate: TokenRefresher,
@@ -30,6 +32,9 @@ class SingleFlightTokenRefresher(
                 scope.launch(SupervisorJob()) {
                     try {
                         created.complete(delegate.refresh(current))
+                    } catch (cancellation: CancellationException) {
+                        created.completeExceptionally(cancellation)
+                        throw cancellation
                     } catch (throwable: Throwable) {
                         created.complete(
                             TokenRefreshResult.Failed(
