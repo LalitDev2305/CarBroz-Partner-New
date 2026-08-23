@@ -1,9 +1,11 @@
 package com.carbroz.foundation.security
 
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryRef
 import platform.CoreFoundation.CFTypeRefVar
@@ -121,7 +123,12 @@ class KeychainSecureStorage(
         error("Keychain $operation failed for '${key.value}' with OSStatus $status.")
 }
 
-@OptIn(ExperimentalForeignApi::class)
-private fun ByteArray.toNSData(): NSData = memScoped {
-    NSData.create(bytes = refTo(0), length = size.toULong())
-}
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
+private fun ByteArray.toNSData(): NSData =
+    if (isEmpty()) {
+        NSData()
+    } else {
+        usePinned { pinned ->
+            NSData.create(bytes = pinned.addressOf(0), length = size.toULong())
+        }
+    }
