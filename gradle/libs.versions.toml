@@ -9,6 +9,7 @@ detekt = "1.23.8"
 kover = "0.9.9"
 androidxActivity = "1.11.0"
 koinBom = "4.2.2"
+navigation3 = "1.1.2"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -19,6 +20,7 @@ compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.re
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose" }
+jetbrains-navigation3-ui = { module = "org.jetbrains.androidx.navigation3:navigation3-ui", version.ref = "navigation3" }
 koin-bom = { module = "io.insert-koin:koin-bom", version.ref = "koinBom" }
 koin-core = { module = "io.insert-koin:koin-core" }
 koin-compose = { module = "io.insert-koin:koin-compose" }
