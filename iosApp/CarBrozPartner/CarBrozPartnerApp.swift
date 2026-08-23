@@ -5,6 +5,10 @@ import CarBrozShared
 struct CarBrozPartnerApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        DependencyInjectionKt.initializeCarBrozDependencyInjection()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
