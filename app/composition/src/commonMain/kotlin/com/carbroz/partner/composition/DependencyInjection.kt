@@ -6,7 +6,6 @@ import com.carbroz.foundation.lifecycle.DefaultAppLifecycle
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.DefaultApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
-import org.koin.core.Koin
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -34,12 +33,15 @@ val carBrozApplicationModule = module {
  * points may be recreated while the process remains alive. Definition override
  * is disabled so duplicate ownership fails instead of silently replacing a
  * canonical dependency.
+ *
+ * Koin itself remains an implementation detail of the composition boundary;
+ * platform hosts initialize the graph but do not receive or depend on [org.koin.core.Koin].
  */
-fun initializeCarBrozDependencyInjection(): Koin {
-    KoinPlatform.getKoinOrNull()?.let { return it }
+fun initializeCarBrozDependencyInjection() {
+    if (KoinPlatform.getKoinOrNull() != null) return
 
-    return startKoin {
+    startKoin {
         allowOverride(false)
         modules(carBrozApplicationModule)
-    }.koin
+    }
 }
