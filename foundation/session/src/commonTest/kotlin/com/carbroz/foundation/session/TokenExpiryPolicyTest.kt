@@ -71,8 +71,8 @@ class TokenExpiryPolicyTest {
     }
 
     private fun tokens(expiresAt: Long?): AuthTokens = AuthTokens(
-        accessToken = Secret("access-token"),
-        refreshToken = Secret("refresh-token"),
+        accessToken = Secret.of("access-token"),
+        refreshToken = Secret.of("refresh-token"),
         accessTokenExpiresAtEpochMilliseconds = expiresAt,
     )
 
