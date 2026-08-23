@@ -8,9 +8,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 
 /**
- * Compose-facing adaptive environment derived exclusively from the available
- * layout constraints. No platform, model, orientation, or device-name checks
- * are involved.
+ * Compose-facing adaptive environment derived from the current container plus
+ * semantic context supplied by the outer platform/application boundary.
+ *
+ * No platform, model, orientation, or device-name checks are involved.
  */
 @Immutable
 data class AdaptiveEnvironment(
@@ -18,6 +19,7 @@ data class AdaptiveEnvironment(
     val height: Dp,
     val widthClass: AdaptiveWidthClass,
     val heightClass: AdaptiveHeightClass,
+    val context: AdaptiveContext,
 )
 
 val LocalAdaptiveEnvironment = staticCompositionLocalOf<AdaptiveEnvironment> {
@@ -27,9 +29,14 @@ val LocalAdaptiveEnvironment = staticCompositionLocalOf<AdaptiveEnvironment> {
 /**
  * Provides the current adaptive environment to descendants using the actual
  * constraints of the container in which the UI is being rendered.
+ *
+ * [context] carries only semantic information that constraints cannot reveal,
+ * such as folding posture, occlusion and primary input mode. Native platform
+ * types are translated before they reach this boundary.
  */
 @Composable
 fun AdaptiveLayoutProvider(
+    context: AdaptiveContext = AdaptiveContext(),
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints {
@@ -39,6 +46,7 @@ fun AdaptiveLayoutProvider(
             height = layoutInfo.height,
             widthClass = layoutInfo.widthClass,
             heightClass = layoutInfo.heightClass,
+            context = context,
         )
 
         CompositionLocalProvider(LocalAdaptiveEnvironment provides environment) {
