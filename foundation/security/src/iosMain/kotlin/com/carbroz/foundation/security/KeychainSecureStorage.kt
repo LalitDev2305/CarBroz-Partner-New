@@ -127,9 +127,9 @@ class KeychainSecureStorage(
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 @Suppress("UNCHECKED_CAST")
 private fun dictionaryOf(vararg entries: Pair<Any?, Any?>): CFDictionaryRef =
-    NSDictionary.dictionaryWithObjects(
-        objects = entries.map { it.second }.toList(),
-        forKeys = entries.map { it.first }.toList(),
+    NSDictionary(
+        objects = entries.map { it.second },
+        forKeys = entries.map { it.first },
     ) as CFDictionaryRef
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
