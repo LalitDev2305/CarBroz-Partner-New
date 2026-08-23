@@ -15,8 +15,18 @@ sealed interface TokenRefreshResult {
     data class Failed(val reason: TokenRefreshFailure) : TokenRefreshResult
 }
 
+/**
+ * Sanitized semantic failures for token refresh.
+ *
+ * Raw exception messages, response bodies, credentials, tokens and PII must
+ * never cross this boundary. Transport-specific failures are mapped into these
+ * categories by the owning network/auth adapter.
+ */
 sealed interface TokenRefreshFailure {
     data object MissingRefreshToken : TokenRefreshFailure
-    data class Rejected(val reason: String) : TokenRefreshFailure
-    data class Unexpected(val reason: String) : TokenRefreshFailure
+    data object Rejected : TokenRefreshFailure
+    data object NetworkUnavailable : TokenRefreshFailure
+    data object Unauthorized : TokenRefreshFailure
+    data object InvalidRefreshToken : TokenRefreshFailure
+    data object Unexpected : TokenRefreshFailure
 }
