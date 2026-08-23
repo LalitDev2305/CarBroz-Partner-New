@@ -11,21 +11,47 @@ class ConfigurationValidatorTest {
     }
 
     @Test
-    fun `all structural violations are reported together`() {
+    fun `development may use loopback http without weakening production`() {
+        val development = validConfiguration().copy(
+            environment = AppEnvironment.Development,
+            apiBaseUrl = "http://localhost:8080",
+        )
+        val production = development.copy(environment = AppEnvironment.Production)
+
+        assertEquals(ConfigurationValidationResult.Valid, ConfigurationValidator.validate(development))
+        assertEquals(
+            ConfigurationValidationResult.Invalid(listOf(ConfigurationViolation.ApiBaseUrlSchemeInvalid)),
+            ConfigurationValidator.validate(production),
+        )
+    }
+
+    @Test
+    fun `unsafe structural violations are reported together`() {
         val result = ConfigurationValidator.validate(
             AppConfiguration(
-                environment = AppEnvironment.Development,
-                apiBaseUrl = "http://localhost/",
+                environment = AppEnvironment.Staging,
+                apiBaseUrl = "http://api.example.com/path/?token=1#fragment/",
                 buildInformation = BuildInformation(
                     versionName = " ",
                     versionCode = 0,
-                    applicationId = "",
+                    applicationId = "partner",
                 ),
             ),
         )
 
         val invalid = assertIs<ConfigurationValidationResult.Invalid>(result)
-        assertEquals(ConfigurationViolation.entries.toList(), invalid.violations)
+        assertEquals(
+            listOf(
+                ConfigurationViolation.ApiBaseUrlSchemeInvalid,
+                ConfigurationViolation.ApiBaseUrlMustNotEndWithSlash,
+                ConfigurationViolation.ApiBaseUrlMustNotContainFragment,
+                ConfigurationViolation.ApiBaseUrlMustNotContainQuery,
+                ConfigurationViolation.VersionNameBlank,
+                ConfigurationViolation.VersionCodeInvalid,
+                ConfigurationViolation.ApplicationIdInvalid,
+            ),
+            invalid.violations,
+        )
     }
 
     private fun validConfiguration() = AppConfiguration(
