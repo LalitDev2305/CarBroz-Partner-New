@@ -14,5 +14,7 @@ private struct ComposeRootView: UIViewControllerRepresentable {
         MainViewControllerKt.MainViewController()
     }
 
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) = Unit
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        // The shared Compose root owns its own UI state.
+    }
 }
