@@ -31,15 +31,16 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            // AppConfiguration is part of composition's public host-facing API:
-            // createCarBrozAppConfiguration() returns it and initializeCarBrozDependencyInjection()
-            // accepts it. Export it transitively so platform hosts do not need to know or duplicate
-            // the underlying foundation module dependency.
+            // AppConfiguration is part of composition's public host-facing API.
             api(project(":foundation:configuration"))
             implementation(project(":foundation:lifecycle"))
+            implementation(project(":foundation:time"))
+            implementation(project(":foundation:security"))
+            implementation(project(":foundation:session"))
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":runtime:application"))
+            implementation(project(":data:secure-storage"))
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
