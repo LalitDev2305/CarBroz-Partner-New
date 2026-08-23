@@ -1,6 +1,8 @@
 package com.carbroz.partner.composition
 
-/** Thin Swift-to-common bootstrap bridge. All validation and DI ownership remain in common code. */
+import com.carbroz.data.securestorage.KeychainSecureStorage
+
+/** Thin Swift-to-common bootstrap bridge with Keychain-backed secure storage. */
 fun initializeCarBrozIosApplication(
     environment: String,
     apiBaseUrl: String,
@@ -16,5 +18,6 @@ fun initializeCarBrozIosApplication(
             versionCode = versionCode,
             applicationId = applicationId,
         ),
+        secureStorage = KeychainSecureStorage(service = applicationId),
     )
 }
