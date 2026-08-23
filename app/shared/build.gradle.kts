@@ -9,9 +9,9 @@ plugins {
 }
 
 kotlin {
-    androidLibrary {
+    android {
         namespace = "com.carbroz.partner.shared"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 24
     }
 
