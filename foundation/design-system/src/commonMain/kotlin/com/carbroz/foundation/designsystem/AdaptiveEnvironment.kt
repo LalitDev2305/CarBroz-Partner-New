@@ -33,11 +33,12 @@ fun AdaptiveLayoutProvider(
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints {
+        val layoutInfo = AdaptiveLayoutClassifier.classify(maxWidth, maxHeight)
         val environment = AdaptiveEnvironment(
-            width = maxWidth,
-            height = maxHeight,
-            widthClass = AdaptiveLayoutClassifier.widthClass(maxWidth),
-            heightClass = AdaptiveLayoutClassifier.heightClass(maxHeight),
+            width = layoutInfo.width,
+            height = layoutInfo.height,
+            widthClass = layoutInfo.widthClass,
+            heightClass = layoutInfo.heightClass,
         )
 
         CompositionLocalProvider(LocalAdaptiveEnvironment provides environment) {
