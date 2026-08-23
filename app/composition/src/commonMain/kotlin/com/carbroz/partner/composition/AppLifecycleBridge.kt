@@ -3,7 +3,8 @@ package com.carbroz.partner.composition
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleController
 import com.carbroz.foundation.lifecycle.AppLifecycleState
-import org.koin.core.context.GlobalContext
+import org.koin.core.Koin
+import org.koin.mp.KoinPlatform
 
 /**
  * Thin platform-to-common lifecycle bridge owned by the application composition boundary.
@@ -26,6 +27,6 @@ object AppLifecycleBridge {
 
     private fun controller(): AppLifecycleController = koin().get()
 
-    private fun koin() = GlobalContext.getOrNull()
+    private fun koin(): Koin = KoinPlatform.getKoinOrNull()
         ?: error("CarBroz dependency injection must be initialized before lifecycle events are forwarded.")
 }
