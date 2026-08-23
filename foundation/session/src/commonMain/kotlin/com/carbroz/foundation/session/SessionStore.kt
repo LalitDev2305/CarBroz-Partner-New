@@ -40,17 +40,22 @@ class SessionStore(
     }
 
     /**
-     * Replaces only the token set of the currently authenticated session.
-     *
-     * This keeps [SessionStore] as the sole session state owner. Refresh
-     * orchestration can obtain new credentials independently, but it must apply
-     * them through this boundary so durable and in-memory state cannot diverge.
+     * Applies refreshed tokens only if the session that initiated the refresh
+     * is still current. This prevents an old refresh result from overwriting a
+     * later sign-in or a newer token set.
      */
-    suspend fun updateTokens(tokens: AuthTokens): SessionTransitionResult = mutex.withLock {
+    suspend fun updateTokens(
+        expectedCurrentTokens: AuthTokens,
+        refreshedTokens: AuthTokens,
+    ): SessionTransitionResult = mutex.withLock {
         val authenticated = state as? SessionState.Authenticated
             ?: return@withLock SessionTransitionResult.Failed(SessionTransitionFailure.NotAuthenticated)
 
-        persistAndPublish(authenticated.copy(tokens = tokens))
+        if (authenticated.tokens != expectedCurrentTokens) {
+            return@withLock SessionTransitionResult.Failed(SessionTransitionFailure.StaleSession)
+        }
+
+        persistAndPublish(authenticated.copy(tokens = refreshedTokens))
     }
 
     suspend fun signOut(): SessionTransitionResult = mutex.withLock {
@@ -87,4 +92,5 @@ sealed interface SessionTransitionFailure {
     data class Persistence(val reason: SessionPersistenceFailure) : SessionTransitionFailure
     data class RestoreRejected(val reason: SessionRestoreFailure) : SessionTransitionFailure
     data object NotAuthenticated : SessionTransitionFailure
+    data object StaleSession : SessionTransitionFailure
 }
