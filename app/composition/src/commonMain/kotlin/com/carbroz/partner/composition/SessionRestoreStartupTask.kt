@@ -22,8 +22,7 @@ class SessionRestoreStartupTask(
     private suspend fun handleFailure(failure: SessionTransitionFailure): StartupTaskResult = when (failure) {
         is SessionTransitionFailure.RestoreRejected -> when (failure.reason) {
             SessionRestoreFailure.MalformedSnapshot,
-            SessionRestoreFailure.UnsupportedSnapshotVersion,
-            -> recoverCorruptSnapshot()
+            SessionRestoreFailure.UnsupportedSnapshotVersion -> recoverCorruptSnapshot()
 
             SessionRestoreFailure.StorageUnavailable -> StartupTaskResult.Failure(
                 StartupFailure.Expected(
@@ -40,8 +39,7 @@ class SessionRestoreStartupTask(
             ),
         )
         SessionTransitionFailure.NotAuthenticated,
-        SessionTransitionFailure.StaleSession,
-        -> StartupTaskResult.Failure(StartupFailure.Unexpected)
+        SessionTransitionFailure.StaleSession -> StartupTaskResult.Failure(StartupFailure.Unexpected)
     }
 
     private suspend fun recoverCorruptSnapshot(): StartupTaskResult =
