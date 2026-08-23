@@ -3,26 +3,29 @@ package com.carbroz.partner.composition
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleController
 import com.carbroz.foundation.lifecycle.AppLifecycleState
-import com.carbroz.foundation.lifecycle.DefaultAppLifecycle
+import org.koin.core.context.GlobalContext
 
 /**
- * Process-wide lifecycle bridge owned by the application composition boundary.
+ * Thin platform-to-common lifecycle bridge owned by the application composition boundary.
  *
- * Native and platform hosts report visibility transitions through the write-side
- * methods below. Common application/runtime code observes [lifecycle] and cannot
- * forge platform transitions.
+ * Lifecycle state itself is owned by the Koin-composed [AppLifecycleController].
+ * This bridge contains no parallel state and only translates host callbacks into
+ * the shared semantic lifecycle contract.
  */
 object AppLifecycleBridge {
-    private val controller: AppLifecycleController = DefaultAppLifecycle()
-
     val lifecycle: AppLifecycle
-        get() = controller
+        get() = koin().get()
 
     fun moveToForeground() {
-        controller.moveTo(AppLifecycleState.Foreground)
+        controller().moveTo(AppLifecycleState.Foreground)
     }
 
     fun moveToBackground() {
-        controller.moveTo(AppLifecycleState.Background)
+        controller().moveTo(AppLifecycleState.Background)
     }
+
+    private fun controller(): AppLifecycleController = koin().get()
+
+    private fun koin() = GlobalContext.getOrNull()
+        ?: error("CarBroz dependency injection must be initialized before lifecycle events are forwarded.")
 }
