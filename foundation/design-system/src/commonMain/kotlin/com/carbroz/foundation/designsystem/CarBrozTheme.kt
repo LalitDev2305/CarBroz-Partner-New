@@ -1,6 +1,8 @@
 package com.carbroz.foundation.designsystem
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -20,17 +22,19 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun CarBrozTheme(
     darkTheme: Boolean = false,
+    colorScheme: ColorScheme = if (darkTheme) darkColorScheme() else lightColorScheme(),
+    typography: Typography = CarBrozTypography.Default,
+    spacing: CarBrozSpacing = CarBrozSpacing.Default,
+    interactionSizing: InteractionSizing = InteractionSizing.Default,
     content: @Composable () -> Unit,
 ) {
-    val colors = if (darkTheme) darkColorScheme() else lightColorScheme()
-
     CompositionLocalProvider(
-        LocalCarBrozSpacing provides CarBrozSpacing.Default,
-        LocalInteractionSizing provides InteractionSizing.Default,
+        LocalCarBrozSpacing provides spacing,
+        LocalInteractionSizing provides interactionSizing,
     ) {
         MaterialTheme(
-            colorScheme = colors,
-            typography = CarBrozTypography.Default,
+            colorScheme = colorScheme,
+            typography = typography,
             content = content,
         )
     }
@@ -45,6 +49,15 @@ data class CarBrozSpacing(
     val large: Dp,
     val extraLarge: Dp,
 ) {
+    init {
+        require(none >= 0.dp) { "Spacing values must not be negative." }
+        require(extraSmall >= none) { "Spacing scale must be non-decreasing." }
+        require(small >= extraSmall) { "Spacing scale must be non-decreasing." }
+        require(medium >= small) { "Spacing scale must be non-decreasing." }
+        require(large >= medium) { "Spacing scale must be non-decreasing." }
+        require(extraLarge >= large) { "Spacing scale must be non-decreasing." }
+    }
+
     companion object {
         val Default = CarBrozSpacing(
             none = 0.dp,
