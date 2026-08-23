@@ -15,7 +15,12 @@ Before every phase, PR, module, package, class, interface, provider, registry, f
 5. Compare the current repository against this constitution.
 6. Classify existing code as KEEP / MOVE / RENAME / MERGE / DELETE / REPLACE / CREATE.
 7. Do not create a second source of truth.
-8. Build and test Android, iOS Kotlin targets and Desktop where applicable before freezing the slice.
+8. Before creating anything, search the complete repository for an existing equivalent or overlapping module, package, type, contract, implementation, test fixture, resource, dependency or configuration.
+9. After every implementation/migration, delete superseded code, duplicate implementations, obsolete packages/modules, stale tests/resources/configuration and unused dependencies. Temporary compatibility copies are allowed only during an actively verified migration and MUST be removed before that slice is frozen.
+10. Run a post-implementation simplification/optimization review: verify the solution is the smallest clear production-safe design, remove unnecessary abstraction/indirection/allocation/dependency, prefer common KMP code where valid, and preserve correctness, readability, testability and architectural ownership over clever micro-optimization.
+11. Verify there is one canonical owner/source of truth for every responsibility and no old/new implementation remains in parallel unintentionally.
+12. Build and test Android, iOS Kotlin targets and Desktop where applicable before freezing the slice.
+13. Re-run repository-wide duplicate/stale-code and dependency checks after the build passes; a green build alone is not a freeze gate.
 
 Older architecture notes remain historical context only. When they conflict with this constitution, **this constitution wins**.
 
@@ -249,7 +254,7 @@ Platform hosts -> application composition -> features/runtime -> contracts; data
 A new template/component/ChildData/action/validation/capability/business operation should normally require creating and registering the new implementation, not editing unrelated central engines.
 
 ## 76. Constitution-before-code rule
-This file is the canonical architecture constitution. Before every new phase, implementation must first re-read this document, compare the current repository to the target ownership/dependency rules, document deviations, repair completed-phase drift when necessary, and only then start new code. Any architecture change requires updating this constitution first with the reason and migration impact.
+This file is the canonical architecture constitution. Before every new phase, implementation must first re-read this document, compare the current repository to the target ownership/dependency rules, document deviations, repair completed-phase drift when necessary, and only then start new code. Any architecture change requires updating this constitution first with the reason and migration impact. Every implementation or migration also requires a repository-wide hygiene and simplification pass: no superseded/duplicate code, module, resource, configuration or dependency may remain after the slice is frozen, and the resulting design must be reviewed for a simpler, clearer or more efficient implementation without weakening correctness, maintainability, testability or multiplatform ownership.
 
 ---
 
@@ -419,6 +424,8 @@ READ THIS FILE
    ↓
 Audit current repository against the phase ownership
    ↓
+Search repository for existing/overlapping implementation
+   ↓
 List deviations from completed phases
    ↓
 Repair deviations first
@@ -427,12 +434,20 @@ Define exact modules/dependencies for the phase
    ↓
 Implement
    ↓
+Delete superseded/duplicate/stale code, modules, resources and dependencies
+   ↓
+Review for simpler/clearer/more efficient production-safe implementation
+   ↓
 Tests + Android/iOS/Desktop gates
+   ↓
+Repository-wide hygiene/dependency audit
    ↓
 Architecture audit
    ↓
 Freeze phase
 ```
+
+A phase/slice is **not frozen merely because it compiles**. Freeze requires proof that the new implementation is the canonical owner, superseded code has been removed, dependencies are minimal, and no unnecessary parallel abstraction remains.
 
 ---
 
@@ -452,12 +467,13 @@ Current repository implementation has useful production work, but the following 
 - `foundation:design-system` — keep styling/theme/accessibility responsibility, but remove adaptive ownership from it.
 
 ## Must change before Phase 7
-1. **Create `foundation:adaptive` and move adaptive/window/content-layout policy code out of `foundation:design-system`.** The final architecture makes adaptive UI a first-class foundation boundary; design-system consumes it rather than owning it.
-2. **Migrate `app:shared` toward `app:composition`.** The final architecture requires a composition root rather than a generic shared catch-all. Shared Compose root, Koin assembly and the Kotlin iOS `MainViewController` bridge belong here.
-3. **Merge `foundation:feature-control` into `foundation:configuration` unless an independent dependency/build reason is proven.** The frozen final direction places FeatureFlag/FeatureFlagProvider under configuration ownership.
-4. **Add Koin to the composition/bootstrap architecture.** Koin is the single DI owner and was part of the pre-Phase-1 frozen stack; completed startup/bootstrap work is not structurally complete until composition is Koin-based rather than relying on future/manual wiring.
+1. **Create `foundation:adaptive` and move adaptive/window/content-layout policy code out of `foundation:design-system`.** The final architecture makes adaptive UI a first-class foundation boundary; design-system consumes it rather than owning it. Migration is complete only after old design-system adaptive code/tests are deleted and repository search confirms no stale package/import remains.
+2. **Migrate `app:shared` toward `app:composition`.** The final architecture requires a composition root rather than a generic shared catch-all. Shared Compose root, Koin assembly and the Kotlin iOS `MainViewController` bridge belong here. Delete the superseded module/path/configuration after all consumers migrate; do not leave both module identities in parallel.
+3. **Merge `foundation:feature-control` into `foundation:configuration` unless an independent dependency/build reason is proven.** The frozen final direction places FeatureFlag/FeatureFlagProvider under configuration ownership. Remove the old module and all stale dependency declarations after migration.
+4. **Add Koin to the composition/bootstrap architecture.** Koin is the single DI owner and was part of the pre-Phase-1 frozen stack; completed startup/bootstrap work is not structurally complete until composition is Koin-based rather than relying on future/manual wiring. Remove any superseded manual graph/service-locator wiring rather than retaining two DI systems.
 5. **Keep platform hosts thin while performing the above moves.** No reusable architecture should migrate into Android/iOS/Desktop hosts.
-6. **Preserve all current tests and cross-platform compilation while restructuring.** Migration is not permission to rewrite working behavior.
+6. **Preserve all current tests and cross-platform compilation while restructuring.** Migration is not permission to rewrite working behavior. Once behavior is proven equivalent, delete the superseded implementation and migrate tests to the canonical owner.
+7. **After all Phase 1–6 reconciliation work, run a full repository hygiene and optimization audit.** Search for duplicate classes/contracts/packages/modules, stale imports/resources/configuration, unused dependencies, obsolete compatibility code, unnecessary abstractions and avoidable platform-specific implementations. Resolve findings before Phase 7.
 
 ## Deferred intentionally to later phases
 - Navigation 3 -> Phase 7.
@@ -472,4 +488,4 @@ Current repository implementation has useful production work, but the following 
 - final CI/docs/freeze -> Phase 16.
 - foundation versioning/product adoption -> Phase 17.
 
-Phase 7 MUST NOT begin until the completed Phase 1–6 reconciliation items above are implemented, tested and audited.
+Phase 7 MUST NOT begin until the completed Phase 1–6 reconciliation items above are implemented, tested, optimized, cleaned of superseded/duplicate artifacts and audited.
