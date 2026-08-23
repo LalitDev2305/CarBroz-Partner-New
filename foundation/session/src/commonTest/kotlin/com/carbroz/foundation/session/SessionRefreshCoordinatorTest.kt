@@ -101,16 +101,32 @@ class SessionRefreshCoordinatorTest {
     }
 
     @Test
+    fun refreshResultCannotRestoreSessionAfterLogout() = runTest {
+        val current = tokens("current", expiresAt = 1_000L)
+        val stale = tokens("stale", expiresAt = 100_000L)
+        val store = authenticatedStore(current)
+        val coordinator = coordinator(store, now = 1_000L) {
+            store.signOut()
+            TokenRefreshResult.Success(stale)
+        }
+
+        val result = assertIs<SessionRefreshResult.ApplyFailed>(coordinator.refreshIfNeeded())
+
+        assertEquals(SessionTransitionFailure.NotAuthenticated, result.reason)
+        assertEquals(SessionState.SignedOut, store.current())
+    }
+
+    @Test
     fun delegateFailureIsReturnedWithoutApplyingTokens() = runTest {
         val current = tokens("current", expiresAt = 1_000L)
         val store = authenticatedStore(current)
         val coordinator = coordinator(store, now = 1_000L) {
-            TokenRefreshResult.Failed(TokenRefreshFailure.Rejected("expired-refresh"))
+            TokenRefreshResult.Failed(TokenRefreshFailure.InvalidRefreshToken)
         }
 
         val result = assertIs<SessionRefreshResult.Failed>(coordinator.refreshIfNeeded())
 
-        assertEquals(TokenRefreshFailure.Rejected("expired-refresh"), result.reason)
+        assertEquals(TokenRefreshFailure.InvalidRefreshToken, result.reason)
         assertEquals(current, assertIs<SessionState.Authenticated>(store.current()).tokens)
     }
 
@@ -125,16 +141,15 @@ class SessionRefreshCoordinatorTest {
     }
 
     @Test
-    fun unexpectedDelegateThrowableBecomesTypedFailure() = runTest {
+    fun unexpectedDelegateThrowableBecomesSanitizedFailure() = runTest {
         val current = tokens("current", expiresAt = 1_000L)
         val store = authenticatedStore(current)
         val coordinator = coordinator(store, now = 1_000L) {
-            error("boom")
+            error("secret-response-body")
         }
 
         val result = assertIs<SessionRefreshResult.Failed>(coordinator.refreshIfNeeded())
-        val failure = assertIs<TokenRefreshFailure.Unexpected>(result.reason)
-        assertEquals("boom", failure.reason)
+        assertEquals(TokenRefreshFailure.Unexpected, result.reason)
         assertEquals(current, assertIs<SessionState.Authenticated>(store.current()).tokens)
     }
 
