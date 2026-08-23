@@ -5,20 +5,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.carbroz.foundation.adaptive.AdaptiveLayoutProvider
 import com.carbroz.foundation.designsystem.CarBrozTheme
 import com.carbroz.foundation.navigation.Navigation3Host
-import com.carbroz.foundation.navigation.NavigationCommand
 import com.carbroz.foundation.navigation.NavigationDestination
 import com.carbroz.foundation.navigation.NavigationDestinationContent
-import com.carbroz.foundation.navigation.NavigationReducer
 import com.carbroz.foundation.navigation.NavigationState
-import com.carbroz.foundation.navigation.NavigationTransition
+import com.carbroz.foundation.navigation.NavigationStore
 
 private data object AppShellDestination : NavigationDestination {
     override val navigationId: String = "app-shell"
@@ -39,30 +36,24 @@ private val appShellContent = NavigationDestinationContent { destination ->
 /**
  * Application composition root.
  *
- * Navigation state is application-owned and reduced through the framework-free
- * navigation kernel. Navigation 3 only presents that canonical state; it does
- * not own a second CarBroz back stack. The temporary shell destination will be
- * replaced by the static splash/reference vertical slice in its planned phase.
+ * [NavigationStore] owns the canonical semantic back stack outside transient UI
+ * state. Navigation 3 only presents that state and emits semantic commands back
+ * to the same store. The temporary shell destination will be replaced by the
+ * static splash/reference vertical slice in its planned phase.
  */
 @Composable
 fun CarBrozApp() {
-    var navigationState by remember {
-        mutableStateOf(NavigationState(listOf(AppShellDestination)))
+    val navigationStore = remember {
+        NavigationStore(NavigationState(listOf(AppShellDestination)))
     }
-
-    fun dispatch(command: NavigationCommand) {
-        when (val transition = NavigationReducer.reduce(navigationState, command)) {
-            is NavigationTransition.Applied -> navigationState = transition.state
-            is NavigationTransition.Ignored -> Unit
-        }
-    }
+    val navigationState by navigationStore.state.collectAsStateWithLifecycle()
 
     CarBrozTheme {
         AdaptiveLayoutProvider {
             Navigation3Host(
                 state = navigationState,
                 destinationContent = appShellContent,
-                onCommand = ::dispatch,
+                onCommand = navigationStore::dispatch,
             )
         }
     }
