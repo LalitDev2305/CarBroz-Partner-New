@@ -8,17 +8,20 @@ The iOS host owns only unavoidable Apple-platform concerns:
 
 - SwiftUI application/process entry point
 - Xcode project, bundle/signing and deployment configuration
-- native launch screen and Apple resources
 - linking the `CarBrozShared` Kotlin Multiplatform framework
-- future entitlements, background modes, notification hooks and Apple SDK bridges
+- future entitlements, background modes, notification hooks and Apple SDK bridges that cannot live in common KMP code
 
-Reusable application architecture, business rules and Compose UI remain in Kotlin Multiplatform modules. Native SwiftUI views must not become a second feature-screen architecture.
+Reusable application architecture, business rules, navigation state, SDUI runtime and product UI remain in Kotlin Multiplatform/Compose Multiplatform modules. Native SwiftUI views must not become a second feature-screen architecture. Platform-specific code is added only when the common implementation cannot satisfy the platform requirement.
 
 ## Application flow
 
 `CarBrozPartnerApp` -> `ContentView` -> Kotlin `MainViewController()` -> shared `CarBrozApp()`.
 
 The Xcode target runs `:app:shared:embedAndSignAppleFrameworkForXcode` before compiling the Swift host so the framework matches the active Xcode SDK, architecture and configuration.
+
+## Launch and splash policy
+
+Product splash/startup UI is owned by shared Compose Multiplatform code. The iOS host does not define a branded/product splash screen. Any OS-mandated launch presentation must remain minimal and non-product-specific; the first intentional product screen is rendered by shared Compose code.
 
 ## Identity and platform baseline
 
