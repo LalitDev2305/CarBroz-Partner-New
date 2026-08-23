@@ -31,6 +31,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":foundation:configuration"))
             implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
