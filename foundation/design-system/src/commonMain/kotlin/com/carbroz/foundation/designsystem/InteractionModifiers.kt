@@ -14,6 +14,6 @@ import androidx.compose.ui.Modifier
  */
 @Composable
 fun Modifier.carBrozMinimumInteractionSize(): Modifier {
-    val minimumSize = CarBrozDesignSystem.interactionSizing.minimumTouchTarget
+    val minimumSize = CarBrozDesignSystem.interactionSizing.minimumTarget
     return sizeIn(minWidth = minimumSize, minHeight = minimumSize)
 }
