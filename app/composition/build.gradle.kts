@@ -37,6 +37,7 @@ kotlin {
             implementation(project(":foundation:time"))
             implementation(project(":foundation:security"))
             implementation(project(":foundation:session"))
+            implementation(project(":foundation:navigation"))
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":runtime:application"))
