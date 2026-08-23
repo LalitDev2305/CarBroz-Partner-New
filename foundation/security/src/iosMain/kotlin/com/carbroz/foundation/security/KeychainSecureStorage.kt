@@ -21,6 +21,7 @@ import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
 import platform.Security.SecItemUpdate
+import platform.Security.errSecDuplicateItem
 import platform.Security.errSecItemNotFound
 import platform.Security.errSecSuccess
 import platform.Security.kSecAttrAccessible
@@ -37,44 +38,46 @@ import platform.Security.kSecValueData
 /**
  * Apple Keychain-backed [SecureStorage].
  *
+ * The service namespace is supplied by the product composition root so this
+ * foundation adapter remains product-neutral. Items use
+ * `AfterFirstUnlockThisDeviceOnly`: they remain available to legitimate
+ * background work after the device has been unlocked once, while staying bound
+ * to the current device and excluded from migration/backup restoration.
+ *
  * Only the unavoidable Apple storage adapter lives in `iosMain`; the contract
  * and all authentication/session policy remain in common Kotlin code.
  */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class KeychainSecureStorage(
-    private val service: String = "com.carbroz.partner",
+    private val service: String,
 ) : SecureStorage {
+    init {
+        require(service.isNotBlank()) { "Keychain service must not be blank." }
+        require(service == service.trim()) { "Keychain service must not contain surrounding whitespace." }
+    }
 
     override suspend fun read(key: SecureKey): String? = memScoped {
         val result = alloc<CFTypeRefVar>()
-        val status = SecItemCopyMatching(
-            query(key, returnData = true),
-            result.ptr,
-        )
+        val status = SecItemCopyMatching(query(key, returnData = true), result.ptr)
 
         when (status) {
             errSecSuccess -> {
                 val data = result.value as? NSData
-                    ?: error("Keychain returned an unexpected value for '${key.value}'.")
+                    ?: error("Keychain returned an unexpected value.")
                 NSString.create(data = data, encoding = NSUTF8StringEncoding)?.toString()
-                    ?: error("Keychain value for '${key.value}' is not valid UTF-8.")
+                    ?: error("Keychain value is not valid UTF-8.")
             }
             errSecItemNotFound -> null
-            else -> keychainFailure("read", key, status)
+            else -> keychainFailure("read", status)
         }
     }
 
     override suspend fun write(key: SecureKey, value: String) {
         val data = value.encodeToByteArray().toNSData()
-        val updateStatus = SecItemUpdate(
-            query(key),
-            dictionaryOf(kSecValueData to data),
-        )
-
-        when (updateStatus) {
+        when (val updateStatus = update(key, data)) {
             errSecSuccess -> Unit
             errSecItemNotFound -> {
-                val addStatus = SecItemAdd(
+                when (val addStatus = SecItemAdd(
                     dictionaryOf(
                         kSecClass to kSecClassGenericPassword,
                         kSecAttrService to service,
@@ -83,17 +86,23 @@ class KeychainSecureStorage(
                         kSecValueData to data,
                     ),
                     null,
-                )
-                if (addStatus != errSecSuccess) keychainFailure("write", key, addStatus)
+                )) {
+                    errSecSuccess -> Unit
+                    errSecDuplicateItem -> {
+                        val retryStatus = update(key, data)
+                        if (retryStatus != errSecSuccess) keychainFailure("write", retryStatus)
+                    }
+                    else -> keychainFailure("write", addStatus)
+                }
             }
-            else -> keychainFailure("write", key, updateStatus)
+            else -> keychainFailure("write", updateStatus)
         }
     }
 
     override suspend fun remove(key: SecureKey) {
         val status = SecItemDelete(query(key))
         if (status != errSecSuccess && status != errSecItemNotFound) {
-            keychainFailure("remove", key, status)
+            keychainFailure("remove", status)
         }
     }
 
@@ -105,9 +114,14 @@ class KeychainSecureStorage(
             ),
         )
         if (status != errSecSuccess && status != errSecItemNotFound) {
-            error("Keychain clear failed with OSStatus $status.")
+            keychainFailure("clear", status)
         }
     }
+
+    private fun update(key: SecureKey, data: NSData): Int = SecItemUpdate(
+        query(key),
+        dictionaryOf(kSecValueData to data),
+    )
 
     private fun query(key: SecureKey, returnData: Boolean = false): CFDictionaryRef {
         val entries = mutableListOf<Pair<Any?, Any?>>(
@@ -122,12 +136,11 @@ class KeychainSecureStorage(
         return dictionaryOf(*entries.toTypedArray())
     }
 
-    private fun keychainFailure(operation: String, key: SecureKey, status: Int): Nothing =
-        error("Keychain $operation failed for '${key.value}' with OSStatus $status.")
+    private fun keychainFailure(operation: String, status: Int): Nothing =
+        error("Keychain $operation failed with OSStatus $status.")
 }
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-@Suppress("UNCHECKED_CAST")
 private fun dictionaryOf(vararg entries: Pair<Any?, Any?>): CFDictionaryRef =
     entries.toMap() as NSDictionary as CFDictionaryRef
 
