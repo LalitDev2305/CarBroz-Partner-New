@@ -6,9 +6,9 @@ import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import kotlin.test.Test
 import kotlin.test.assertSame
-import org.koin.core.context.GlobalContext
 import org.koin.core.context.stopKoin
 import org.koin.dsl.koinApplication
+import org.koin.mp.KoinPlatform
 
 class DependencyInjectionTest {
     @Test
@@ -31,7 +31,7 @@ class DependencyInjectionTest {
 
     @Test
     fun processInitializerIsIdempotent() {
-        GlobalContext.getOrNull()?.let { stopKoin() }
+        KoinPlatform.getKoinOrNull()?.let { stopKoin() }
 
         try {
             val first = initializeCarBrozDependencyInjection()
@@ -39,7 +39,7 @@ class DependencyInjectionTest {
 
             assertSame(first, second)
         } finally {
-            GlobalContext.getOrNull()?.let { stopKoin() }
+            KoinPlatform.getKoinOrNull()?.let { stopKoin() }
         }
     }
 }
