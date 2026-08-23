@@ -35,14 +35,8 @@ class SingleFlightTokenRefresher(
                     } catch (cancellation: CancellationException) {
                         created.completeExceptionally(cancellation)
                         throw cancellation
-                    } catch (throwable: Throwable) {
-                        created.complete(
-                            TokenRefreshResult.Failed(
-                                TokenRefreshFailure.Unexpected(
-                                    throwable.message ?: throwable::class.simpleName ?: "Unexpected refresh failure",
-                                ),
-                            ),
-                        )
+                    } catch (_: Throwable) {
+                        created.complete(TokenRefreshResult.Failed(TokenRefreshFailure.Unexpected))
                     } finally {
                         mutex.withLock {
                             if (inFlight === created) {
