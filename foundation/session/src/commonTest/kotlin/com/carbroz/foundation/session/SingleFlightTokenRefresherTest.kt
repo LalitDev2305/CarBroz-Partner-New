@@ -1,6 +1,7 @@
 package com.carbroz.foundation.session
 
 import com.carbroz.foundation.security.Secret
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -10,6 +11,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertSame
 
@@ -70,6 +72,16 @@ class SingleFlightTokenRefresherTest {
 
         assertSame(expected, survivingWaiter.await())
         assertEquals(1, calls)
+    }
+
+    @Test
+    fun `delegate cancellation propagates to all waiters`() = runTest {
+        val delegate = TokenRefresher { throw CancellationException("delegate-cancelled") }
+        val refresher = SingleFlightTokenRefresher(delegate, backgroundScope)
+
+        assertFailsWith<CancellationException> {
+            refresher.refresh(tokens("old-access"))
+        }
     }
 
     @Test
