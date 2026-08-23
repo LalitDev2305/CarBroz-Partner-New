@@ -19,6 +19,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(project(":foundation:security"))
+            implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
