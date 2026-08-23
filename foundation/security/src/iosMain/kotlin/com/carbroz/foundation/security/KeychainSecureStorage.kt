@@ -4,15 +4,14 @@ import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
-import kotlinx.cinterop.cValuesOf
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
-import platform.CoreFoundation.CFDictionaryCreate
 import platform.CoreFoundation.CFDictionaryRef
 import platform.CoreFoundation.CFTypeRefVar
 import platform.Foundation.NSData
+import platform.Foundation.NSDictionary
 import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.create
@@ -126,18 +125,12 @@ class KeychainSecureStorage(
 }
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-private fun dictionaryOf(vararg entries: Pair<Any?, Any?>): CFDictionaryRef {
-    val keys = cValuesOf(*entries.map { it.first }.toTypedArray())
-    val values = cValuesOf(*entries.map { it.second }.toTypedArray())
-    return CFDictionaryCreate(
-        allocator = null,
-        keys = keys,
-        values = values,
-        numValues = entries.size.toLong(),
-        keyCallBacks = null,
-        valueCallBacks = null,
-    ) ?: error("Unable to create Keychain dictionary.")
-}
+@Suppress("UNCHECKED_CAST")
+private fun dictionaryOf(vararg entries: Pair<Any?, Any?>): CFDictionaryRef =
+    NSDictionary.dictionaryWithObjects(
+        objects = entries.map { it.second }.toList(),
+        forKeys = entries.map { it.first }.toList(),
+    ) as CFDictionaryRef
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 private fun ByteArray.toNSData(): NSData =
