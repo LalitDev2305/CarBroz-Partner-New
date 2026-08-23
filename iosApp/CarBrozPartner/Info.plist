@@ -20,6 +20,10 @@
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>CarBrozEnvironment</key>
+    <string>$(CARBROZ_ENVIRONMENT)</string>
+    <key>CarBrozApiBaseUrl</key>
+    <string>$(CARBROZ_API_BASE_URL)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>UISupportedInterfaceOrientations</key>
