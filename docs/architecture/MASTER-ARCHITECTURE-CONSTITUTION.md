@@ -21,12 +21,13 @@ Before every phase, PR, module, package, class, interface, provider, registry, f
 11. Verify there is one canonical owner/source of truth for every responsibility and no old/new implementation remains in parallel unintentionally.
 12. Build and test Android, iOS Kotlin targets and Desktop where applicable before freezing the slice.
 13. Re-run repository-wide duplicate/stale-code and dependency checks after the build passes; a green build alone is not a freeze gate.
+14. Implement each infrastructure phase to production-complete readiness, not placeholder readiness. If a technology or subsystem is part of the frozen architecture, its reusable contracts, production implementation, environment wiring, failure handling, tests and integration path must be completed in its owning phase even if the first visible screen does not consume every capability yet.
 
 Older architecture notes remain historical context only. When they conflict with this constitution, **this constitution wins**.
 
 ---
 
-# Part A — 76 Frozen Architecture Decisions
+# Part A — 77 Frozen Architecture Decisions
 
 ## 1. Product-neutral foundation
 CarBroz Foundation is reusable architecture, not Partner business code. Partner is implemented first; Customer later consumes the same neutral foundation where semantically correct. Product business logic is not shared merely for reuse.
@@ -68,7 +69,7 @@ Platform lifecycle is translated into common semantic lifecycle state. Product/r
 `runtime:application` owns bootstrap state and ordered startup tasks. Startup is serialized, cancellation-safe, retryable where appropriate and observable.
 
 ## 14. Startup is ordered and lazy
-Initialize only required systems during startup. Expensive capabilities such as maps, camera or payment are not initialized eagerly.
+Initialize only systems required for the current startup path, but distinguish lazy initialization from incomplete implementation. Expensive capabilities such as maps, camera or payment are not initialized eagerly; their production-ready contracts/adapters/wiring are still completed in their owning phases so later activation does not require architectural implementation work.
 
 ## 15. Configuration is centralized
 Development/Staging/Production environment data, build information, network configuration and feature flags are centralized. No scattered base URLs or environment switches.
@@ -181,8 +182,8 @@ Concurrent authentication failures coordinate through one refresh operation rath
 ## 51. Technical errors are normalized
 External exceptions such as Ktor/SQLite/vendor exceptions do not cross architecture boundaries directly. Translate into canonical failures/errors.
 
-## 52. Room 3 KMP for structured persistence
-Room KMP is the chosen relational/structured persistence technology when structured/offline data is required. Do not create meaningless generic tables merely for architecture completeness.
+## 52. Room 3 KMP structured persistence is production infrastructure
+Room 3 KMP is the chosen relational/structured persistence technology. Its database factory, platform drivers, schema/versioning, migrations, transactions, health/error mapping, test strategy and DI integration are implemented as production-ready infrastructure in the data phase rather than postponed until a particular screen happens to need a table. Do not create meaningless product tables merely for architecture completeness; create the complete reusable persistence mechanism and add real entities when their data contracts exist.
 
 ## 53. DataStore for non-sensitive preferences
 Theme, locale and non-sensitive settings use DataStore Preferences KMP. Credentials never use preferences.
@@ -255,6 +256,9 @@ A new template/component/ChildData/action/validation/capability/business operati
 
 ## 76. Constitution-before-code rule
 This file is the canonical architecture constitution. Before every new phase, implementation must first re-read this document, compare the current repository to the target ownership/dependency rules, document deviations, repair completed-phase drift when necessary, and only then start new code. Any architecture change requires updating this constitution first with the reason and migration impact. Every implementation or migration also requires a repository-wide hygiene and simplification pass: no superseded/duplicate code, module, resource, configuration or dependency may remain after the slice is frozen, and the resulting design must be reviewed for a simpler, clearer or more efficient implementation without weakening correctness, maintainability, testability or multiplatform ownership.
+
+## 77. Production-complete infrastructure before product adoption
+The foundation is built as a production-ready application platform, not as a sequence of placeholders that are finished only when a future screen asks for them. Development, Staging and Production configuration must be wired explicitly; Debug and release behavior, secrets boundaries, diagnostics policy and environment-specific endpoints must be supported without source edits. When an owning phase introduces networking, persistence, caching, authentication, SDUI, actions, realtime, background work or another frozen subsystem, complete the reusable production path in that phase: contracts, implementation, DI, configuration, error/failure handling, cancellation, retries/timeouts/idempotency where applicable, security/redaction, caching/persistence policy, tests and platform integration. The static Splash/bootstrap path must be able to call a configured bootstrap/config endpoint through the canonical network stack and use the response to determine the next semantic destination. After bootstrap, dynamic screens must use one generic SDUI screen-fetch/action pipeline: server-defined actions and bindings trigger the generic action runtime/network path, responses update runtime state/navigation according to protocol semantics, and adding a normal backend-driven screen or button/API action must not require screen-specific Kotlin networking code. Production endpoint values and backend contracts may change through configuration/protocol data; the client architecture must already be complete. "Implement when required" is acceptable only for genuinely product-specific entities, business invariants or vendor capabilities whose concrete contract does not yet exist—not for infrastructure already frozen in this constitution.
 
 ---
 
@@ -359,23 +363,61 @@ Compose Multiplatform / Design System
 Android / iOS / Desktop
 ```
 
+### Production bootstrap and dynamic request path
+
+```text
+Static Splash
+   ↓
+ApplicationRuntime / StartupCoordinator
+   ↓
+Configured bootstrap/config request
+   ↓
+Canonical Network Foundation
+(Ktor + auth + timeout/retry + typed errors + security + cache policy)
+   ↓
+Bootstrap/config response
+   ↓
+Semantic next destination
+   ↓
+Navigation 3 adapter
+   ↓
+Generic SDUI screen request
+   ↓
+Decode -> Validate -> Compatibility -> Normalize -> Runtime IR
+   ↓
+Dynamic MVI Store -> Renderer
+   ↓
+User interaction
+   ↓
+Binding -> Generic Action Runtime
+   ├── API action -> canonical network pipeline
+   ├── Navigation action -> semantic navigation
+   ├── Overlay action -> runtime presentation
+   ├── Capability action -> capability registry
+   └── Business action -> registered business operation
+   ↓
+Result -> Reducer / binding result / semantic navigation / next SDUI request
+```
+
+Normal server-driven screens and actions must flow through this path without adding screen-specific API clients, repositories, ViewModels, navigation wiring or Kotlin button handlers.
+
 ---
 
 # Part D — 17 Master Implementation Phases
 
-The 76 decisions are architecture responsibilities. These 17 phases are the implementation sequence. Module count is independent from phase count.
+The 77 decisions are architecture responsibilities. These 17 phases are the implementation sequence. Module count is independent from phase count.
 
 ## Phase 1 — Repository, Gradle & Build Engineering
-KMP source sets and hosts; Gradle Kotlin DSL; version catalog; convention-plugin direction; dependency governance; build variants/environments; secrets handling; static analysis/formatting; coverage; CI/reproducibility; warning cleanup; platform compile gates.
+KMP source sets and hosts; Gradle Kotlin DSL; version catalog; convention-plugin direction; dependency governance; Development/Staging/Production build/environment model; Debug/release behavior; secrets handling; static analysis/formatting; coverage; CI/reproducibility; warning cleanup; platform compile gates. Build/environment setup must be production-usable rather than a placeholder awaiting release work.
 
 ## Phase 2 — Architecture Kernel & Dependency Governance
 Clean dependency boundaries; MVI/UDF Store/Reducer/Effect contracts; coroutine policies; architecture dependency laws/tests; product-neutral package policy; `expect/actual` policy; prevention of dumping-ground/base-class architecture.
 
 ## Phase 3 — Application Runtime, Lifecycle & Bootstrap
-ApplicationRuntime; application scope; startup coordinator/tasks/registry; startup ordering; cancellation/retry/recovery; cold/warm launch semantics; lifecycle; process restoration strategy; platform bridges; Koin composition-root foundation.
+ApplicationRuntime; application scope; startup coordinator/tasks/registry; startup ordering; cancellation/retry/recovery; cold/warm launch semantics; lifecycle; process restoration strategy; platform bridges; Koin composition-root foundation. Bootstrap contracts must be capable of orchestrating the production config/bootstrap request once the network implementation is supplied in Phase 10.
 
 ## Phase 4 — Configuration, Time, Localization & Feature Control
-Environment/build/network configuration; time/time-zone; localization/formatting/RTL; runtime feature flags and configuration contracts.
+Development/Staging/Production environment/build/network configuration; endpoint/service configuration without source edits; time/time-zone; localization/formatting/RTL; runtime feature flags and configuration contracts.
 
 ## Phase 5 — Security, Authentication, Session & Privacy Foundation
 Secure storage boundary; credentials/tokens; restoration; expiry; single-flight refresh; logout/invalidation; trusted hosts/URIs; secure randomness; redaction/privacy; cancellation/concurrency/security tests.
@@ -387,31 +429,31 @@ Dedicated adaptive ownership; window/container classification; responsive layout
 Semantic destinations and commands; application-owned back stack; Navigation 3 adapter; deep links; guards/prerequisite redirects; pending destinations; adaptive navigation; restoration; SDUI isolation from framework types.
 
 ## Phase 8 — SDUI Protocol & Rendering Runtime
-Envelope/contracts; decoder; strict validation; protocol limits; compatibility; normalization; runtime IR; immutable screen; variable-depth Screen->Template->Component->SubComponent->Child->ChildData; renderer registry; fallback/unsupported behavior.
+Envelope/contracts; decoder; strict validation; protocol limits; compatibility; normalization; runtime IR; immutable screen; variable-depth Screen->Template->Component->SubComponent->Child->ChildData; renderer registry; fallback/unsupported behavior. The protocol/runtime must be production-complete for generic backend-driven screen delivery, not only a fixture decoder.
 
 ## Phase 9 — Binding, Dynamic Forms & Action Runtime
-Typed/redaction-aware binding scopes; dynamic form state/validation; action dispatcher/registry; validation/security/authorization; API/navigation/dialog/sheet/URI/capability semantics; trusted endpoint/idempotency policy.
+Typed/redaction-aware binding scopes; dynamic form state/validation; action dispatcher/registry; validation/security/authorization; API/navigation/dialog/sheet/URI/capability semantics; trusted endpoint/idempotency policy. API actions must be generic and data-driven so ordinary server-defined button/form actions execute without screen-specific Kotlin networking code.
 
-## Phase 10 — Networking, Persistence & Data Infrastructure
-Ktor network foundation; serialization; typed errors; request context; timeout/retry/idempotency; Room 3 KMP; migrations/transactions/health; DataStore preferences; secure-storage data adapters; repository boundaries.
+## Phase 10 — Networking, Persistence, Caching & Data Infrastructure
+Implement the complete production data platform: Ktor client/engines and lifecycle; serialization; typed request/response/error contracts; request context; Development/Staging/Production endpoint resolution; headers/authentication integration; timeout/retry/backoff/idempotency; connectivity-aware behavior where applicable; security/trusted-host/redaction hooks; HTTP/cache policy and reusable cache abstraction; Room 3 KMP database factory/platform drivers/schema/versioning/migrations/transactions/health/error mapping/testing; DataStore Preferences KMP; secure-storage data adapters; repository/data-source boundaries; Koin wiring and observability hooks. Provide the canonical bootstrap/config API execution path and the generic SDUI screen/action API execution path. After this phase, changing configured backend URLs/contracts should not require inventing networking architecture, database infrastructure or caching infrastructure later.
 
 ## Phase 11 — Offline, Sync, Realtime & Resilience
-Connectivity; operation-specific offline policy; outbox; sync coordinator; conflicts; retries/backoff/dedup/idempotency; `RealtimeTransport`; Ktor WebSockets adapter; reconnect/order/dedup/recovery.
+Connectivity; operation-specific offline policy; outbox; sync coordinator; conflicts; retries/backoff/dedup/idempotency; `RealtimeTransport`; Ktor WebSockets adapter; reconnect/order/dedup/recovery. Complete the reusable production mechanisms in this phase; only operation-specific queue/conflict rules wait for actual business semantics.
 
 ## Phase 12 — Platform Capability Layer
-Capability registry/availability; permissions; location; tracking; maps; camera; media; notifications; sharing; external URI; provider isolation and explicit unsupported/restricted behavior across platforms.
+Capability registry/availability; permissions; location; tracking; maps; camera; media; notifications; sharing; external URI; provider isolation and explicit unsupported/restricted behavior across platforms. Frozen generic capability infrastructure is completed here even when a specific product flow has not activated every capability.
 
 ## Phase 13 — Background & Foreground Execution
 Semantic common scheduler; Android WorkManager; Android foreground execution boundary; iOS BackgroundTasks/native modes; Desktop scheduler; constraints/cancellation/uniqueness/recovery and continuous-execution semantics.
 
 ## Phase 14 — Observability, Analytics, Performance & Operational Quality
-Structured logging/correlation/tracing; crash abstraction; analytics separation/sanitization; performance instrumentation; startup/render/network/database/background metrics; freeze/ANR awareness; resource/memory diagnostics.
+Structured logging/correlation/tracing; crash abstraction; analytics separation/sanitization; performance instrumentation; startup/render/network/database/background metrics; freeze/ANR awareness; resource/memory diagnostics. Production and debug/staging diagnostics behavior must be explicitly configured and privacy-safe.
 
 ## Phase 15 — Static Splash + Neutral Reference Vertical Slice
-Real static Splash using MVI/DI/lifecycle/adaptive UI/Navigation 3; startup failure/retry; then a neutral SDUI fixture proving protocol->normalize->binding->render->action->navigation without Partner business logic.
+Real static Splash using MVI/DI/lifecycle/adaptive UI/Navigation 3. Splash/bootstrap executes the configured bootstrap/config request through the canonical network stack, handles loading/failure/retry/cancellation/cache policy as defined, and resolves the next semantic destination from response/runtime state. Then a neutral SDUI fixture/integration path proves protocol->normalize->binding->render->generic action->network/navigation without Partner business logic or screen-specific API wiring.
 
 ## Phase 16 — Verification, Documentation, CI/Release & Architecture Freeze
-Meaningful >=90% coverage where appropriate; positive/negative/boundary/concurrency/cancellation/protocol/migration/UI/adaptive/accessibility/security/performance suites; KDoc; ADRs; dependency diagrams; extension/testing guides; full Android/iOS/Desktop build matrix; final dependency/security/performance audit.
+Meaningful >=90% coverage where appropriate; positive/negative/boundary/concurrency/cancellation/protocol/migration/UI/adaptive/accessibility/security/performance suites; KDoc; ADRs; dependency diagrams; extension/testing guides; full Development/Staging/Production and applicable Debug/release verification; Android/iOS/Desktop build matrix; final dependency/security/performance audit. Verify that no frozen production subsystem remains a TODO, placeholder, fake implementation or "implement when needed" architecture gap.
 
 ## Phase 17 — Foundation Governance, Versioning & Product Adoption
 Version the neutral foundation; establish compatibility/deprecation policy; publish/consume foundation internally for Partner and later Customer; prevent architecture drift; maintain constitution/ADRs; perform periodic dependency/technology/security upgrades without leaking product assumptions into foundation.
@@ -432,7 +474,9 @@ Repair deviations first
    ↓
 Define exact modules/dependencies for the phase
    ↓
-Implement
+Define production-complete acceptance criteria for every frozen subsystem owned by the phase
+   ↓
+Implement complete reusable production path (not placeholder/future TODO)
    ↓
 Delete superseded/duplicate/stale code, modules, resources and dependencies
    ↓
@@ -442,12 +486,12 @@ Tests + Android/iOS/Desktop gates
    ↓
 Repository-wide hygiene/dependency audit
    ↓
-Architecture audit
+Architecture + production-readiness audit
    ↓
 Freeze phase
 ```
 
-A phase/slice is **not frozen merely because it compiles**. Freeze requires proof that the new implementation is the canonical owner, superseded code has been removed, dependencies are minimal, and no unnecessary parallel abstraction remains.
+A phase/slice is **not frozen merely because it compiles**. Freeze requires proof that the new implementation is the canonical owner, superseded code has been removed, dependencies are minimal, no unnecessary parallel abstraction remains, and every infrastructure responsibility assigned to that phase has a complete production-usable path. A TODO/placeholder or "we will implement it when a screen needs it" is not acceptable for frozen infrastructure.
 
 ---
 
@@ -474,17 +518,18 @@ Current repository implementation has useful production work, but the following 
 5. **Keep platform hosts thin while performing the above moves.** No reusable architecture should migrate into Android/iOS/Desktop hosts.
 6. **Preserve all current tests and cross-platform compilation while restructuring.** Migration is not permission to rewrite working behavior. Once behavior is proven equivalent, delete the superseded implementation and migrate tests to the canonical owner.
 7. **After all Phase 1–6 reconciliation work, run a full repository hygiene and optimization audit.** Search for duplicate classes/contracts/packages/modules, stale imports/resources/configuration, unused dependencies, obsolete compatibility code, unnecessary abstractions and avoidable platform-specific implementations. Resolve findings before Phase 7.
+8. **Re-audit completed Phases 1–6 against Decision 77.** Anything already declared as frozen infrastructure must be production-complete for its current responsibility rather than a placeholder. Missing production configuration, DI integration, security/session behavior, environment wiring or platform implementation that belongs to Phases 1–6 must be corrected before Phase 7; responsibilities explicitly owned by later phases remain implemented in those later phases, but may not be deferred beyond their owning phase.
 
 ## Deferred intentionally to later phases
 - Navigation 3 -> Phase 7.
-- SDUI protocol/runtime -> Phase 8.
-- Binding/forms/actions -> Phase 9.
-- Ktor/Room/DataStore data foundation -> Phase 10.
-- Sync/realtime -> Phase 11.
+- SDUI protocol/runtime -> Phase 8, where the generic production screen pipeline must be completed.
+- Binding/forms/actions -> Phase 9, where generic data-driven API/action execution semantics must be completed.
+- Ktor/Room/DataStore/caching data foundation -> Phase 10, where the complete reusable production infrastructure is implemented even if only bootstrap/reference flows initially consume it.
+- Sync/realtime -> Phase 11, with generic production mechanisms completed there and only business-specific policies deferred.
 - Capabilities -> Phase 12.
 - Background execution -> Phase 13.
 - Observability/analytics/performance -> Phase 14.
-- Splash/reference SDUI slice -> Phase 15.
+- Splash/reference SDUI slice -> Phase 15, which must prove the real bootstrap/config and generic dynamic request/action paths rather than mocks standing in for missing infrastructure.
 - final CI/docs/freeze -> Phase 16.
 - foundation versioning/product adoption -> Phase 17.
 
