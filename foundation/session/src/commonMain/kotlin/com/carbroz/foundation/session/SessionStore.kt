@@ -1,6 +1,5 @@
 package com.carbroz.foundation.session
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
