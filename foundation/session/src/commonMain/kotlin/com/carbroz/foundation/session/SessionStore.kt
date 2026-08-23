@@ -36,15 +36,21 @@ class SessionStore(
     }
 
     suspend fun authenticate(session: SessionState.Authenticated): SessionTransitionResult = mutex.withLock {
-        when (val result = persistence.save(session)) {
-            SessionPersistenceResult.Success -> {
-                state = session
-                SessionTransitionResult.Success(state)
-            }
+        persistAndPublish(session)
+    }
 
-            is SessionPersistenceResult.Failed ->
-                SessionTransitionResult.Failed(SessionTransitionFailure.Persistence(result.reason))
-        }
+    /**
+     * Replaces only the token set of the currently authenticated session.
+     *
+     * This keeps [SessionStore] as the sole session state owner. Refresh
+     * orchestration can obtain new credentials independently, but it must apply
+     * them through this boundary so durable and in-memory state cannot diverge.
+     */
+    suspend fun updateTokens(tokens: AuthTokens): SessionTransitionResult = mutex.withLock {
+        val authenticated = state as? SessionState.Authenticated
+            ?: return@withLock SessionTransitionResult.Failed(SessionTransitionFailure.NotAuthenticated)
+
+        persistAndPublish(authenticated.copy(tokens = tokens))
     }
 
     suspend fun signOut(): SessionTransitionResult = mutex.withLock {
@@ -58,6 +64,18 @@ class SessionStore(
                 SessionTransitionResult.Failed(SessionTransitionFailure.Persistence(result.reason))
         }
     }
+
+    private suspend fun persistAndPublish(
+        session: SessionState.Authenticated,
+    ): SessionTransitionResult = when (val result = persistence.save(session)) {
+        SessionPersistenceResult.Success -> {
+            state = session
+            SessionTransitionResult.Success(state)
+        }
+
+        is SessionPersistenceResult.Failed ->
+            SessionTransitionResult.Failed(SessionTransitionFailure.Persistence(result.reason))
+    }
 }
 
 sealed interface SessionTransitionResult {
@@ -68,4 +86,5 @@ sealed interface SessionTransitionResult {
 sealed interface SessionTransitionFailure {
     data class Persistence(val reason: SessionPersistenceFailure) : SessionTransitionFailure
     data class RestoreRejected(val reason: SessionRestoreFailure) : SessionTransitionFailure
+    data object NotAuthenticated : SessionTransitionFailure
 }
