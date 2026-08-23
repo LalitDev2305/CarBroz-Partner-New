@@ -11,6 +11,7 @@ kotlin {
         namespace = "com.carbroz.foundation.designsystem"
         compileSdk = 36
         minSdk = 24
+        withHostTest {}
     }
 
     jvm("desktop")
