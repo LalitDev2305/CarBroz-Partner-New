@@ -9,6 +9,7 @@ kotlin {
         namespace = "com.carbroz.runtime.application"
         compileSdk = 37
         minSdk = 24
+        withHostTest {}
     }
 
     jvm("desktop")
