@@ -9,7 +9,7 @@ detekt = "1.23.8"
 kover = "0.9.9"
 androidxActivity = "1.11.0"
 koinBom = "4.2.2"
-navigation3 = "1.1.2"
+navigation3 = "1.1.1"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
