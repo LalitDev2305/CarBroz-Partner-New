@@ -5,9 +5,9 @@ plugins {
 }
 
 kotlin {
-    androidLibrary {
+    android {
         namespace = "com.carbroz.foundation.session"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 24
         withHostTest {}
     }
