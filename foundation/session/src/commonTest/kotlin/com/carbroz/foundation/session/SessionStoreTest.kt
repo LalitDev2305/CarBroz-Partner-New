@@ -87,6 +87,57 @@ class SessionStoreTest {
     }
 
     @Test
+    fun updateTokensPreservesSubjectAndPersistsBeforePublishing() = runTest {
+        val original = authenticated("subject-a")
+        val replacementTokens = tokens("refreshed")
+        val persistence = FakeSessionPersistence()
+        val store = SessionStore(persistence)
+        store.authenticate(original)
+
+        val result = store.updateTokens(replacementTokens)
+
+        val updated = assertIs<SessionState.Authenticated>(
+            assertIs<SessionTransitionResult.Success>(result).state,
+        )
+        assertEquals(original.subject, updated.subject)
+        assertEquals(replacementTokens, updated.tokens)
+        assertEquals(updated, store.current())
+        assertEquals(updated, persistence.lastSaved)
+    }
+
+    @Test
+    fun updateTokensWhileSignedOutFailsWithoutPersistenceWrite() = runTest {
+        val persistence = FakeSessionPersistence()
+        val store = SessionStore(persistence)
+
+        val result = store.updateTokens(tokens("refreshed"))
+
+        assertEquals(
+            SessionTransitionFailure.NotAuthenticated,
+            assertIs<SessionTransitionResult.Failed>(result).reason,
+        )
+        assertEquals(SessionState.SignedOut, store.current())
+        assertEquals(emptyList(), persistence.savedSessions)
+    }
+
+    @Test
+    fun failedUpdateTokensPreservesPreviousAuthenticatedState() = runTest {
+        val original = authenticated("subject-a")
+        val persistence = FakeSessionPersistence()
+        val store = SessionStore(persistence)
+        store.authenticate(original)
+        persistence.saveResult = SessionPersistenceResult.Failed(SessionPersistenceFailure.StorageUnavailable)
+
+        val result = store.updateTokens(tokens("refreshed"))
+
+        assertEquals(
+            SessionTransitionFailure.Persistence(SessionPersistenceFailure.StorageUnavailable),
+            assertIs<SessionTransitionResult.Failed>(result).reason,
+        )
+        assertEquals(original, store.current())
+    }
+
+    @Test
     fun signOutClearsPersistenceBeforePublishingSignedOut() = runTest {
         val session = authenticated("subject-a")
         val persistence = FakeSessionPersistence()
@@ -133,11 +184,13 @@ class SessionStoreTest {
 
     private fun authenticated(subject: String) = SessionState.Authenticated(
         subject = SessionSubject(subject),
-        tokens = AuthTokens(
-            accessToken = Secret.of("access-$subject"),
-            refreshToken = Secret.of("refresh-$subject"),
-            accessTokenExpiresAtEpochMilliseconds = 123_456L,
-        ),
+        tokens = tokens(subject),
+    )
+
+    private fun tokens(suffix: String) = AuthTokens(
+        accessToken = Secret.of("access-$suffix"),
+        refreshToken = Secret.of("refresh-$suffix"),
+        accessTokenExpiresAtEpochMilliseconds = 123_456L,
     )
 
     private class FakeSessionPersistence(
