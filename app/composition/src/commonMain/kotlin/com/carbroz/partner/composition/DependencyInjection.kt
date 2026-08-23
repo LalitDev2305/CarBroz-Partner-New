@@ -5,6 +5,8 @@ import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleController
 import com.carbroz.foundation.lifecycle.DefaultAppLifecycle
+import com.carbroz.foundation.navigation.NavigationState
+import com.carbroz.foundation.navigation.NavigationStore
 import com.carbroz.foundation.security.SecureStorage
 import com.carbroz.foundation.session.JsonSessionSnapshotCodec
 import com.carbroz.foundation.session.SecureSessionPersistence
@@ -44,6 +46,8 @@ fun carBrozApplicationModule(
     single<SessionProvider> { get<SessionStore>() }
     single { TokenExpiryPolicy(clock = get()) }
     single { SessionRestoreStartupTask(sessionStore = get()) }
+
+    single { NavigationStore(NavigationState(listOf(AppShellDestination))) }
 
     single { DefaultAppLifecycle() } bind AppLifecycleController::class
     single<AppLifecycle> { get<AppLifecycleController>() }
