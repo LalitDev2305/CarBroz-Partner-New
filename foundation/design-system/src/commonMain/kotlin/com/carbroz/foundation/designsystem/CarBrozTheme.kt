@@ -1,10 +1,10 @@
 package com.carbroz.foundation.designsystem
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
@@ -24,12 +24,16 @@ fun CarBrozTheme(
 ) {
     val colors = if (darkTheme) darkColorScheme() else lightColorScheme()
 
-    LocalCarBrozSpacing provides CarBrozSpacing.Default
-    MaterialTheme(
-        colorScheme = colors,
-        typography = Typography(),
-        content = content,
-    )
+    CompositionLocalProvider(
+        LocalCarBrozSpacing provides CarBrozSpacing.Default,
+        LocalInteractionSizing provides InteractionSizing.Default,
+    ) {
+        MaterialTheme(
+            colorScheme = colors,
+            typography = CarBrozTypography.Default,
+            content = content,
+        )
+    }
 }
 
 @Immutable
@@ -54,8 +58,12 @@ data class CarBrozSpacing(
 }
 
 val LocalCarBrozSpacing = staticCompositionLocalOf { CarBrozSpacing.Default }
+val LocalInteractionSizing = staticCompositionLocalOf { InteractionSizing.Default }
 
 object CarBrozDesignSystem {
     val spacing: CarBrozSpacing
         @Composable get() = LocalCarBrozSpacing.current
+
+    val interactionSizing: InteractionSizing
+        @Composable get() = LocalInteractionSizing.current
 }
