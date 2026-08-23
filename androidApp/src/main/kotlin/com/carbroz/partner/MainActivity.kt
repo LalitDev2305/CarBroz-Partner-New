@@ -5,21 +5,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.carbroz.partner.composition.AppLifecycleBridge
 import com.carbroz.partner.composition.CarBrozApp
-import com.carbroz.partner.composition.createCarBrozAppConfiguration
-import com.carbroz.partner.composition.initializeCarBrozDependencyInjection
+import com.carbroz.partner.composition.initializeCarBrozAndroidApplication
 
 /** Android host entry point. Reusable application behavior belongs in KMP modules. */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        initializeCarBrozDependencyInjection(
-            configuration = createCarBrozAppConfiguration(
-                environment = BuildConfig.CARBROZ_ENVIRONMENT,
-                apiBaseUrl = BuildConfig.CARBROZ_API_BASE_URL,
-                versionName = BuildConfig.VERSION_NAME,
-                versionCode = BuildConfig.VERSION_CODE.toLong(),
-                applicationId = BuildConfig.APPLICATION_ID,
-            ),
+        initializeCarBrozAndroidApplication(
+            context = applicationContext,
+            environment = BuildConfig.CARBROZ_ENVIRONMENT,
+            apiBaseUrl = BuildConfig.CARBROZ_API_BASE_URL,
+            versionName = BuildConfig.VERSION_NAME,
+            versionCode = BuildConfig.VERSION_CODE.toLong(),
+            applicationId = BuildConfig.APPLICATION_ID,
         )
         setContent { CarBrozApp() }
     }
