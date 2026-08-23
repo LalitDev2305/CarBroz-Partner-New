@@ -2,7 +2,7 @@ package com.carbroz.partner.desktop
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import com.carbroz.partner.shared.CarBrozApp
+import com.carbroz.partner.composition.CarBrozApp
 
 /** Desktop host entry point. */
 fun main() = application {
