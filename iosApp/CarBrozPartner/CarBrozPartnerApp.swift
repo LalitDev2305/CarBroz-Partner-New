@@ -6,7 +6,20 @@ struct CarBrozPartnerApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        DependencyInjectionKt.initializeCarBrozDependencyInjection()
+        let environment = Bundle.main.object(forInfoDictionaryKey: "CarBrozEnvironment") as? String ?? ""
+        let apiBaseUrl = Bundle.main.object(forInfoDictionaryKey: "CarBrozApiBaseUrl") as? String ?? ""
+        let versionName = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let versionCodeString = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        let versionCode = Int64(versionCodeString) ?? 0
+        let applicationId = Bundle.main.bundleIdentifier ?? ""
+
+        IosApplicationBootstrapKt.initializeCarBrozIosApplication(
+            environment: environment,
+            apiBaseUrl: apiBaseUrl,
+            versionName: versionName,
+            versionCode: versionCode,
+            applicationId: applicationId
+        )
     }
 
     var body: some Scene {
