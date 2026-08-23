@@ -2,6 +2,7 @@ package com.carbroz.foundation.designsystem
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
@@ -39,7 +40,8 @@ fun AdaptiveLayoutProvider(
             heightClass = AdaptiveLayoutClassifier.heightClass(maxHeight),
         )
 
-        LocalAdaptiveEnvironment provides environment
-        content()
+        CompositionLocalProvider(LocalAdaptiveEnvironment provides environment) {
+            content()
+        }
     }
 }
