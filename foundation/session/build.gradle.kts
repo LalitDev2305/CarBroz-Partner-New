@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidKmpLibrary)
+    alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.kover)
 }
 
@@ -21,6 +22,7 @@ kotlin {
             implementation(project(":foundation:security"))
             implementation(project(":foundation:time"))
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
