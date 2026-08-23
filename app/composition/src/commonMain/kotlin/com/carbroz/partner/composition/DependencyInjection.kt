@@ -1,5 +1,7 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.foundation.configuration.AppConfiguration
+import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleController
 import com.carbroz.foundation.lifecycle.DefaultAppLifecycle
@@ -11,14 +13,11 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
-/**
- * Canonical application composition module.
- *
- * Each subsystem continues to own its contracts and implementations; this module
- * only assembles those dependencies at the outer application boundary. New
- * subsystem modules are included here as their owning architecture phases land.
- */
-val carBrozApplicationModule = module {
+/** Canonical application composition module for one validated process configuration. */
+fun carBrozApplicationModule(configuration: AppConfiguration) = module {
+    single { configuration }
+    single<ConfigurationProvider> { ConfigurationProvider { get<AppConfiguration>() } }
+
     single { DefaultAppLifecycle() } bind AppLifecycleController::class
     single<AppLifecycle> { get<AppLifecycleController>() }
 
@@ -29,19 +28,14 @@ val carBrozApplicationModule = module {
 /**
  * Starts the single process-wide Koin container used by all platform hosts.
  *
- * Initialization is idempotent because Android activities and other host entry
- * points may be recreated while the process remains alive. Definition override
- * is disabled so duplicate ownership fails instead of silently replacing a
- * canonical dependency.
- *
- * Koin itself remains an implementation detail of the composition boundary;
- * platform hosts initialize the graph but do not receive or depend on [org.koin.core.Koin].
+ * The supplied [configuration] has already crossed the mandatory configuration-validation boundary.
+ * Initialization is process-idempotent; subsequent host recreation cannot replace the canonical graph.
  */
-fun initializeCarBrozDependencyInjection() {
+fun initializeCarBrozDependencyInjection(configuration: AppConfiguration) {
     if (KoinPlatform.getKoinOrNull() != null) return
 
     startKoin {
         allowOverride(false)
-        modules(carBrozApplicationModule)
+        modules(carBrozApplicationModule(configuration))
     }
 }
