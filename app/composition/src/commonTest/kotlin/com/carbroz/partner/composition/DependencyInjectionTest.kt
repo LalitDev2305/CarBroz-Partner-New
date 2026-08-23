@@ -5,6 +5,7 @@ import com.carbroz.foundation.lifecycle.AppLifecycleController
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import org.koin.core.context.stopKoin
 import org.koin.dsl.koinApplication
@@ -34,9 +35,12 @@ class DependencyInjectionTest {
         KoinPlatform.getKoinOrNull()?.let { stopKoin() }
 
         try {
-            val first = initializeCarBrozDependencyInjection()
-            val second = initializeCarBrozDependencyInjection()
+            initializeCarBrozDependencyInjection()
+            val first = KoinPlatform.getKoinOrNull()
+            initializeCarBrozDependencyInjection()
+            val second = KoinPlatform.getKoinOrNull()
 
+            assertNotNull(first)
             assertSame(first, second)
         } finally {
             KoinPlatform.getKoinOrNull()?.let { stopKoin() }
