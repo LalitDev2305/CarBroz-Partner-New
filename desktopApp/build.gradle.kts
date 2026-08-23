@@ -10,7 +10,7 @@ kotlin {
     sourceSets {
         val desktopMain by getting {
             dependencies {
-                implementation(project(":app:shared"))
+                implementation(project(":app:composition"))
                 implementation(compose.desktop.currentOs)
             }
         }
