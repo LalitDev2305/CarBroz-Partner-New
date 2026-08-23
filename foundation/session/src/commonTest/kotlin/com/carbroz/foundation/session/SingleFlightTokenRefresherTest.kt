@@ -85,15 +85,14 @@ class SingleFlightTokenRefresherTest {
     }
 
     @Test
-    fun `unexpected delegate throwable becomes typed failure`() = runTest {
-        val delegate = TokenRefresher { error("boom") }
+    fun `unexpected delegate throwable becomes sanitized failure`() = runTest {
+        val delegate = TokenRefresher { error("secret-response-body") }
         val refresher = SingleFlightTokenRefresher(delegate, backgroundScope)
 
         val result = refresher.refresh(tokens("old-access"))
 
         val failed = assertIs<TokenRefreshResult.Failed>(result)
-        val unexpected = assertIs<TokenRefreshFailure.Unexpected>(failed.reason)
-        assertEquals("boom", unexpected.reason)
+        assertEquals(TokenRefreshFailure.Unexpected, failed.reason)
     }
 
     @Test
