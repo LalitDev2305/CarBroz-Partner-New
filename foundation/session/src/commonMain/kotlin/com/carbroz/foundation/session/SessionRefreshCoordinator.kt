@@ -50,12 +50,10 @@ class SessionRefreshCoordinator(
             tokenRefresher.refresh(tokens)
         } catch (cancellation: CancellationException) {
             throw cancellation
-        } catch (throwable: Throwable) {
-            TokenRefreshResult.Failed(
-                TokenRefreshFailure.Unexpected(
-                    throwable.message ?: throwable::class.simpleName ?: "Unexpected refresh failure",
-                ),
-            )
+        } catch (_: Throwable) {
+            // Never surface Throwable.message here: it may contain response data,
+            // credentials, identifiers or other sensitive implementation detail.
+            TokenRefreshResult.Failed(TokenRefreshFailure.Unexpected)
         }
 }
 
