@@ -5,9 +5,9 @@ plugins {
 }
 
 kotlin {
-    androidLibrary {
+    android {
         namespace = "com.carbroz.foundation.time"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 24
     }
 
