@@ -1,3 +1,5 @@
+@file:Suppress("CAST_NEVER_SUCCEEDS")
+
 package com.carbroz.foundation.security
 
 import kotlinx.cinterop.BetaInteropApi
@@ -127,10 +129,7 @@ class KeychainSecureStorage(
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 @Suppress("UNCHECKED_CAST")
 private fun dictionaryOf(vararg entries: Pair<Any?, Any?>): CFDictionaryRef =
-    NSDictionary(
-        objects = entries.map { it.second },
-        forKeys = entries.map { it.first },
-    ) as CFDictionaryRef
+    entries.toMap() as NSDictionary as CFDictionaryRef
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 private fun ByteArray.toNSData(): NSData =
