@@ -11,6 +11,8 @@ import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryRef
 import platform.CoreFoundation.CFTypeRefVar
 import platform.Foundation.NSData
+import platform.Foundation.NSDictionary
+import platform.Foundation.NSMutableDictionary
 import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.create
@@ -20,8 +22,8 @@ import platform.Security.SecItemDelete
 import platform.Security.SecItemUpdate
 import platform.Security.errSecItemNotFound
 import platform.Security.errSecSuccess
-import platform.Security.kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 import platform.Security.kSecAttrAccessible
+import platform.Security.kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 import platform.Security.kSecAttrAccount
 import platform.Security.kSecAttrService
 import platform.Security.kSecClass
@@ -34,10 +36,10 @@ import platform.Security.kSecValueData
 /**
  * Apple Keychain-backed [SecureStorage].
  *
- * This is intentionally an iOS-only adapter. The storage contract and all
- * session/authentication behaviour remain in common Kotlin code.
+ * Only the unavoidable Apple storage adapter lives in `iosMain`; the contract
+ * and all authentication/session policy remain in common Kotlin code.
  */
-@OptIn(ExperimentalForeignApi::class)
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class KeychainSecureStorage(
     private val service: String = "com.carbroz.partner",
 ) : SecureStorage {
@@ -63,24 +65,23 @@ class KeychainSecureStorage(
 
     override suspend fun write(key: SecureKey, value: String) {
         val data = value.encodeToByteArray().toNSData()
+        val updateAttributes = NSDictionary.dictionaryWithObject(data, forKey = kSecValueData)
         val updateStatus = SecItemUpdate(
             query(key),
-            mapOf(kSecValueData to data) as CFDictionaryRef,
+            updateAttributes,
         )
 
         when (updateStatus) {
             errSecSuccess -> Unit
             errSecItemNotFound -> {
-                val addStatus = SecItemAdd(
-                    mapOf(
-                        kSecClass to kSecClassGenericPassword,
-                        kSecAttrService to service,
-                        kSecAttrAccount to key.value,
-                        kSecAttrAccessible to kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-                        kSecValueData to data,
-                    ) as CFDictionaryRef,
-                    null,
-                )
+                val addQuery = NSMutableDictionary()
+                addQuery[kSecClass] = kSecClassGenericPassword
+                addQuery[kSecAttrService] = service
+                addQuery[kSecAttrAccount] = key.value
+                addQuery[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                addQuery[kSecValueData] = data
+
+                val addStatus = SecItemAdd(addQuery, null)
                 if (addStatus != errSecSuccess) keychainFailure("write", key, addStatus)
             }
             else -> keychainFailure("write", key, updateStatus)
@@ -95,29 +96,26 @@ class KeychainSecureStorage(
     }
 
     override suspend fun clear() {
-        val status = SecItemDelete(
-            mapOf(
-                kSecClass to kSecClassGenericPassword,
-                kSecAttrService to service,
-            ) as CFDictionaryRef,
-        )
+        val clearQuery = NSMutableDictionary()
+        clearQuery[kSecClass] = kSecClassGenericPassword
+        clearQuery[kSecAttrService] = service
+
+        val status = SecItemDelete(clearQuery)
         if (status != errSecSuccess && status != errSecItemNotFound) {
             error("Keychain clear failed with OSStatus $status.")
         }
     }
 
     private fun query(key: SecureKey, returnData: Boolean = false): CFDictionaryRef {
-        val values = mutableMapOf<Any?, Any?>(
-            kSecClass to kSecClassGenericPassword,
-            kSecAttrService to service,
-            kSecAttrAccount to key.value,
-        )
+        val query = NSMutableDictionary()
+        query[kSecClass] = kSecClassGenericPassword
+        query[kSecAttrService] = service
+        query[kSecAttrAccount] = key.value
         if (returnData) {
-            values[kSecReturnData] = true
-            values[kSecMatchLimit] = kSecMatchLimitOne
+            query[kSecReturnData] = true
+            query[kSecMatchLimit] = kSecMatchLimitOne
         }
-        @Suppress("UNCHECKED_CAST")
-        return values as CFDictionaryRef
+        return query
     }
 
     private fun keychainFailure(operation: String, key: SecureKey, status: Int): Nothing =
