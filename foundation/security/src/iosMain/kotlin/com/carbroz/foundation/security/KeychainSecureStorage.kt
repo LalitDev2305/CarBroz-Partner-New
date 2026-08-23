@@ -4,6 +4,7 @@ import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.cValuesOf
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.usePinned
@@ -125,10 +126,10 @@ class KeychainSecureStorage(
 }
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-private fun dictionaryOf(vararg entries: Pair<Any?, Any?>): CFDictionaryRef = memScoped {
-    val keys = allocArrayOf(*entries.map { it.first }.toTypedArray())
-    val values = allocArrayOf(*entries.map { it.second }.toTypedArray())
-    CFDictionaryCreate(
+private fun dictionaryOf(vararg entries: Pair<Any?, Any?>): CFDictionaryRef {
+    val keys = cValuesOf(*entries.map { it.first }.toTypedArray())
+    val values = cValuesOf(*entries.map { it.second }.toTypedArray())
+    return CFDictionaryCreate(
         allocator = null,
         keys = keys,
         values = values,
