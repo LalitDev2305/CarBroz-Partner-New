@@ -1,5 +1,6 @@
 package com.carbroz.foundation.designsystem
 
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,6 +54,26 @@ class AdaptiveLayoutClassifierTest {
         }
         assertFailsWith<IllegalArgumentException> {
             AdaptiveLayoutClassifier.classify(width = 100.dp, height = (-1).dp)
+        }
+    }
+
+    @Test
+    fun unspecifiedAvailableSizeIsRejected() {
+        assertFailsWith<IllegalArgumentException> {
+            AdaptiveLayoutClassifier.classify(width = Dp.Unspecified, height = 100.dp)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AdaptiveLayoutClassifier.classify(width = 100.dp, height = Dp.Unspecified)
+        }
+    }
+
+    @Test
+    fun infiniteAvailableSizeIsRejected() {
+        assertFailsWith<IllegalArgumentException> {
+            AdaptiveLayoutClassifier.classify(width = Dp.Infinity, height = 100.dp)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AdaptiveLayoutClassifier.classify(width = 100.dp, height = Dp.Infinity)
         }
     }
 }
