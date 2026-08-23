@@ -5,15 +5,14 @@ import com.carbroz.foundation.security.SecureStorage
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Explicit Desktop secure-storage policy for the current foundation.
+ * Explicit production Desktop secure-storage policy.
  *
- * Secrets are retained in process memory only and are never written to disk. This is a deliberate
- * fail-safe policy until a reviewed OS credential-vault adapter is selected for each supported
- * desktop operating system. The provider is fully functional for an authenticated process, but
- * sessions intentionally do not survive process termination.
+ * Credentials are process-ephemeral by design: secrets are retained in memory only and are never
+ * written to disk, so Desktop sessions intentionally require authentication again after process
+ * termination. This is a complete fail-closed policy, not a plaintext persistence fallback.
  *
- * This class must not be replaced with plaintext preferences/files. Persistent Desktop credentials
- * require an OS-backed credential provider and an architecture update documenting that provider.
+ * If persistent Desktop credentials become a product requirement, they require an OS-backed
+ * credential-vault provider and an architecture update; plaintext preferences/files are forbidden.
  */
 class EphemeralDesktopSecureStorage : SecureStorage {
     private val values = ConcurrentHashMap<String, String>()
