@@ -6,12 +6,14 @@ import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import kotlin.test.Test
 import kotlin.test.assertSame
-import org.koin.core.context.startKoin
+import org.koin.core.context.GlobalContext
+import org.koin.core.context.stopKoin
+import org.koin.dsl.koinApplication
 
 class DependencyInjectionTest {
     @Test
     fun applicationModuleResolvesCanonicalRuntimeGraph() {
-        val application = startKoin {
+        val application = koinApplication {
             modules(carBrozApplicationModule)
         }
 
@@ -24,6 +26,20 @@ class DependencyInjectionTest {
             koin.get<ApplicationRuntime>()
         } finally {
             application.close()
+        }
+    }
+
+    @Test
+    fun processInitializerIsIdempotent() {
+        GlobalContext.getOrNull()?.let { stopKoin() }
+
+        try {
+            val first = initializeCarBrozDependencyInjection()
+            val second = initializeCarBrozDependencyInjection()
+
+            assertSame(first, second)
+        } finally {
+            GlobalContext.getOrNull()?.let { stopKoin() }
         }
     }
 }
