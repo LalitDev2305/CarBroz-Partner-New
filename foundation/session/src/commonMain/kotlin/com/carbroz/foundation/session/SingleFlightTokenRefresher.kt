@@ -1,7 +1,9 @@
 package com.carbroz.foundation.session
 
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -14,6 +16,7 @@ import kotlinx.coroutines.sync.withLock
  */
 class SingleFlightTokenRefresher(
     private val delegate: TokenRefresher,
+    private val scope: CoroutineScope,
 ) : TokenRefresher {
     private val mutex = Mutex()
     private var inFlight: CompletableDeferred<TokenRefreshResult>? = null
@@ -22,31 +25,24 @@ class SingleFlightTokenRefresher(
         val deferred = mutex.withLock {
             inFlight?.let { return@withLock it }
 
-            CompletableDeferred<TokenRefreshResult>().also {
-                inFlight = it
-            }
-        }
-
-        if (!deferred.isCompleted) {
-            val shouldExecute = mutex.withLock { inFlight === deferred && !deferred.isCompleted }
-            if (shouldExecute) {
-                try {
-                    deferred.complete(delegate.refresh(current))
-                } catch (cancellation: CancellationException) {
-                    deferred.completeExceptionally(cancellation)
-                    throw cancellation
-                } catch (throwable: Throwable) {
-                    deferred.complete(
-                        TokenRefreshResult.Failed(
-                            TokenRefreshFailure.Unexpected(
-                                throwable.message ?: throwable::class.simpleName ?: "Unexpected refresh failure",
+            CompletableDeferred<TokenRefreshResult>().also { created ->
+                inFlight = created
+                scope.launch(SupervisorJob()) {
+                    try {
+                        created.complete(delegate.refresh(current))
+                    } catch (throwable: Throwable) {
+                        created.complete(
+                            TokenRefreshResult.Failed(
+                                TokenRefreshFailure.Unexpected(
+                                    throwable.message ?: throwable::class.simpleName ?: "Unexpected refresh failure",
+                                ),
                             ),
-                        ),
-                    )
-                } finally {
-                    mutex.withLock {
-                        if (inFlight === deferred) {
-                            inFlight = null
+                        )
+                    } finally {
+                        mutex.withLock {
+                            if (inFlight === created) {
+                                inFlight = null
+                            }
                         }
                     }
                 }
