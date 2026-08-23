@@ -2,14 +2,11 @@ package com.carbroz.foundation.session
 
 import com.carbroz.foundation.security.Secret
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,11 +18,13 @@ class SingleFlightTokenRefresherTest {
 
     @Test
     fun `concurrent callers share one delegate refresh and same result`() = runTest {
+        val started = CompletableDeferred<Unit>()
         val gate = CompletableDeferred<Unit>()
         var calls = 0
         val expected = TokenRefreshResult.Success(tokens("new-access"))
         val delegate = TokenRefresher {
             calls += 1
+            started.complete(Unit)
             gate.await()
             expected
         }
@@ -33,10 +32,12 @@ class SingleFlightTokenRefresherTest {
 
         val first = async { refresher.refresh(tokens("old-access")) }
         val second = async { refresher.refresh(tokens("old-access")) }
-        advanceUntilIdle()
+        runCurrent()
+        started.await()
 
         assertEquals(1, calls)
         gate.complete(Unit)
+        runCurrent()
 
         assertSame(expected, first.await())
         assertSame(expected, second.await())
@@ -45,11 +46,13 @@ class SingleFlightTokenRefresherTest {
 
     @Test
     fun `cancelled waiter does not cancel shared delegate refresh`() = runTest {
+        val started = CompletableDeferred<Unit>()
         val gate = CompletableDeferred<Unit>()
         var calls = 0
         val expected = TokenRefreshResult.Success(tokens("new-access"))
         val delegate = TokenRefresher {
             calls += 1
+            started.complete(Unit)
             gate.await()
             expected
         }
@@ -57,11 +60,13 @@ class SingleFlightTokenRefresherTest {
 
         val cancelledWaiter = launch { refresher.refresh(tokens("old-access")) }
         val survivingWaiter = async { refresher.refresh(tokens("old-access")) }
-        advanceUntilIdle()
+        runCurrent()
+        started.await()
 
         assertEquals(1, calls)
         cancelledWaiter.cancelAndJoin()
         gate.complete(Unit)
+        runCurrent()
 
         assertSame(expected, survivingWaiter.await())
         assertEquals(1, calls)
