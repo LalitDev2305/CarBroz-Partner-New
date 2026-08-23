@@ -7,10 +7,10 @@ import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.DefaultApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import org.koin.core.Koin
-import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatform
 
 /**
  * Canonical application composition module.
@@ -36,7 +36,7 @@ val carBrozApplicationModule = module {
  * canonical dependency.
  */
 fun initializeCarBrozDependencyInjection(): Koin {
-    GlobalContext.getOrNull()?.let { return it }
+    KoinPlatform.getKoinOrNull()?.let { return it }
 
     return startKoin {
         allowOverride(false)
