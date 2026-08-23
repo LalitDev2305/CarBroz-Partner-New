@@ -39,6 +39,12 @@ object AdaptiveLayoutClassifier {
     val ExpandedHeightBreakpoint: Dp = 900.dp
 
     fun classify(width: Dp, height: Dp): AdaptiveLayoutInfo {
+        require(width.isSpecified && width.value.isFinite()) {
+            "Available width must be a specified finite value."
+        }
+        require(height.isSpecified && height.value.isFinite()) {
+            "Available height must be a specified finite value."
+        }
         require(width >= 0.dp) { "Available width must not be negative." }
         require(height >= 0.dp) { "Available height must not be negative." }
 
