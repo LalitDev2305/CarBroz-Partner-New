@@ -2,6 +2,7 @@ package com.carbroz.foundation.session
 
 import com.carbroz.foundation.security.SecureKey
 import com.carbroz.foundation.security.SecureStorage
+import kotlinx.coroutines.CancellationException
 
 /**
  * Persistence boundary for the authenticated session snapshot.
@@ -70,6 +71,8 @@ sealed interface SessionSnapshotDecodeResult {
  *
  * One key is used deliberately so credential rotation never relies on multiple
  * independently persisted token fields being updated successfully in sequence.
+ * Coroutine cancellation is always propagated and is never converted into a
+ * storage or codec failure.
  */
 class SecureSessionPersistence(
     private val secureStorage: SecureStorage,
@@ -78,11 +81,21 @@ class SecureSessionPersistence(
     override suspend fun restore(): SessionRestoreResult {
         val encoded = try {
             secureStorage.read(SESSION_SNAPSHOT_KEY)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (_: Throwable) {
             return SessionRestoreResult.Rejected(SessionRestoreFailure.StorageUnavailable)
         } ?: return SessionRestoreResult.NoSession
 
-        return when (val decoded = codec.decode(encoded)) {
+        val decoded = try {
+            codec.decode(encoded)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            SessionSnapshotDecodeResult.Malformed
+        }
+
+        return when (decoded) {
             is SessionSnapshotDecodeResult.Decoded -> SessionRestoreResult.Restored(decoded.session)
             SessionSnapshotDecodeResult.Malformed -> SessionRestoreResult.Rejected(SessionRestoreFailure.MalformedSnapshot)
             SessionSnapshotDecodeResult.UnsupportedVersion ->
@@ -91,15 +104,23 @@ class SecureSessionPersistence(
     }
 
     override suspend fun save(session: SessionState.Authenticated): SessionPersistenceResult {
-        val encoded = when (val result = codec.encode(session)) {
-            is SessionSnapshotEncodeResult.Encoded -> result.value
-            SessionSnapshotEncodeResult.Failed ->
-                return SessionPersistenceResult.Failed(SessionPersistenceFailure.EncodingFailed)
+        val encoded = try {
+            when (val result = codec.encode(session)) {
+                is SessionSnapshotEncodeResult.Encoded -> result.value
+                SessionSnapshotEncodeResult.Failed ->
+                    return SessionPersistenceResult.Failed(SessionPersistenceFailure.EncodingFailed)
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            return SessionPersistenceResult.Failed(SessionPersistenceFailure.EncodingFailed)
         }
 
         return try {
             secureStorage.write(SESSION_SNAPSHOT_KEY, encoded)
             SessionPersistenceResult.Success
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (_: Throwable) {
             SessionPersistenceResult.Failed(SessionPersistenceFailure.StorageUnavailable)
         }
@@ -108,6 +129,8 @@ class SecureSessionPersistence(
     override suspend fun clear(): SessionPersistenceResult = try {
         secureStorage.remove(SESSION_SNAPSHOT_KEY)
         SessionPersistenceResult.Success
+    } catch (cancellation: CancellationException) {
+        throw cancellation
     } catch (_: Throwable) {
         SessionPersistenceResult.Failed(SessionPersistenceFailure.StorageUnavailable)
     }
