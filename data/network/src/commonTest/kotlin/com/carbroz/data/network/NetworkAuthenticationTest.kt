@@ -74,7 +74,7 @@ class NetworkAuthenticationTest {
         assertIs<NetworkResult.Success>(result)
         assertEquals(2, attempts)
         assertEquals(1, recoveries)
-        assertEquals(listOf("Bearer old-token", "Bearer new-token"), seenAuthorization)
+        assertEquals<List<String?>>(listOf("Bearer old-token", "Bearer new-token"), seenAuthorization)
     }
 
     @Test
