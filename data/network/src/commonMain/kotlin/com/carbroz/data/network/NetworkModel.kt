@@ -44,7 +44,7 @@ sealed interface NetworkFailure {
     data object Offline : NetworkFailure
     data object Timeout : NetworkFailure
     data class Http(val statusCode: Int, val body: JsonElement? = null) : NetworkFailure
-    data class Transport(val reason: String? = null) : NetworkFailure
+    data object Transport : NetworkFailure
     data class InvalidRequest(val reason: String) : NetworkFailure
 }
 
