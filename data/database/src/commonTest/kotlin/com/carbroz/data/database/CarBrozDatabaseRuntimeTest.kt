@@ -35,7 +35,7 @@ class CarBrozDatabaseRuntimeTest {
         val database = createTestDatabase()
 
         try {
-            val health = DatabaseHealthCheck(database).check()
+            val health = RoomDatabaseHealthCheck(database).check()
             assertTrue(health is DatabaseHealth.Healthy)
         } finally {
             database.close()
