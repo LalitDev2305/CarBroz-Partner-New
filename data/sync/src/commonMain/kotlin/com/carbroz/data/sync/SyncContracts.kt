@@ -49,5 +49,5 @@ fun interface SyncConflictResolver {
 }
 
 fun interface SyncCoordinator {
-    suspend fun synchronize(trigger: SyncTrigger = SyncTrigger.MANUAL): SyncReport
+    suspend fun synchronize(trigger: SyncTrigger): SyncReport
 }
