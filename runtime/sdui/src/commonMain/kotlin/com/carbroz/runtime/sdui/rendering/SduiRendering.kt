@@ -1,6 +1,7 @@
 package com.carbroz.runtime.sdui.rendering
 
 import androidx.compose.runtime.Composable
+import com.carbroz.runtime.sdui.extension.SduiDefinition
 import com.carbroz.runtime.sdui.model.Component
 import com.carbroz.runtime.sdui.model.ComponentContent
 import com.carbroz.runtime.sdui.model.Element
@@ -13,11 +14,9 @@ import com.carbroz.runtime.sdui.model.Screen
 import com.carbroz.runtime.sdui.model.Section
 import com.carbroz.runtime.sdui.model.SectionContent
 import com.carbroz.runtime.sdui.model.Template
+import com.carbroz.runtime.sdui.registry.SduiRegistry
 
-/**
- * UI-only event emitted by SDUI renderers. It intentionally carries no execution behavior.
- * The owning MVI/runtime layer decides what to do with the event and the command attached to the node.
- */
+/** UI-only events. Command execution remains outside Compose rendering. */
 sealed interface SduiRenderEvent {
     val path: NodePath
 
@@ -33,27 +32,44 @@ data class SduiRenderContext(
     val events: SduiEventSink,
 )
 
-/** Compose renderer owned by the same atomic definition that owns property decoding. */
-interface SduiRenderer<P : NodeProperties, N : Any> {
+/**
+ * Rendering is type-erased only at the registry boundary. Each atomic definition owns the safe typed cast
+ * between its normalized property model and its renderer, so the dispatcher never performs generic casts.
+ */
+interface RenderableSduiDefinition {
     @Composable
-    fun Render(node: N, properties: P, context: SduiRenderContext, children: @Composable () -> Unit)
+    fun RenderTemplate(node: Template, context: SduiRenderContext, children: @Composable () -> Unit): Boolean = false
+
+    @Composable
+    fun RenderComponent(node: Component, context: SduiRenderContext, children: @Composable () -> Unit): Boolean = false
+
+    @Composable
+    fun RenderSection(node: Section, context: SduiRenderContext, children: @Composable () -> Unit): Boolean = false
+
+    @Composable
+    fun RenderGroup(node: Group, context: SduiRenderContext, children: @Composable () -> Unit): Boolean = false
+
+    @Composable
+    fun RenderElement(node: Element, context: SduiRenderContext): Boolean = false
 }
 
-interface RenderableSduiDefinition<P : NodeProperties, N : Any> {
-    val renderer: SduiRenderer<P, N>
+/** Convenience base for typed definitions. Concrete definitions implement only their own node kind. */
+abstract class TypedRenderableDefinition<P : NodeProperties>(
+    private val propertyType: kotlin.reflect.KClass<P>,
+) : RenderableSduiDefinition {
+    protected fun properties(value: NodeProperties): P? =
+        if (propertyType.isInstance(value)) propertyType.cast(value) else null
 }
 
 sealed interface SduiRenderFailure {
     data class MissingDefinition(val kind: NodeKind, val type: NodeType, val path: NodePath) : SduiRenderFailure
     data class DefinitionIsNotRenderable(val kind: NodeKind, val type: NodeType, val path: NodePath) : SduiRenderFailure
+    data class DefinitionRejectedNode(val kind: NodeKind, val type: NodeType, val path: NodePath) : SduiRenderFailure
 }
 
-/**
- * Central traversal/dispatch boundary. Structural definitions decide layout; traversal remains centralized.
- * No renderer performs networking, navigation, command execution, or business work.
- */
+/** Central structural traversal and definition dispatch. */
 class SduiRendererDispatcher(
-    private val lookup: (NodeKind, NodeType) -> Any?,
+    private val registry: SduiRegistry,
 ) {
     @Composable
     fun RenderScreen(screen: Screen, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
@@ -62,65 +78,71 @@ class SduiRendererDispatcher(
 
     @Composable
     private fun renderTemplate(node: Template, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
-        render(NodeKind.TEMPLATE, node.type, node.path, node.properties, node, context, onFailure) {
-            node.components.forEach { renderComponent(it, context, onFailure) }
+        dispatch(NodeKind.TEMPLATE, node.type, node.path, onFailure) { definition ->
+            definition.RenderTemplate(node, context) {
+                node.components.forEach { renderComponent(it, context, onFailure) }
+            }
         }
     }
 
     @Composable
     private fun renderComponent(node: Component, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
-        render(NodeKind.COMPONENT, node.type, node.path, node.properties, node, context, onFailure) {
-            when (val content = node.content) {
-                is ComponentContent.Sections -> content.values.forEach { renderSection(it, context, onFailure) }
-                is ComponentContent.Elements -> content.values.forEach { renderElement(it, context, onFailure) }
+        dispatch(NodeKind.COMPONENT, node.type, node.path, onFailure) { definition ->
+            definition.RenderComponent(node, context) {
+                when (val content = node.content) {
+                    is ComponentContent.Sections -> content.values.forEach { renderSection(it, context, onFailure) }
+                    is ComponentContent.Elements -> content.values.forEach { renderElement(it, context, onFailure) }
+                }
             }
         }
     }
 
     @Composable
     private fun renderSection(node: Section, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
-        render(NodeKind.SECTION, node.type, node.path, node.properties, node, context, onFailure) {
-            when (val content = node.content) {
-                is SectionContent.Groups -> content.values.forEach { renderGroup(it, context, onFailure) }
-                is SectionContent.Elements -> content.values.forEach { renderElement(it, context, onFailure) }
+        dispatch(NodeKind.SECTION, node.type, node.path, onFailure) { definition ->
+            definition.RenderSection(node, context) {
+                when (val content = node.content) {
+                    is SectionContent.Groups -> content.values.forEach { renderGroup(it, context, onFailure) }
+                    is SectionContent.Elements -> content.values.forEach { renderElement(it, context, onFailure) }
+                }
             }
         }
     }
 
     @Composable
     private fun renderGroup(node: Group, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
-        render(NodeKind.GROUP, node.type, node.path, node.properties, node, context, onFailure) {
-            node.elements.forEach { renderElement(it, context, onFailure) }
+        dispatch(NodeKind.GROUP, node.type, node.path, onFailure) { definition ->
+            definition.RenderGroup(node, context) {
+                node.elements.forEach { renderElement(it, context, onFailure) }
+            }
         }
     }
 
     @Composable
     private fun renderElement(node: Element, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
-        render(NodeKind.ELEMENT, node.type, node.path, node.properties, node, context, onFailure) {}
+        dispatch(NodeKind.ELEMENT, node.type, node.path, onFailure) { definition ->
+            definition.RenderElement(node, context)
+        }
     }
 
     @Composable
-    @Suppress("UNCHECKED_CAST")
-    private fun <P : NodeProperties, N : Any> render(
+    private fun dispatch(
         kind: NodeKind,
         type: NodeType,
         path: NodePath,
-        properties: P,
-        node: N,
-        context: SduiRenderContext,
         onFailure: (SduiRenderFailure) -> Unit,
-        children: @Composable () -> Unit,
+        render: @Composable (RenderableSduiDefinition) -> Boolean,
     ) {
-        val definition = lookup(kind, type)
-        if (definition == null) {
+        val registered: SduiDefinition<*> = registry.find(kind, type) ?: run {
             onFailure(SduiRenderFailure.MissingDefinition(kind, type, path))
             return
         }
-        val renderable = definition as? RenderableSduiDefinition<P, N>
-        if (renderable == null) {
+        val definition = registered as? RenderableSduiDefinition ?: run {
             onFailure(SduiRenderFailure.DefinitionIsNotRenderable(kind, type, path))
             return
         }
-        renderable.renderer.Render(node, properties, context, children)
+        if (!render(definition)) {
+            onFailure(SduiRenderFailure.DefinitionRejectedNode(kind, type, path))
+        }
     }
 }
