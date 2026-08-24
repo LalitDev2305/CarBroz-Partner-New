@@ -42,6 +42,7 @@ kotlin {
             implementation(project(":foundation:design-system"))
             implementation(project(":runtime:application"))
             implementation(project(":data:network"))
+            implementation(project(":data:database"))
             implementation(project(":data:secure-storage"))
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
