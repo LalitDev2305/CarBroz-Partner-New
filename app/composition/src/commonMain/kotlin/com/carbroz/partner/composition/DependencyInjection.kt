@@ -1,5 +1,13 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.network.KtorNetworkTransport
+import com.carbroz.data.network.NetworkAuthorizationProvider
+import com.carbroz.data.network.NetworkEnvironment
+import com.carbroz.data.network.NetworkEnvironmentProvider
+import com.carbroz.data.network.NetworkExecutor
+import com.carbroz.data.network.NetworkTransport
+import com.carbroz.data.network.SessionNetworkAuthorizationProvider
+import com.carbroz.data.network.createKtorNetworkTransport
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
@@ -25,7 +33,7 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
-/** Canonical application composition module for validated configuration and platform secure storage. */
+/** Canonical application composition module for validated configuration and platform infrastructure. */
 fun carBrozApplicationModule(
     configuration: AppConfiguration,
     secureStorage: SecureStorage,
@@ -46,6 +54,19 @@ fun carBrozApplicationModule(
     single<SessionProvider> { get<SessionStore>() }
     single { TokenExpiryPolicy(clock = get()) }
     single { SessionRestoreStartupTask(sessionStore = get()) }
+
+    single { NetworkEnvironmentProvider(configurationProvider = get()) }
+    single<NetworkEnvironment> { get<NetworkEnvironmentProvider>().get() }
+    single { createKtorNetworkTransport() }
+    single<NetworkTransport> { get<KtorNetworkTransport>() }
+    single<NetworkAuthorizationProvider> { SessionNetworkAuthorizationProvider(sessionProvider = get()) }
+    single {
+        NetworkExecutor(
+            environment = get(),
+            transport = get(),
+            authorizationProvider = get(),
+        )
+    }
 
     single { NavigationStore(NavigationState(listOf(AppShellDestination))) }
 
