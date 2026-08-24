@@ -2,7 +2,8 @@ package com.carbroz.runtime.sdui.model
 
 import kotlinx.serialization.json.JsonElement
 
-sealed interface Command
+/** Trusted semantic command marker. Concrete command families remain extensible. */
+interface Command
 
 data class RequestCommand(
     val method: RequestMethod,
