@@ -93,4 +93,5 @@ data class Element(
     val path: NodePath,
     val type: NodeType,
     val properties: NodeProperties,
+    val command: Command?,
 )
