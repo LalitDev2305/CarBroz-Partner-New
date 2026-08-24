@@ -43,6 +43,7 @@ kotlin {
             implementation(project(":runtime:application"))
             implementation(project(":data:network"))
             implementation(project(":data:database"))
+            implementation(project(":data:preferences"))
             implementation(project(":data:secure-storage"))
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
