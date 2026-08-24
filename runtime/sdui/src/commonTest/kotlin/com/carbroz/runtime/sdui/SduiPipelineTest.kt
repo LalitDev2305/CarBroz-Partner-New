@@ -150,16 +150,12 @@ class SduiPipelineTest {
     private class TestDefinition(
         override val kind: NodeKind,
         type: String,
-        private val decode: (JsonObject) -> PropertyDecodeResult<out NodeProperties> = {
+        private val decode: (JsonObject) -> PropertyDecodeResult<NodeProperties> = {
             PropertyDecodeResult.Success(EmptyNodeProperties)
         },
     ) : SduiDefinition<NodeProperties> {
         override val type: NodeType = NodeType(type)
 
-        override fun decodeProperties(raw: JsonObject): PropertyDecodeResult<NodeProperties> =
-            when (val result = decode(raw)) {
-                is PropertyDecodeResult.Success -> PropertyDecodeResult.Success(result.properties)
-                is PropertyDecodeResult.Failure -> result
-            }
+        override fun decodeProperties(raw: JsonObject): PropertyDecodeResult<NodeProperties> = decode(raw)
     }
 }
