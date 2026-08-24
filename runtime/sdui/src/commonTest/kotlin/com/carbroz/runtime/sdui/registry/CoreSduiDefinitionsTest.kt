@@ -25,6 +25,8 @@ class CoreSduiDefinitionsTest {
         assertEquals(CoreSduiDefinitions.all.size, registry.size)
         assertTrue(registry.supports(NodeKind.TEMPLATE, NodeType("FORM_TEMPLATE")))
         assertTrue(registry.supports(NodeKind.COMPONENT, NodeType("STACK")))
+        assertTrue(registry.supports(NodeKind.SECTION, NodeType("STACK")))
+        assertTrue(registry.supports(NodeKind.GROUP, NodeType("STACK")))
         assertTrue(registry.supports(NodeKind.ELEMENT, NodeType("TEXT")))
         assertTrue(registry.supports(NodeKind.ELEMENT, NodeType("BUTTON")))
     }
