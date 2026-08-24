@@ -20,6 +20,8 @@ class NetworkExecutor(
     private val transport: NetworkTransport,
     private val headerProvider: NetworkHeaderProvider = EmptyNetworkHeaderProvider,
     private val headerPolicy: NetworkHeaderPolicy = NetworkHeaderPolicy(),
+    private val authorizationProvider: NetworkAuthorizationProvider = EmptyNetworkAuthorizationProvider,
+    private val authenticationRecovery: NetworkAuthenticationRecovery = NoNetworkAuthenticationRecovery,
     private val retryDelay: NetworkRetryDelay = CoroutineNetworkRetryDelay,
     private val json: Json = Json,
 ) {
@@ -27,21 +29,16 @@ class NetworkExecutor(
         val validationFailure = validateExecution(request)
         if (validationFailure != null) return validationFailure
 
-        val headers = try {
-            buildMap<String, String> {
-                putAll(headerPolicy.merge(headerProvider.headers(), request.headers))
-                request.idempotencyKey?.let { key -> put(IDEMPOTENCY_HEADER, key) }
-            }
-        } catch (error: IllegalArgumentException) {
-            return NetworkResult.Failure(NetworkFailure.InvalidRequest(error.message.orEmpty()))
-        }
+        val firstResult = executeWithPolicy(request)
+        if (!request.shouldAttemptAuthenticationRecovery(firstResult)) return firstResult
+        if (!authenticationRecovery.recover()) return firstResult
 
-        val transportRequest = TransportRequest(
-            method = request.method.name,
-            url = environment.resolve(request.endpoint),
-            headers = headers,
-            body = request.payload?.let { payload -> json.encodeToString(payload) },
-        )
+        return executeWithPolicy(request)
+    }
+
+    private suspend fun executeWithPolicy(request: NetworkRequest): NetworkResult {
+        val transportRequest = buildTransportRequest(request)
+            ?: return NetworkResult.Failure(NetworkFailure.InvalidRequest("Authenticated session is required"))
 
         repeat(request.executionPolicy.maxAttempts) { attemptIndex ->
             val result = withTimeoutOrNull(request.executionPolicy.timeoutMillis) {
@@ -57,19 +54,49 @@ class NetworkExecutor(
         error("Network retry loop exhausted without returning a result")
     }
 
+    private suspend fun buildTransportRequest(request: NetworkRequest): TransportRequest? {
+        val headers = try {
+            buildMap<String, String> {
+                putAll(headerPolicy.merge(headerProvider.headers(), request.headers))
+                request.idempotencyKey?.let { key -> put(IDEMPOTENCY_HEADER, key) }
+                if (request.authentication == NetworkAuthentication.SESSION) {
+                    val authorization = authorizationProvider.authorizationHeader() ?: return null
+                    put(AUTHORIZATION_HEADER, authorization)
+                }
+            }
+        } catch (error: IllegalArgumentException) {
+            throw InvalidNetworkRequestException(error.message.orEmpty())
+        }
+
+        return TransportRequest(
+            method = request.method.name,
+            url = environment.resolve(request.endpoint),
+            headers = headers,
+            body = request.payload?.let { payload -> json.encodeToString(payload) },
+        )
+    }
+
     private fun validateExecution(request: NetworkRequest): NetworkResult.Failure? {
         val retriesEnabled = request.executionPolicy.maxAttempts > 1
         if (retriesEnabled && request.method.requiresIdempotencyKeyForRetry() && request.idempotencyKey == null) {
             return NetworkResult.Failure(
-                NetworkFailure.InvalidRequest(
-                    "${request.method} retries require an idempotency key",
-                ),
+                NetworkFailure.InvalidRequest("${request.method} retries require an idempotency key"),
             )
         }
         return null
     }
 
+    private fun NetworkRequest.shouldAttemptAuthenticationRecovery(result: NetworkResult): Boolean {
+        if (authentication != NetworkAuthentication.SESSION) return false
+        val http = (result as? NetworkResult.Failure)?.error as? NetworkFailure.Http ?: return false
+        if (http.statusCode != 401) return false
+        return !method.requiresIdempotencyKeyForRetry() || idempotencyKey != null
+    }
+
     private companion object {
+        const val AUTHORIZATION_HEADER = "Authorization"
         const val IDEMPOTENCY_HEADER = "Idempotency-Key"
     }
 }
+
+private class InvalidNetworkRequestException(message: String) : IllegalArgumentException(message)
