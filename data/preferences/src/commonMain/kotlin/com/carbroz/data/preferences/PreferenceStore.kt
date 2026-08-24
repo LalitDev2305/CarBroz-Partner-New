@@ -2,6 +2,32 @@ package com.carbroz.data.preferences
 
 import kotlinx.coroutines.flow.Flow
 
+/** Strongly typed identifier for a non-sensitive preference value. */
+sealed class PreferenceKey<T> internal constructor(val name: String) {
+    class StringKey(name: String) : PreferenceKey<String>(validated(name))
+    class BooleanKey(name: String) : PreferenceKey<Boolean>(validated(name))
+    class IntKey(name: String) : PreferenceKey<Int>(validated(name))
+    class LongKey(name: String) : PreferenceKey<Long>(validated(name))
+    class DoubleKey(name: String) : PreferenceKey<Double>(validated(name))
+
+    companion object {
+        fun string(name: String): PreferenceKey<String> = StringKey(name)
+        fun boolean(name: String): PreferenceKey<Boolean> = BooleanKey(name)
+        fun int(name: String): PreferenceKey<Int> = IntKey(name)
+        fun long(name: String): PreferenceKey<Long> = LongKey(name)
+        fun double(name: String): PreferenceKey<Double> = DoubleKey(name)
+
+        private fun validated(name: String): String {
+            require(name.isNotBlank()) { "Preference key must not be blank" }
+            require(name.length <= 128) { "Preference key must be <= 128 characters" }
+            require(name.all { it.isLetterOrDigit() || it == '.' || it == '_' || it == '-' }) {
+                "Preference key contains unsupported characters"
+            }
+            return name
+        }
+    }
+}
+
 /**
  * Canonical non-sensitive application preference storage.
  *
@@ -9,32 +35,9 @@ import kotlinx.coroutines.flow.Flow
  * secure-storage/session architecture instead of this contract.
  */
 interface PreferenceStore {
-    fun observeString(key: String): Flow<String?>
-    fun observeBoolean(key: String): Flow<Boolean?>
-    fun observeInt(key: String): Flow<Int?>
-    fun observeLong(key: String): Flow<Long?>
-    fun observeDouble(key: String): Flow<Double?>
-
-    suspend fun getString(key: String): String?
-    suspend fun getBoolean(key: String): Boolean?
-    suspend fun getInt(key: String): Int?
-    suspend fun getLong(key: String): Long?
-    suspend fun getDouble(key: String): Double?
-
-    suspend fun putString(key: String, value: String)
-    suspend fun putBoolean(key: String, value: Boolean)
-    suspend fun putInt(key: String, value: Int)
-    suspend fun putLong(key: String, value: Long)
-    suspend fun putDouble(key: String, value: Double)
-
-    suspend fun remove(key: String)
+    fun <T> observe(key: PreferenceKey<T>): Flow<T?>
+    suspend fun <T> get(key: PreferenceKey<T>): T?
+    suspend fun <T> put(key: PreferenceKey<T>, value: T)
+    suspend fun <T> remove(key: PreferenceKey<T>)
     suspend fun clear()
-}
-
-internal fun requireValidPreferenceKey(key: String) {
-    require(key.isNotBlank()) { "Preference key must not be blank" }
-    require(key.length <= 128) { "Preference key must be <= 128 characters" }
-    require(key.all { it.isLetterOrDigit() || it == '.' || it == '_' || it == '-' }) {
-        "Preference key contains unsupported characters"
-    }
 }
