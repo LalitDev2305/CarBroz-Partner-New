@@ -6,9 +6,9 @@ data class SduiProtocolLimits(
     val maxTypeLength: Int = 128,
     val maxRequiredIdentifiers: Int = 128,
     val maxComponents: Int = 256,
-    val maxSubComponentsPerComponent: Int = 128,
-    val maxChildrenPerContainer: Int = 256,
-    val maxChildDataPerChild: Int = 128,
+    val maxSectionsPerComponent: Int = 128,
+    val maxGroupsPerSection: Int = 256,
+    val maxElementsPerContainer: Int = 256,
     val maxTotalNodes: Int = 4_096,
 )
 
@@ -27,9 +27,10 @@ enum class SduiViolationCode {
     IdentifierTooLong,
     MissingType,
     TypeTooLong,
-    DuplicateIdentifier,
+    DuplicateSiblingIdentifier,
     EmptyBranch,
-    MissingTerminalData,
+    ConflictingBranchContent,
+    MissingTerminalElements,
     CollectionLimitExceeded,
     TotalNodeLimitExceeded,
 }
@@ -43,9 +44,9 @@ class SduiSchemaValidator(
         context.identifier(envelope.screen.id, "screen.id")
         context.identifier(envelope.screen.template.id, "screen.template.id")
         context.type(envelope.screen.template.type, "screen.template.type")
-        context.bounded(envelope.requiredRenderers.size, limits.maxRequiredIdentifiers, "requiredRenderers")
+        context.bounded(envelope.requiredDefinitions.size, limits.maxRequiredIdentifiers, "requiredDefinitions")
         context.bounded(envelope.requiredCapabilities.size, limits.maxRequiredIdentifiers, "requiredCapabilities")
-        envelope.requiredRenderers.forEachIndexed { index, value -> context.type(value, "requiredRenderers[$index]") }
+        envelope.requiredDefinitions.forEachIndexed { index, value -> context.type(value, "requiredDefinitions[$index]") }
         envelope.requiredCapabilities.forEachIndexed { index, value -> context.type(value, "requiredCapabilities[$index]") }
         context.template(envelope.screen.template, "screen.template")
         return if (context.violations.isEmpty()) SduiValidationResult.Valid
@@ -54,15 +55,11 @@ class SduiSchemaValidator(
 
     private class ValidationContext(private val limits: SduiProtocolLimits) {
         val violations = mutableListOf<SduiViolation>()
-        private val ids = mutableSetOf<String>()
         private var nodes = 0
 
         fun identifier(value: String, path: String) {
             if (value.isBlank()) violation(path, SduiViolationCode.MissingIdentifier)
-            else {
-                if (value.length > limits.maxIdentifierLength) violation(path, SduiViolationCode.IdentifierTooLong)
-                if (!ids.add(value)) violation(path, SduiViolationCode.DuplicateIdentifier)
-            }
+            else if (value.length > limits.maxIdentifierLength) violation(path, SduiViolationCode.IdentifierTooLong)
         }
 
         fun type(value: String, path: String) {
@@ -79,48 +76,71 @@ class SduiSchemaValidator(
             if (nodes == limits.maxTotalNodes + 1) violation(path, SduiViolationCode.TotalNodeLimitExceeded)
         }
 
+        private fun <T> validateSiblingIds(values: List<T>, path: String, id: (T) -> String) {
+            val seen = mutableSetOf<String>()
+            values.forEachIndexed { index, value ->
+                val nodeId = id(value)
+                if (nodeId.isNotBlank() && !seen.add(nodeId)) {
+                    violation("$path[$index].id", SduiViolationCode.DuplicateSiblingIdentifier)
+                }
+            }
+        }
+
         fun template(value: TemplateDto, path: String) {
             count(path)
             bounded(value.components.size, limits.maxComponents, "$path.components")
-            bounded(value.children.size, limits.maxChildrenPerContainer, "$path.children")
-            if (value.components.isEmpty() && value.children.isEmpty()) violation(path, SduiViolationCode.EmptyBranch)
-            value.components.forEachIndexed { index, component -> component(component, "$path.components[$index]") }
-            value.children.forEachIndexed { index, child -> child(child, "$path.children[$index]") }
+            if (value.components.isEmpty()) violation(path, SduiViolationCode.EmptyBranch)
+            validateSiblingIds(value.components, "$path.components") { it.id }
+            value.components.forEachIndexed { index, item -> component(item, "$path.components[$index]") }
         }
 
         private fun component(value: ComponentDto, path: String) {
             count(path)
             identifier(value.id, "$path.id")
             type(value.type, "$path.type")
-            bounded(value.subComponents.size, limits.maxSubComponentsPerComponent, "$path.subComponents")
-            bounded(value.children.size, limits.maxChildrenPerContainer, "$path.children")
-            if (value.subComponents.isEmpty() && value.children.isEmpty()) violation(path, SduiViolationCode.EmptyBranch)
-            value.subComponents.forEachIndexed { index, item -> subComponent(item, "$path.subComponents[$index]") }
-            value.children.forEachIndexed { index, item -> child(item, "$path.children[$index]") }
+            bounded(value.sections.size, limits.maxSectionsPerComponent, "$path.sections")
+            bounded(value.elements.size, limits.maxElementsPerContainer, "$path.elements")
+            validateExclusiveBranch(value.sections.isNotEmpty(), value.elements.isNotEmpty(), path)
+            validateSiblingIds(value.sections, "$path.sections") { it.id }
+            validateSiblingIds(value.elements, "$path.elements") { it.id }
+            value.sections.forEachIndexed { index, item -> section(item, "$path.sections[$index]") }
+            value.elements.forEachIndexed { index, item -> element(item, "$path.elements[$index]") }
         }
 
-        private fun subComponent(value: SubComponentDto, path: String) {
+        private fun section(value: SectionDto, path: String) {
             count(path)
             identifier(value.id, "$path.id")
             type(value.type, "$path.type")
-            bounded(value.children.size, limits.maxChildrenPerContainer, "$path.children")
-            if (value.children.isEmpty()) violation(path, SduiViolationCode.EmptyBranch)
-            value.children.forEachIndexed { index, item -> child(item, "$path.children[$index]") }
+            bounded(value.groups.size, limits.maxGroupsPerSection, "$path.groups")
+            bounded(value.elements.size, limits.maxElementsPerContainer, "$path.elements")
+            validateExclusiveBranch(value.groups.isNotEmpty(), value.elements.isNotEmpty(), path)
+            validateSiblingIds(value.groups, "$path.groups") { it.id }
+            validateSiblingIds(value.elements, "$path.elements") { it.id }
+            value.groups.forEachIndexed { index, item -> group(item, "$path.groups[$index]") }
+            value.elements.forEachIndexed { index, item -> element(item, "$path.elements[$index]") }
         }
 
-        private fun child(value: ChildDto, path: String) {
+        private fun group(value: GroupDto, path: String) {
             count(path)
             identifier(value.id, "$path.id")
             type(value.type, "$path.type")
-            bounded(value.data.size, limits.maxChildDataPerChild, "$path.data")
-            if (value.data.isEmpty()) violation(path, SduiViolationCode.MissingTerminalData)
-            value.data.forEachIndexed { index, item -> childData(item, "$path.data[$index]") }
+            bounded(value.elements.size, limits.maxElementsPerContainer, "$path.elements")
+            if (value.elements.isEmpty()) violation(path, SduiViolationCode.MissingTerminalElements)
+            validateSiblingIds(value.elements, "$path.elements") { it.id }
+            value.elements.forEachIndexed { index, item -> element(item, "$path.elements[$index]") }
         }
 
-        private fun childData(value: ChildDataDto, path: String) {
+        private fun element(value: ElementDto, path: String) {
             count(path)
             identifier(value.id, "$path.id")
             type(value.type, "$path.type")
+        }
+
+        private fun validateExclusiveBranch(hasIntermediate: Boolean, hasElements: Boolean, path: String) {
+            when {
+                hasIntermediate && hasElements -> violation(path, SduiViolationCode.ConflictingBranchContent)
+                !hasIntermediate && !hasElements -> violation(path, SduiViolationCode.EmptyBranch)
+            }
         }
 
         private fun violation(path: String, code: SduiViolationCode) {
