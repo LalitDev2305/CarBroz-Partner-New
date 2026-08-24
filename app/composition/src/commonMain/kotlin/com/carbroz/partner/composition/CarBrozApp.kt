@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,7 +46,14 @@ private val appShellContent = NavigationDestinationContent { destination ->
 @Composable
 fun CarBrozApp() {
     val navigationStore = koinInject<NavigationStore>()
+    val syncActivationCoordinator = koinInject<SyncActivationCoordinator>()
     val navigationState by navigationStore.state.collectAsStateWithLifecycle()
+    val applicationScope = rememberCoroutineScope()
+
+    DisposableEffect(syncActivationCoordinator, applicationScope) {
+        val activationJob = syncActivationCoordinator.start(applicationScope)
+        onDispose { activationJob.cancel() }
+    }
 
     CarBrozTheme {
         AdaptiveLayoutProvider {
