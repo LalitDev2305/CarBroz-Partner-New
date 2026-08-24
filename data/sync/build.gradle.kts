@@ -18,6 +18,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":data:database"))
             implementation(project(":data:network"))
             implementation(project(":foundation:time"))
             implementation(libs.kotlinx.coroutines.core)
