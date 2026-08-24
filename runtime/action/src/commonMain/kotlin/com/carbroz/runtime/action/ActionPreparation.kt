@@ -2,11 +2,8 @@ package com.carbroz.runtime.action
 
 import com.carbroz.runtime.binding.BindingContext
 import com.carbroz.runtime.binding.BindingResolutionError
-import com.carbroz.runtime.binding.BindingResolutionResult
-import com.carbroz.runtime.binding.BindingResolver
 import com.carbroz.runtime.form.FormStore
 import com.carbroz.runtime.sdui.model.Command
-import com.carbroz.runtime.sdui.model.RequestCommand
 import com.carbroz.runtime.sdui.model.RequestMethod
 import com.carbroz.runtime.sdui.model.ScreenDestination
 import kotlinx.serialization.json.JsonObject
@@ -31,42 +28,20 @@ sealed interface ActionPreparationResult {
     data object FormInvalid : ActionPreparationResult
     data class BindingFailure(val error: BindingResolutionError) : ActionPreparationResult
     data class UnsupportedCommand(val command: Command) : ActionPreparationResult
+    data class DefinitionRejectedCommand(val command: Command) : ActionPreparationResult
 }
 
 /**
- * Converts trusted semantic commands into fully resolved execution intents.
+ * Converts trusted semantic commands into fully resolved execution intents through the immutable registry.
  * This boundary performs no HTTP, navigation, persistence or platform work.
  */
 class ActionPreparer(
-    private val bindingResolver: BindingResolver = BindingResolver(),
+    private val registry: ActionRegistry,
 ) {
-    fun prepare(command: Command, context: ActionPreparationContext): ActionPreparationResult = when (command) {
-        is RequestCommand -> prepareRequest(command, context)
-        else -> ActionPreparationResult.UnsupportedCommand(command)
-    }
-
-    private fun prepareRequest(
-        command: RequestCommand,
-        context: ActionPreparationContext,
-    ): ActionPreparationResult {
-        if (context.form != null && !context.form.validate()) {
-            return ActionPreparationResult.FormInvalid
-        }
-
-        return when (val resolution = bindingResolver.resolve(JsonObject(command.payload), context.bindings)) {
-            is BindingResolutionResult.Failure -> ActionPreparationResult.BindingFailure(resolution.error)
-            is BindingResolutionResult.Success -> {
-                val payload = resolution.value as? JsonObject
-                    ?: error("Request payload normalization must always resolve to JsonObject")
-                ActionPreparationResult.Success(
-                    PreparedAction.Request(
-                        method = command.method,
-                        endpoint = command.endpoint,
-                        destination = command.destination,
-                        payload = payload,
-                    ),
-                )
-            }
-        }
+    fun prepare(command: Command, context: ActionPreparationContext): ActionPreparationResult {
+        val definition = registry.find(command.kind)
+            ?: return ActionPreparationResult.UnsupportedCommand(command)
+        return definition.prepare(command, context)
+            ?: ActionPreparationResult.DefinitionRejectedCommand(command)
     }
 }
