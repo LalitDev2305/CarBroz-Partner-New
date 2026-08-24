@@ -23,6 +23,7 @@ class NetworkExecutor(
     private val authorizationProvider: NetworkAuthorizationProvider = EmptyNetworkAuthorizationProvider,
     private val authenticationRecovery: NetworkAuthenticationRecovery = NoNetworkAuthenticationRecovery,
     private val retryDelay: NetworkRetryDelay = CoroutineNetworkRetryDelay,
+    private val connectivityProvider: NetworkConnectivityProvider = UnknownNetworkConnectivityProvider,
     private val requestIdProvider: NetworkRequestIdProvider = EmptyNetworkRequestIdProvider,
     private val observer: NetworkObserver = NoNetworkObserver,
     private val json: Json = Json,
@@ -60,6 +61,10 @@ class NetworkExecutor(
         } ?: return NetworkResult.Failure(NetworkFailure.InvalidRequest("Authenticated session is required"))
 
         repeat(request.executionPolicy.maxAttempts) { attemptIndex ->
+            if (connectivityProvider.connectivity() == NetworkConnectivity.OFFLINE) {
+                return NetworkResult.Failure(NetworkFailure.Offline)
+            }
+
             val attempt = attemptIndex + 1
             observer.observe(NetworkObservation.AttemptStarted(context, attempt))
             val result = withTimeoutOrNull(request.executionPolicy.timeoutMillis) {
