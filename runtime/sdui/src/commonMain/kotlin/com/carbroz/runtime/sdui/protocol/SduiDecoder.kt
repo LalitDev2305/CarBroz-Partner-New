@@ -22,6 +22,7 @@ class SduiDecoder(
         isLenient = false
         explicitNulls = false
         coerceInputValues = false
+        classDiscriminator = "kind"
     },
 ) {
     fun decode(payload: String): SduiDecodeResult {
