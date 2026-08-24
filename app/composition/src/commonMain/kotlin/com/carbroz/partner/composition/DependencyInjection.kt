@@ -18,6 +18,10 @@ import com.carbroz.data.network.SessionNetworkAuthorizationProvider
 import com.carbroz.data.network.createKtorNetworkTransport
 import com.carbroz.data.preferences.PreferenceStore
 import com.carbroz.data.preferences.PreferenceStoreProvider
+import com.carbroz.data.realtime.KtorRealtimeTransport
+import com.carbroz.data.realtime.RealtimeDeliveryGate
+import com.carbroz.data.realtime.RealtimeTransport
+import com.carbroz.data.realtime.createKtorRealtimeTransport
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
@@ -91,6 +95,10 @@ fun carBrozApplicationModule(
     }
     single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
     single { NetworkActionExecutor(dataSource = get()) }
+
+    single { createKtorRealtimeTransport() }
+    single<RealtimeTransport> { get<KtorRealtimeTransport>() }
+    single { RealtimeDeliveryGate() }
 
     single { NavigationStore(NavigationState(listOf(AppShellDestination))) }
 
