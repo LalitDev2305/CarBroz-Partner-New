@@ -89,6 +89,58 @@ class NetworkBoundaryTest {
     }
 
     @Test
+    fun requestRejectsInvalidHeaderNamesAndValuesBeforeTransport() = runTest {
+        var transportCalls = 0
+        val executor = NetworkExecutor(
+            environment = NetworkEnvironment("https://api.carbroz.example"),
+            transport = NetworkTransport {
+                transportCalls += 1
+                NetworkResult.Success(NetworkResponse(200))
+            },
+        )
+
+        val invalidHeaders = listOf(
+            mapOf("" to "value"),
+            mapOf("Bad Header" to "value"),
+            mapOf("X-Test" to "safe\r\nInjected: value"),
+            mapOf("X-Test" to "safe\u0000value"),
+        )
+
+        invalidHeaders.forEach { headers ->
+            val result = executor.execute(request(headers))
+            val failure = assertIs<NetworkResult.Failure>(result)
+            assertIs<NetworkFailure.InvalidRequest>(failure.error)
+        }
+        assertEquals(0, transportCalls)
+    }
+
+    @Test
+    fun providerRejectsInvalidHeaderNamesAndValuesBeforeTransport() = runTest {
+        var transportCalls = 0
+        val invalidProviderHeaders = listOf(
+            mapOf("Bad Header" to "value"),
+            mapOf("X-Provider" to "safe\nInjected: value"),
+            mapOf("X-Provider" to "safe\u007Fvalue"),
+        )
+
+        invalidProviderHeaders.forEach { providerHeaders ->
+            val executor = NetworkExecutor(
+                environment = NetworkEnvironment("https://api.carbroz.example"),
+                transport = NetworkTransport {
+                    transportCalls += 1
+                    NetworkResult.Success(NetworkResponse(200))
+                },
+                headerProvider = NetworkHeaderProvider { providerHeaders },
+            )
+
+            val result = executor.execute(request())
+            val failure = assertIs<NetworkResult.Failure>(result)
+            assertIs<NetworkFailure.InvalidRequest>(failure.error)
+        }
+        assertEquals(0, transportCalls)
+    }
+
+    @Test
     fun timeoutIsNormalizedAtExecutorBoundary() = runTest {
         val executor = NetworkExecutor(
             environment = NetworkEnvironment("https://api.carbroz.example"),
@@ -118,7 +170,7 @@ class NetworkBoundaryTest {
             transport = NetworkTransport {
                 attempts += 1
                 if (attempts == 1) {
-                    NetworkResult.Failure(NetworkFailure.Transport("temporary"))
+                    NetworkResult.Failure(NetworkFailure.Transport)
                 } else {
                     NetworkResult.Success(NetworkResponse(200))
                 }
@@ -174,7 +226,7 @@ class NetworkBoundaryTest {
             environment = NetworkEnvironment("https://api.carbroz.example"),
             transport = NetworkTransport {
                 attemptsWithoutKey += 1
-                NetworkResult.Failure(NetworkFailure.Transport())
+                NetworkResult.Failure(NetworkFailure.Transport)
             },
             retryDelay = NetworkRetryDelay { },
         )
