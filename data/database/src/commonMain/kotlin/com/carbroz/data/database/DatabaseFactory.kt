@@ -1,7 +1,6 @@
 package com.carbroz.data.database
 
 import androidx.room3.RoomDatabase
-import androidx.room3.setDriver
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 
 /** Platform-owned source of a Room database builder for the canonical application database. */
