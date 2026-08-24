@@ -1,8 +1,7 @@
 package com.carbroz.partner.composition
 
-import androidx.room3.RoomDatabase
 import com.carbroz.data.database.CarBrozDatabase
-import com.carbroz.data.database.CarBrozDatabaseBuilderProvider
+import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.network.KtorNetworkTransport
 import com.carbroz.data.network.NetworkAuthorizationProvider
 import com.carbroz.data.network.NetworkEnvironment
@@ -48,9 +47,9 @@ class DependencyInjectionTest {
     @Test
     fun applicationModuleResolvesCanonicalRuntimeSessionAndNetworkGraph() {
         val secureStorage = FakeSecureStorage()
-        val databaseBuilderProvider = FailingDatabaseBuilderProvider()
+        val databaseProvider = FailingDatabaseProvider()
         val application = koinApplication {
-            modules(carBrozApplicationModule(configuration, secureStorage, databaseBuilderProvider))
+            modules(carBrozApplicationModule(configuration, secureStorage, databaseProvider))
         }
 
         try {
@@ -66,7 +65,7 @@ class DependencyInjectionTest {
             assertSame(configuration, koin.get<AppConfiguration>())
             assertEquals(configuration, koin.get<ConfigurationProvider>().get())
             assertSame(secureStorage, koin.get<SecureStorage>())
-            assertSame(databaseBuilderProvider, koin.get<CarBrozDatabaseBuilderProvider>())
+            assertSame(databaseProvider, koin.get<CarBrozDatabaseProvider>())
             assertSame(sessionStore, koin.get<SessionProvider>())
             koin.get<SessionSnapshotCodec>()
             koin.get<SessionPersistence>()
@@ -90,12 +89,12 @@ class DependencyInjectionTest {
     fun processInitializerIsIdempotent() {
         KoinPlatform.getKoinOrNull()?.let { stopKoin() }
         val secureStorage = FakeSecureStorage()
-        val databaseBuilderProvider = FailingDatabaseBuilderProvider()
+        val databaseProvider = FailingDatabaseProvider()
 
         try {
-            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseBuilderProvider)
+            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider)
             val first = KoinPlatform.getKoinOrNull()
-            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseBuilderProvider)
+            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider)
             val second = KoinPlatform.getKoinOrNull()
 
             assertNotNull(first)
@@ -105,8 +104,8 @@ class DependencyInjectionTest {
         }
     }
 
-    private class FailingDatabaseBuilderProvider : CarBrozDatabaseBuilderProvider {
-        override fun builder(): RoomDatabase.Builder<CarBrozDatabase> =
+    private class FailingDatabaseProvider : CarBrozDatabaseProvider {
+        override fun get(): CarBrozDatabase =
             error("Database creation is not required by this DI graph test")
     }
 
