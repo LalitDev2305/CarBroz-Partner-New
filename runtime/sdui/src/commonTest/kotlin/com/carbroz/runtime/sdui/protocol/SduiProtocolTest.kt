@@ -1,5 +1,6 @@
 package com.carbroz.runtime.sdui.protocol
 
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,11 +18,15 @@ class SduiProtocolTest {
                 "version": 1,
                 "template": {
                   "id": "template-1",
-                  "type": "stack",
-                  "children": [{
-                    "id": "child-1",
-                    "type": "content",
-                    "data": [{"id":"data-1","type":"text","payload":"Hello"}]
+                  "type": "auth",
+                  "components": [{
+                    "id": "component-1",
+                    "type": "form",
+                    "elements": [{
+                      "id": "title",
+                      "type": "text",
+                      "properties": {"text":"Hello","typography":"TITLE_LARGE"}
+                    }]
                   }]
                 }
               }
@@ -41,7 +46,7 @@ class SduiProtocolTest {
               "screen": {
                 "id": "screen-1",
                 "version": 1,
-                "template": {"id":"template-1","type":"stack","children":[]}
+                "template": {"id":"template-1","type":"auth","components":[]}
               }
             }
         """.trimIndent()
@@ -62,25 +67,30 @@ class SduiProtocolTest {
     }
 
     @Test
-    fun validatorAcceptsVariableDepthWhenEveryBranchTerminatesInChildData() {
+    fun validatorAcceptsFullSemanticHierarchy() {
         val envelope = envelope(
             TemplateDto(
                 id = "template",
-                type = "stack",
+                type = "auth",
                 components = listOf(
                     ComponentDto(
                         id = "component",
-                        type = "section",
-                        subComponents = listOf(
-                            SubComponentDto(
-                                id = "sub",
-                                type = "group",
-                                children = listOf(child("nested-child", "nested-data")),
+                        type = "form",
+                        sections = listOf(
+                            SectionDto(
+                                id = "credentials",
+                                type = "credentials",
+                                groups = listOf(
+                                    GroupDto(
+                                        id = "fields",
+                                        type = "field-group",
+                                        elements = listOf(element("email", "input"), element("password", "input")),
+                                    ),
+                                ),
                             ),
                         ),
                     ),
                 ),
-                children = listOf(child("direct-child", "direct-data")),
             ),
         )
 
@@ -88,45 +98,102 @@ class SduiProtocolTest {
     }
 
     @Test
-    fun validatorRejectsEmptyIntermediateBranch() {
+    fun validatorAcceptsComponentTerminatingDirectlyInElements() {
         val envelope = envelope(
             TemplateDto(
                 id = "template",
-                type = "stack",
-                components = listOf(ComponentDto(id = "component", type = "section")),
+                type = "auth",
+                components = listOf(
+                    ComponentDto(
+                        id = "component",
+                        type = "header",
+                        elements = listOf(element("title", "text")),
+                    ),
+                ),
             ),
         )
 
-        val invalid = assertIs<SduiValidationResult.Invalid>(SduiSchemaValidator().validate(envelope))
-        assertEquals(SduiViolationCode.EmptyBranch, invalid.violations.single().code)
+        assertEquals(SduiValidationResult.Valid, SduiSchemaValidator().validate(envelope))
     }
 
     @Test
-    fun validatorRejectsDuplicateIdentifiersAcrossHierarchy() {
+    fun validatorRejectsConflictingComponentBranches() {
         val envelope = envelope(
             TemplateDto(
                 id = "template",
-                type = "stack",
-                children = listOf(child("screen", "data")),
+                type = "auth",
+                components = listOf(
+                    ComponentDto(
+                        id = "component",
+                        type = "form",
+                        sections = listOf(
+                            SectionDto(id = "section", type = "credentials", elements = listOf(element("email", "input"))),
+                        ),
+                        elements = listOf(element("title", "text")),
+                    ),
+                ),
             ),
         )
 
         val invalid = assertIs<SduiValidationResult.Invalid>(SduiSchemaValidator().validate(envelope))
-        assertEquals(SduiViolationCode.DuplicateIdentifier, invalid.violations.single().code)
+        assertEquals(SduiViolationCode.ConflictingBranchContent, invalid.violations.single().code)
     }
 
     @Test
-    fun validatorRejectsMissingTerminalData() {
+    fun validatorRejectsDuplicateSiblingIdentifiersButAllowsSameIdInDifferentBranches() {
+        val duplicateSibling = envelope(
+            TemplateDto(
+                id = "template",
+                type = "auth",
+                components = listOf(
+                    ComponentDto(
+                        id = "component",
+                        type = "form",
+                        elements = listOf(element("label", "text"), element("label", "text")),
+                    ),
+                ),
+            ),
+        )
+        val invalid = assertIs<SduiValidationResult.Invalid>(SduiSchemaValidator().validate(duplicateSibling))
+        assertEquals(SduiViolationCode.DuplicateSiblingIdentifier, invalid.violations.single().code)
+
+        val reusableAcrossBranches = envelope(
+            TemplateDto(
+                id = "template",
+                type = "auth",
+                components = listOf(
+                    ComponentDto(id = "one", type = "header", elements = listOf(element("label", "text"))),
+                    ComponentDto(id = "two", type = "footer", elements = listOf(element("label", "text"))),
+                ),
+            ),
+        )
+        assertEquals(SduiValidationResult.Valid, SduiSchemaValidator().validate(reusableAcrossBranches))
+    }
+
+    @Test
+    fun validatorRejectsGroupWithoutTerminalElements() {
         val envelope = envelope(
             TemplateDto(
                 id = "template",
-                type = "stack",
-                children = listOf(ChildDto(id = "child", type = "content", data = emptyList())),
+                type = "auth",
+                components = listOf(
+                    ComponentDto(
+                        id = "component",
+                        type = "form",
+                        sections = listOf(
+                            SectionDto(
+                                id = "section",
+                                type = "credentials",
+                                groups = listOf(GroupDto(id = "group", type = "fields", elements = emptyList())),
+                            ),
+                        ),
+                    ),
+                ),
             ),
         )
 
         val invalid = assertIs<SduiValidationResult.Invalid>(SduiSchemaValidator().validate(envelope))
-        assertEquals(SduiViolationCode.MissingTerminalData, invalid.violations.single().code)
+        assertEquals(SduiViolationCode.MissingTerminalElements, invalid.violations.single().code)
     }
 
     private fun envelope(template: TemplateDto) = SduiEnvelopeDto(
@@ -135,9 +202,9 @@ class SduiProtocolTest {
         screen = ScreenDto(id = "screen", version = 1, template = template),
     )
 
-    private fun child(id: String, dataId: String) = ChildDto(
+    private fun element(id: String, type: String) = ElementDto(
         id = id,
-        type = "content",
-        data = listOf(ChildDataDto(dataId, "text", JsonPrimitive("value"))),
+        type = type,
+        properties = JsonObject(mapOf("value" to JsonPrimitive("value"))),
     )
 }
