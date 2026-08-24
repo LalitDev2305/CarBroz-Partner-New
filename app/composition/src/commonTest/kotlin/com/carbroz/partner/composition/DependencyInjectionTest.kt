@@ -9,6 +9,9 @@ import com.carbroz.data.network.NetworkEnvironmentProvider
 import com.carbroz.data.network.NetworkExecutor
 import com.carbroz.data.network.NetworkTransport
 import com.carbroz.data.network.SessionNetworkAuthorizationProvider
+import com.carbroz.data.preferences.PreferenceKey
+import com.carbroz.data.preferences.PreferenceStore
+import com.carbroz.data.preferences.PreferenceStoreProvider
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.BuildInformation
@@ -24,6 +27,8 @@ import com.carbroz.foundation.session.SessionStore
 import com.carbroz.foundation.session.TokenExpiryPolicy
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -45,11 +50,13 @@ class DependencyInjectionTest {
     )
 
     @Test
-    fun applicationModuleResolvesCanonicalRuntimeSessionAndNetworkGraph() {
+    fun applicationModuleResolvesCanonicalRuntimeSessionNetworkAndPreferenceGraph() {
         val secureStorage = FakeSecureStorage()
         val databaseProvider = FailingDatabaseProvider()
+        val preferenceStore = FakePreferenceStore()
+        val preferenceProvider = PreferenceStoreProvider { preferenceStore }
         val application = koinApplication {
-            modules(carBrozApplicationModule(configuration, secureStorage, databaseProvider))
+            modules(carBrozApplicationModule(configuration, secureStorage, databaseProvider, preferenceProvider))
         }
 
         try {
@@ -66,6 +73,8 @@ class DependencyInjectionTest {
             assertEquals(configuration, koin.get<ConfigurationProvider>().get())
             assertSame(secureStorage, koin.get<SecureStorage>())
             assertSame(databaseProvider, koin.get<CarBrozDatabaseProvider>())
+            assertSame(preferenceProvider, koin.get<PreferenceStoreProvider>())
+            assertSame(preferenceStore, koin.get<PreferenceStore>())
             assertSame(sessionStore, koin.get<SessionProvider>())
             koin.get<SessionSnapshotCodec>()
             koin.get<SessionPersistence>()
@@ -90,11 +99,12 @@ class DependencyInjectionTest {
         KoinPlatform.getKoinOrNull()?.let { stopKoin() }
         val secureStorage = FakeSecureStorage()
         val databaseProvider = FailingDatabaseProvider()
+        val preferenceProvider = PreferenceStoreProvider { FakePreferenceStore() }
 
         try {
-            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider)
+            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider, preferenceProvider)
             val first = KoinPlatform.getKoinOrNull()
-            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider)
+            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider, preferenceProvider)
             val second = KoinPlatform.getKoinOrNull()
 
             assertNotNull(first)
@@ -107,6 +117,14 @@ class DependencyInjectionTest {
     private class FailingDatabaseProvider : CarBrozDatabaseProvider {
         override fun get(): CarBrozDatabase =
             error("Database creation is not required by this DI graph test")
+    }
+
+    private class FakePreferenceStore : PreferenceStore {
+        override fun <T> observe(key: PreferenceKey<T>): Flow<T?> = flowOf(null)
+        override suspend fun <T> get(key: PreferenceKey<T>): T? = null
+        override suspend fun <T> put(key: PreferenceKey<T>, value: T) = Unit
+        override suspend fun <T> remove(key: PreferenceKey<T>) = Unit
+        override suspend fun clear() = Unit
     }
 
     private class FakeSecureStorage : SecureStorage {
