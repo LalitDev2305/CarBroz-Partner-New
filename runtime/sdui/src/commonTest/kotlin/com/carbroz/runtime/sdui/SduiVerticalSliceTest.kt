@@ -39,7 +39,7 @@ class SduiVerticalSliceTest {
 
         val component = screen.template.components.single()
         val commandIndex = SduiCommandIndex.from(screen)
-        assertEquals("login/form/credentials/fields/continue", commandIndexPath(screen))
+        assertEquals("login/form/credentials/fields/inputs/continue", buttonPath(screen).toString())
         assertEquals(1, commandIndex.size)
 
         val command = assertNotNull(commandIndex.commandAt(buttonPath(screen)))
@@ -59,9 +59,6 @@ class SduiVerticalSliceTest {
                 val groups = assertIs<com.carbroz.runtime.sdui.model.SectionContent.Groups>(section.content)
                 groups.values.single().elements.last().path
             }
-
-    private fun commandIndexPath(screen: com.carbroz.runtime.sdui.model.Screen): String =
-        buttonPath(screen).toString()
 
     private val payload = """
         {
@@ -84,7 +81,7 @@ class SduiVerticalSliceTest {
                       "type": "STACK",
                       "groups": [
                         {
-                          "id": "fields",
+                          "id": "inputs",
                           "type": "STACK",
                           "elements": [
                             {
