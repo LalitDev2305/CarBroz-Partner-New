@@ -40,12 +40,13 @@ class NetworkBoundaryTest {
         )
 
         val result = executor.execute(prepared().toNetworkRequest(mapOf("X-Request-Id" to "123")))
+        val request = requireNotNull(captured)
 
         assertIs<NetworkResult.Success>(result)
-        assertEquals("https://api.carbroz.example/auth/send-otp", captured!!.url)
-        assertEquals("Bearer token", captured!!.headers["Authorization"])
-        assertEquals("123", captured!!.headers["X-Request-Id"])
-        assertEquals("POST", captured!!.method)
+        assertEquals("https://api.carbroz.example/auth/send-otp", request.url)
+        assertEquals("Bearer token", request.headers["Authorization"])
+        assertEquals("123", request.headers["X-Request-Id"])
+        assertEquals("POST", request.method)
     }
 
     @Test
