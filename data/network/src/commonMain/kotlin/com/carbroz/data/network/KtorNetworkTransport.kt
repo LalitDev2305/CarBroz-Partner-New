@@ -3,6 +3,7 @@ package com.carbroz.data.network
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.request.header
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -10,7 +11,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
-import io.ktor.http.headers
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -28,9 +28,7 @@ class KtorNetworkTransport(
     override suspend fun execute(request: TransportRequest): NetworkResult = try {
         val response = client.request(request.url) {
             method = HttpMethod.parse(request.method)
-            headers {
-                request.headers.forEach { (name, value) -> append(name, value) }
-            }
+            request.headers.forEach { (name, value) -> header(name, value) }
             request.body?.let { body ->
                 if (request.headers.keys.none { it.equals(HttpHeaders.ContentType, ignoreCase = true) }) {
                     contentType(ContentType.Application.Json)
