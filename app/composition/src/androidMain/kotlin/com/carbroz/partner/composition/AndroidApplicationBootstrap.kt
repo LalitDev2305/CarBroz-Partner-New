@@ -2,6 +2,7 @@ package com.carbroz.partner.composition
 
 import android.content.Context
 import com.carbroz.data.database.AndroidCarBrozDatabaseBuilderProvider
+import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.securestorage.AndroidKeystoreSecureStorage
 
 /** Android host bridge that supplies platform-backed secure storage and database adapters. */
@@ -26,6 +27,8 @@ fun initializeCarBrozAndroidApplication(
             context = context,
             namespace = applicationId,
         ),
-        databaseBuilderProvider = AndroidCarBrozDatabaseBuilderProvider(context),
+        databaseProvider = CarBrozDatabaseFactory(
+            builderProvider = AndroidCarBrozDatabaseBuilderProvider(context),
+        ),
     )
 }
