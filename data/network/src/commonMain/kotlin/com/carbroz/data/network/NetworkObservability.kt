@@ -79,7 +79,7 @@ internal fun NetworkResult.toNetworkOutcome(): NetworkOutcome = when (this) {
         NetworkFailure.Offline -> NetworkOutcome.Offline
         NetworkFailure.Timeout -> NetworkOutcome.Timeout
         is NetworkFailure.Http -> NetworkOutcome.HttpFailure(failure.statusCode)
-        is NetworkFailure.Transport -> NetworkOutcome.TransportFailure
+        NetworkFailure.Transport -> NetworkOutcome.TransportFailure
         is NetworkFailure.InvalidRequest -> NetworkOutcome.InvalidRequest
     }
 }
