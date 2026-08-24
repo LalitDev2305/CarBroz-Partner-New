@@ -1,15 +1,52 @@
 package com.carbroz.data.network
 
+import com.carbroz.foundation.configuration.AppConfiguration
+import com.carbroz.foundation.configuration.AppEnvironment
+import com.carbroz.foundation.configuration.ConfigurationProvider
+import com.carbroz.foundation.configuration.ConfigurationValidationResult
+import com.carbroz.foundation.configuration.ConfigurationValidator
+
 /** Trusted app-owned origin. Server-driven commands may provide only relative endpoints. */
 data class NetworkEnvironment(
     val baseUrl: String,
+    val appEnvironment: AppEnvironment = AppEnvironment.Production,
 ) {
     init {
-        require(baseUrl.startsWith("https://")) { "Network baseUrl must use HTTPS" }
+        val https = baseUrl.startsWith("https://")
+        val localDevelopmentHttp = appEnvironment == AppEnvironment.Development &&
+            (baseUrl.startsWith("http://localhost") || baseUrl.startsWith("http://127.0.0.1"))
+        require(https || localDevelopmentHttp) {
+            "Network baseUrl must use HTTPS except for local Development endpoints"
+        }
         require(!baseUrl.endsWith('/')) { "Network baseUrl must not end with /" }
+        require('#' !in baseUrl) { "Network baseUrl must not contain a fragment" }
+        require('?' !in baseUrl) { "Network baseUrl must not contain a query" }
     }
 
     fun resolve(endpoint: NetworkEndpoint): String = baseUrl + endpoint.value
+}
+
+/**
+ * Adapts the canonical application configuration into the network-owned origin model.
+ * Configuration remains owned by foundation:configuration; networking does not duplicate
+ * environment selection or endpoint values.
+ */
+class NetworkEnvironmentProvider(
+    private val configurationProvider: ConfigurationProvider,
+) {
+    fun get(): NetworkEnvironment = configurationProvider.get().toNetworkEnvironment()
+}
+
+/** Creates a network environment only from configuration accepted by the canonical validator. */
+fun AppConfiguration.toNetworkEnvironment(): NetworkEnvironment {
+    val validation = ConfigurationValidator.validate(this)
+    require(validation is ConfigurationValidationResult.Valid) {
+        "Cannot initialize networking from invalid application configuration"
+    }
+    return NetworkEnvironment(
+        baseUrl = apiBaseUrl,
+        appEnvironment = environment,
+    )
 }
 
 fun interface NetworkHeaderProvider {
