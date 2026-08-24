@@ -14,11 +14,7 @@ kotlin {
         withHostTest {}
     }
 
-    jvm("desktop") {
-        testRuns["test"].executionTask.configure {
-            useJUnitPlatform()
-        }
-    }
+    jvm("desktop")
     iosArm64()
     iosSimulatorArm64()
 
@@ -35,11 +31,6 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
-        }
-        named("desktopTest") {
-            dependencies {
-                implementation(kotlin("test-junit5"))
-            }
         }
     }
 }
