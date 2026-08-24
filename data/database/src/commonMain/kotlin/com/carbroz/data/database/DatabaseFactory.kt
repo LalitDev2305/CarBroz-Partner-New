@@ -3,7 +3,7 @@ package com.carbroz.data.database
 import androidx.room3.RoomDatabase
 import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
-import androidx.sqlite.async.executeSQL
+import androidx.sqlite.executeSQL
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 
 /** Platform-owned source of a Room database builder for the canonical application database. */
