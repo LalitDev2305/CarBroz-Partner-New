@@ -44,6 +44,7 @@ kotlin {
             implementation(project(":runtime:action"))
             implementation(project(":runtime:sdui"))
             implementation(project(":data:network"))
+            implementation(project(":data:realtime"))
             implementation(project(":data:database"))
             implementation(project(":data:preferences"))
             implementation(project(":data:secure-storage"))
