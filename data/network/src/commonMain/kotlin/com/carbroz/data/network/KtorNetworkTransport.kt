@@ -71,8 +71,13 @@ class KtorNetworkTransport(
         client.close()
     }
 
-    private fun decodeBody(value: String): JsonElement? =
-        runCatching { json.parseToJsonElement(value) }.getOrNull()
+    private fun decodeBody(value: String): JsonElement? = try {
+        json.parseToJsonElement(value)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Throwable) {
+        null
+    }
 }
 
 /** Creates the production multiplatform Ktor transport using the CIO engine. */
