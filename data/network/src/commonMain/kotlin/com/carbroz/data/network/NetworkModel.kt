@@ -6,7 +6,7 @@ import com.carbroz.runtime.sdui.model.ScreenDestination
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
-@JvmInline
+@kotlin.jvm.JvmInline
 value class NetworkEndpoint(val value: String) {
     init {
         require(value.startsWith('/')) { "Network endpoint must be relative and start with /" }
