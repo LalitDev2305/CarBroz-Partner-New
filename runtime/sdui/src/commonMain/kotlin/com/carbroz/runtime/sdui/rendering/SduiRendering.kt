@@ -8,7 +8,6 @@ import com.carbroz.runtime.sdui.model.Element
 import com.carbroz.runtime.sdui.model.Group
 import com.carbroz.runtime.sdui.model.NodeKind
 import com.carbroz.runtime.sdui.model.NodePath
-import com.carbroz.runtime.sdui.model.NodeProperties
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.model.Screen
 import com.carbroz.runtime.sdui.model.Section
@@ -33,8 +32,9 @@ data class SduiRenderContext(
 )
 
 /**
- * Rendering is type-erased only at the registry boundary. Each atomic definition owns the safe typed cast
- * between its normalized property model and its renderer, so the dispatcher never performs generic casts.
+ * Multiplatform rendering contract exposed by an atomic SDUI definition.
+ * Definitions opt into exactly the normalized node kinds they support; no reflection or unchecked generic
+ * property cast is required by the dispatcher.
  */
 interface RenderableSduiDefinition {
     @Composable
@@ -51,14 +51,6 @@ interface RenderableSduiDefinition {
 
     @Composable
     fun RenderElement(node: Element, context: SduiRenderContext): Boolean = false
-}
-
-/** Convenience base for typed definitions. Concrete definitions implement only their own node kind. */
-abstract class TypedRenderableDefinition<P : NodeProperties>(
-    private val propertyType: kotlin.reflect.KClass<P>,
-) : RenderableSduiDefinition {
-    protected fun properties(value: NodeProperties): P? =
-        if (propertyType.isInstance(value)) propertyType.cast(value) else null
 }
 
 sealed interface SduiRenderFailure {
