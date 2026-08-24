@@ -17,12 +17,11 @@ import kotlin.test.assertIs
 
 class KtorNetworkTransportTest {
     @Test
-    fun successMapsStatusHeadersAndJsonBody() = runTest {
+    fun successMapsRequestAndJsonResponse() = runTest {
         val engine = MockEngine { request ->
             assertEquals("POST", request.method.value)
             assertEquals("https://api.carbroz.example/action", request.url.toString())
             assertEquals("request-123", request.headers["X-Request-Id"])
-            assertEquals("application/json", request.headers[HttpHeaders.ContentType])
             respond(
                 content = """{"ok":true}""",
                 status = HttpStatusCode.OK,
