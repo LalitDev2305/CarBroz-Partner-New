@@ -14,8 +14,9 @@ import com.carbroz.runtime.sdui.rendering.RenderableSduiDefinition
 import com.carbroz.runtime.sdui.rendering.SduiRenderContext
 import com.carbroz.runtime.sdui.rendering.SduiRenderEvent
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 data class ButtonElementProperties(
     val text: String,
@@ -26,9 +27,14 @@ object ButtonElementDefinition : ElementDefinition<ButtonElementProperties>, Ren
     override val type: NodeType = NodeType("BUTTON")
 
     override fun decodeProperties(raw: JsonObject): PropertyDecodeResult<ButtonElementProperties> {
-        val text = raw["text"]?.jsonPrimitive?.contentOrNull
-            ?: return PropertyDecodeResult.Failure("BUTTON requires non-null 'text'.")
-        val fillWidth = raw["fillWidth"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: true
+        val text = (raw["text"] as? JsonPrimitive)?.contentOrNull
+            ?: return PropertyDecodeResult.Failure("BUTTON requires string 'text'.")
+        val fillWidthPrimitive = raw["fillWidth"] as? JsonPrimitive
+        val fillWidth = when {
+            fillWidthPrimitive == null -> true
+            fillWidthPrimitive.booleanOrNull != null -> fillWidthPrimitive.booleanOrNull!!
+            else -> return PropertyDecodeResult.Failure("BUTTON 'fillWidth' must be a boolean.")
+        }
         return PropertyDecodeResult.Success(ButtonElementProperties(text = text, fillWidth = fillWidth))
     }
 
