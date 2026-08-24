@@ -1,11 +1,13 @@
 package com.carbroz.data.database
 
+import androidx.room3.ConstructedBy
 import androidx.room3.Dao
 import androidx.room3.Database
 import androidx.room3.Entity
 import androidx.room3.PrimaryKey
 import androidx.room3.Query
 import androidx.room3.RoomDatabase
+import androidx.room3.RoomDatabaseConstructor
 import androidx.room3.Upsert
 
 /**
@@ -20,6 +22,7 @@ import androidx.room3.Upsert
     version = CarBrozDatabase.SCHEMA_VERSION,
     exportSchema = true,
 )
+@ConstructedBy(CarBrozDatabaseConstructor::class)
 abstract class CarBrozDatabase : RoomDatabase() {
     abstract fun metadataDao(): DatabaseMetadataDao
 
@@ -27,6 +30,11 @@ abstract class CarBrozDatabase : RoomDatabase() {
         const val SCHEMA_VERSION: Int = 1
         const val DATABASE_NAME: String = "carbroz.db"
     }
+}
+
+@Suppress("KotlinNoActualForExpect")
+expect object CarBrozDatabaseConstructor : RoomDatabaseConstructor<CarBrozDatabase> {
+    override fun initialize(): CarBrozDatabase
 }
 
 @Entity(tableName = "database_metadata")
