@@ -3,7 +3,7 @@ package com.carbroz.data.sync
 import com.carbroz.data.network.NetworkRequest
 import kotlinx.coroutines.flow.Flow
 
-@JvmInline
+@kotlin.jvm.JvmInline
 value class OutboxOperationId(val value: String) {
     init { require(value.isNotBlank()) }
 }
