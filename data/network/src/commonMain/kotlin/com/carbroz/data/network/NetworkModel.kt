@@ -1,6 +1,5 @@
 package com.carbroz.data.network
 
-import com.carbroz.runtime.action.PreparedAction
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
@@ -48,12 +47,3 @@ sealed interface NetworkResult {
     data class Success(val response: NetworkResponse) : NetworkResult
     data class Failure(val error: NetworkFailure) : NetworkResult
 }
-
-fun PreparedAction.Request.toNetworkRequest(
-    headers: Map<String, String> = emptyMap(),
-): NetworkRequest = NetworkRequest(
-    method = NetworkMethod.valueOf(method.name),
-    endpoint = NetworkEndpoint(endpoint),
-    payload = payload,
-    headers = headers,
-)
