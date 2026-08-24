@@ -4,6 +4,8 @@ data class SduiProtocolLimits(
     val maxPayloadCharacters: Int = 1_000_000,
     val maxIdentifierLength: Int = 128,
     val maxTypeLength: Int = 128,
+    val maxEndpointLength: Int = 512,
+    val maxCommandPayloadFields: Int = 128,
     val maxRequiredIdentifiers: Int = 128,
     val maxComponents: Int = 256,
     val maxSectionsPerComponent: Int = 128,
@@ -33,6 +35,11 @@ enum class SduiViolationCode {
     MissingTerminalElements,
     CollectionLimitExceeded,
     TotalNodeLimitExceeded,
+    UnsupportedRequestMethod,
+    MissingEndpoint,
+    EndpointTooLong,
+    EndpointMustBeRelative,
+    InvalidCommandPayload,
 }
 
 /** Strict structural validator for untrusted transport data. */
@@ -134,6 +141,31 @@ class SduiSchemaValidator(
             count(path)
             identifier(value.id, "$path.id")
             type(value.type, "$path.type")
+            value.command?.let { command(it, "$path.command") }
+        }
+
+        private fun command(value: CommandDto, path: String) {
+            when (value) {
+                is RequestCommandDto -> requestCommand(value, path)
+            }
+        }
+
+        private fun requestCommand(value: RequestCommandDto, path: String) {
+            if (value.method.uppercase() !in REQUEST_METHODS) {
+                violation("$path.method", SduiViolationCode.UnsupportedRequestMethod)
+            }
+            when {
+                value.endpoint.isBlank() -> violation("$path.endpoint", SduiViolationCode.MissingEndpoint)
+                value.endpoint.length > limits.maxEndpointLength -> violation("$path.endpoint", SduiViolationCode.EndpointTooLong)
+                !value.endpoint.startsWith("/") || value.endpoint.startsWith("//") || "://" in value.endpoint ->
+                    violation("$path.endpoint", SduiViolationCode.EndpointMustBeRelative)
+            }
+            identifier(value.screenId, "$path.screenId")
+            identifier(value.templateId, "$path.templateId")
+            type(value.templateType, "$path.templateType")
+            if (value.payload.size > limits.maxCommandPayloadFields) {
+                violation("$path.payload", SduiViolationCode.InvalidCommandPayload)
+            }
         }
 
         private fun validateExclusiveBranch(hasIntermediate: Boolean, hasElements: Boolean, path: String) {
@@ -145,6 +177,10 @@ class SduiSchemaValidator(
 
         private fun violation(path: String, code: SduiViolationCode) {
             violations += SduiViolation(path, code)
+        }
+
+        companion object {
+            private val REQUEST_METHODS = setOf("GET", "POST", "PUT", "PATCH", "DELETE")
         }
     }
 }
