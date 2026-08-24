@@ -1,5 +1,6 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.DesktopCarBrozDatabaseBuilderProvider
 import com.carbroz.data.securestorage.EphemeralDesktopSecureStorage
 import java.io.File
@@ -21,8 +22,10 @@ fun initializeCarBrozDesktopApplication(
             applicationId = applicationId,
         ),
         secureStorage = EphemeralDesktopSecureStorage(),
-        databaseBuilderProvider = DesktopCarBrozDatabaseBuilderProvider(
-            databaseDirectory = File(System.getProperty("user.home"), ".carbroz/$applicationId/database"),
+        databaseProvider = CarBrozDatabaseFactory(
+            builderProvider = DesktopCarBrozDatabaseBuilderProvider(
+                databaseDirectory = File(System.getProperty("user.home"), ".carbroz/$applicationId/database"),
+            ),
         ),
     )
 }
