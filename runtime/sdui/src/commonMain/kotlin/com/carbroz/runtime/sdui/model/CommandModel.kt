@@ -2,15 +2,26 @@ package com.carbroz.runtime.sdui.model
 
 import kotlinx.serialization.json.JsonElement
 
+@kotlin.jvm.JvmInline
+value class CommandKind(val value: String)
+
 /** Trusted semantic command marker. Concrete command families remain extensible. */
-interface Command
+interface Command {
+    val kind: CommandKind
+}
 
 data class RequestCommand(
     val method: RequestMethod,
     val endpoint: String,
     val destination: ScreenDestination,
     val payload: Map<String, JsonElement>,
-) : Command
+) : Command {
+    override val kind: CommandKind = KIND
+
+    companion object {
+        val KIND: CommandKind = CommandKind("REQUEST")
+    }
+}
 
 enum class RequestMethod {
     GET,
