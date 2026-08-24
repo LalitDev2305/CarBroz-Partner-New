@@ -24,7 +24,7 @@ enum class NetworkMethod {
 data class NetworkRequest(
     val method: NetworkMethod,
     val endpoint: NetworkEndpoint,
-    val payload: JsonObject,
+    val payload: JsonObject? = null,
     val headers: Map<String, String> = emptyMap(),
 )
 
