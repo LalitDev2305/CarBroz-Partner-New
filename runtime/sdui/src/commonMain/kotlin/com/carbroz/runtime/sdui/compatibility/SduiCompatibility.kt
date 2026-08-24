@@ -2,6 +2,7 @@ package com.carbroz.runtime.sdui.compatibility
 
 import com.carbroz.runtime.sdui.model.NodeKind
 import com.carbroz.runtime.sdui.model.NodeType
+import com.carbroz.runtime.sdui.protocol.ElementDto
 import com.carbroz.runtime.sdui.protocol.RequestCommandDto
 import com.carbroz.runtime.sdui.protocol.SduiEnvelopeDto
 import com.carbroz.runtime.sdui.registry.SduiRegistry
@@ -70,32 +71,33 @@ class SduiCompatibilityPolicy(
             }
         }
 
-        return if (issues.isEmpty()) SduiCompatibilityResult.Compatible
-        else SduiCompatibilityResult.Incompatible(issues)
+        return if (issues.isEmpty()) {
+            SduiCompatibilityResult.Compatible
+        } else {
+            SduiCompatibilityResult.Incompatible(issues)
+        }
     }
 
     private fun supportsAnyDefinitionType(type: String): Boolean =
         NodeKind.entries.any { kind -> registry.supports(kind, NodeType(type)) }
 
-    private fun requestCommands(envelope: SduiEnvelopeDto): Sequence<RequestCommandDto> = sequence {
+    private fun requestCommands(envelope: SduiEnvelopeDto): List<RequestCommandDto> = buildList {
         envelope.screen.template.components.forEach { component ->
-            component.elements.mapNotNullToCommand(this)
+            addRequestCommands(component.elements)
             component.sections.forEach { section ->
-                section.elements.mapNotNullToCommand(this)
+                addRequestCommands(section.elements)
                 section.groups.forEach { group ->
-                    group.elements.mapNotNullToCommand(this)
+                    addRequestCommands(group.elements)
                 }
             }
         }
     }
 
-    private fun List<com.carbroz.runtime.sdui.protocol.ElementDto>.mapNotNullToCommand(
-        scope: SequenceScope<RequestCommandDto>,
-    ) {
-        forEach { element ->
+    private fun MutableList<RequestCommandDto>.addRequestCommands(elements: List<ElementDto>) {
+        elements.forEach { element ->
             val command = element.command
             if (command is RequestCommandDto) {
-                scope.yield(command)
+                add(command)
             }
         }
     }
