@@ -9,19 +9,24 @@ enum class NodeKind {
     ELEMENT,
 }
 
-@JvmInline
+@kotlin.jvm.JvmInline
 value class NodeType(val value: String)
 
-@JvmInline
+@kotlin.jvm.JvmInline
 value class NodeId(val value: String)
 
 /** Canonical identity of a normalized node inside one screen tree. */
-data class NodePath private constructor(val segments: List<NodeId>) {
+class NodePath private constructor(val segments: List<NodeId>) {
     init {
         require(segments.isNotEmpty()) { "NodePath cannot be empty" }
     }
 
     fun child(id: NodeId): NodePath = NodePath(segments + id)
+
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is NodePath && segments == other.segments)
+
+    override fun hashCode(): Int = segments.hashCode()
 
     override fun toString(): String = segments.joinToString("/") { it.value }
 
