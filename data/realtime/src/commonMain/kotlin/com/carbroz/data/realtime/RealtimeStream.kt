@@ -37,6 +37,8 @@ data class RealtimeReconnectPolicy(
 
 /**
  * Reconnects a realtime stream after transport closure/failure. Cancellation always propagates.
+ * The retry budget applies to consecutive connection failures and resets after a successful
+ * connection, so healthy streams are not permanently exhausted by normal lifetime reconnects.
  * Subscription-specific resume cursors remain the responsibility of the operation/protocol adapter.
  */
 class RealtimeStream(
@@ -45,28 +47,28 @@ class RealtimeStream(
     private val retryDelay: RealtimeRetryDelay = CoroutineRealtimeRetryDelay,
 ) {
     fun observe(request: RealtimeConnectRequest): Flow<RealtimeMessage> = flow {
-        var reconnectAttempt = 0
+        var consecutiveFailures = 0
 
         while (true) {
             val connection = transport.connect(request)
             val initialState = connection.state.value
             if (initialState is RealtimeConnectionState.Failed) {
-                if (reconnectAttempt >= reconnectPolicy.maxReconnectAttempts) return@flow
-                retryDelay.wait(reconnectPolicy.delayMillis(reconnectAttempt++))
+                connection.close()
+                if (consecutiveFailures >= reconnectPolicy.maxReconnectAttempts) return@flow
+                retryDelay.wait(reconnectPolicy.delayMillis(consecutiveFailures++))
                 continue
             }
 
+            consecutiveFailures = 0
             try {
                 connection.incoming.collect { emit(it) }
             } catch (error: CancellationException) {
-                connection.close()
                 throw error
             } finally {
                 connection.close()
             }
 
-            if (reconnectAttempt >= reconnectPolicy.maxReconnectAttempts) return@flow
-            retryDelay.wait(reconnectPolicy.delayMillis(reconnectAttempt++))
+            retryDelay.wait(reconnectPolicy.delayMillis(0))
         }
     }
 }
