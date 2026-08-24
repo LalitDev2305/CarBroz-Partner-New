@@ -11,10 +11,10 @@ import org.koin.mp.KoinPlatform
 /**
  * Application-owned semantic connectivity state.
  *
- * Platform hosts translate their native reachability callbacks into [NetworkConnectivity]; no
+ * Platform hosts translate native reachability callbacks through [AppConnectivityBridge]; no
  * platform connectivity APIs cross into common data/runtime modules.
  */
-class ApplicationConnectivity(
+internal class ApplicationConnectivity(
     initialState: NetworkConnectivity = NetworkConnectivity.UNKNOWN,
 ) : NetworkConnectivityObserver {
     private val mutableState = MutableStateFlow(initialState)
@@ -25,11 +25,8 @@ class ApplicationConnectivity(
     }
 }
 
-/** Thin host bridge for platform reachability callbacks. */
+/** Thin host bridge for platform reachability callbacks without exposing data-layer types. */
 object AppConnectivityBridge {
-    val connectivity: NetworkConnectivityObserver
-        get() = koin().get()
-
     fun moveOnline() = controller().update(NetworkConnectivity.ONLINE)
     fun moveOffline() = controller().update(NetworkConnectivity.OFFLINE)
     fun moveToUnknown() = controller().update(NetworkConnectivity.UNKNOWN)
