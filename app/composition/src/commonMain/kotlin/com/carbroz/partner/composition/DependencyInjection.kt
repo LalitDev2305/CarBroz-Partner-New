@@ -4,9 +4,11 @@ import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.database.DatabaseHealthCheck
 import com.carbroz.data.database.RoomDatabaseHealthCheck
+import com.carbroz.data.network.ExecutorNetworkDataSource
 import com.carbroz.data.network.InMemoryNetworkResponseCache
 import com.carbroz.data.network.KtorNetworkTransport
 import com.carbroz.data.network.NetworkAuthorizationProvider
+import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.NetworkEnvironment
 import com.carbroz.data.network.NetworkEnvironmentProvider
 import com.carbroz.data.network.NetworkExecutor
@@ -87,6 +89,8 @@ fun carBrozApplicationModule(
             clock = get(),
         )
     }
+    single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
+    single { NetworkActionExecutor(dataSource = get()) }
 
     single { NavigationStore(NavigationState(listOf(AppShellDestination))) }
 
