@@ -23,6 +23,12 @@ import com.carbroz.data.realtime.RealtimeDeliveryGate
 import com.carbroz.data.realtime.RealtimeStream
 import com.carbroz.data.realtime.RealtimeTransport
 import com.carbroz.data.realtime.createKtorRealtimeTransport
+import com.carbroz.data.sync.DefaultSyncCoordinator
+import com.carbroz.data.sync.KeepQueuedSyncConflictResolver
+import com.carbroz.data.sync.OutboxStore
+import com.carbroz.data.sync.RoomOutboxStore
+import com.carbroz.data.sync.SyncConflictResolver
+import com.carbroz.data.sync.SyncCoordinator
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
@@ -101,6 +107,17 @@ fun carBrozApplicationModule(
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
     single { RealtimeStream(transport = get()) }
     single { RealtimeDeliveryGate() }
+
+    single<OutboxStore> { RoomOutboxStore(database = get()) }
+    single<SyncConflictResolver> { KeepQueuedSyncConflictResolver }
+    single<SyncCoordinator> {
+        DefaultSyncCoordinator(
+            outbox = get(),
+            network = get(),
+            clock = get(),
+            conflictResolver = get(),
+        )
+    }
 
     single { NavigationStore(NavigationState(listOf(AppShellDestination))) }
 
