@@ -1,5 +1,6 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.IosCarBrozDatabaseBuilderProvider
 import com.carbroz.data.securestorage.KeychainSecureStorage
 
@@ -20,6 +21,8 @@ fun initializeCarBrozIosApplication(
             applicationId = applicationId,
         ),
         secureStorage = KeychainSecureStorage(service = applicationId),
-        databaseBuilderProvider = IosCarBrozDatabaseBuilderProvider(),
+        databaseProvider = CarBrozDatabaseFactory(
+            builderProvider = IosCarBrozDatabaseBuilderProvider(),
+        ),
     )
 }
