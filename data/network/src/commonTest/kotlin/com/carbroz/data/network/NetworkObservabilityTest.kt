@@ -37,7 +37,7 @@ class NetworkObservabilityTest {
             transport = NetworkTransport {
                 attempts += 1
                 if (attempts == 1) {
-                    NetworkResult.Failure(NetworkFailure.Transport("temporary-sensitive-detail"))
+                    NetworkResult.Failure(NetworkFailure.Transport)
                 } else {
                     NetworkResult.Success(NetworkResponse(200))
                 }
@@ -169,7 +169,7 @@ class NetworkObservabilityTest {
         val events = mutableListOf<NetworkObservation>()
         val executor = executor(
             transport = NetworkTransport {
-                NetworkResult.Failure(NetworkFailure.Transport("secret transport reason"))
+                NetworkResult.Failure(NetworkFailure.Transport)
             },
             events = events,
         )
@@ -190,7 +190,6 @@ class NetworkObservabilityTest {
         val rendered = events.joinToString("|")
         assertEquals(false, "payload-value" in rendered)
         assertEquals(false, "header-secret" in rendered)
-        assertEquals(false, "secret transport reason" in rendered)
     }
 
     private fun executor(
