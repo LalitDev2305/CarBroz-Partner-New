@@ -4,11 +4,13 @@ import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.database.DatabaseHealthCheck
 import com.carbroz.data.database.RoomDatabaseHealthCheck
+import com.carbroz.data.network.InMemoryNetworkResponseCache
 import com.carbroz.data.network.KtorNetworkTransport
 import com.carbroz.data.network.NetworkAuthorizationProvider
 import com.carbroz.data.network.NetworkEnvironment
 import com.carbroz.data.network.NetworkEnvironmentProvider
 import com.carbroz.data.network.NetworkExecutor
+import com.carbroz.data.network.NetworkResponseCache
 import com.carbroz.data.network.NetworkTransport
 import com.carbroz.data.network.SessionNetworkAuthorizationProvider
 import com.carbroz.data.network.createKtorNetworkTransport
@@ -75,11 +77,14 @@ fun carBrozApplicationModule(
     single { createKtorNetworkTransport() }
     single<NetworkTransport> { get<KtorNetworkTransport>() }
     single<NetworkAuthorizationProvider> { SessionNetworkAuthorizationProvider(sessionProvider = get()) }
+    single<NetworkResponseCache> { InMemoryNetworkResponseCache() }
     single {
         NetworkExecutor(
             environment = get(),
             transport = get(),
             authorizationProvider = get(),
+            responseCache = get(),
+            clock = get(),
         )
     }
 
