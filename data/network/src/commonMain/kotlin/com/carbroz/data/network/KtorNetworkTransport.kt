@@ -59,10 +59,14 @@ class KtorNetworkTransport(
         }
     } catch (error: CancellationException) {
         throw error
-    } catch (error: HttpRequestTimeoutException) {
+    } catch (_: HttpRequestTimeoutException) {
         NetworkResult.Failure(NetworkFailure.Timeout)
     } catch (_: Throwable) {
         NetworkResult.Failure(NetworkFailure.Transport())
+    }
+
+    fun close() {
+        client.close()
     }
 
     private fun decodeBody(value: String): JsonElement? =
@@ -70,10 +74,5 @@ class KtorNetworkTransport(
 }
 
 /** Creates the production multiplatform Ktor transport using the CIO engine. */
-fun createKtorNetworkTransport(
-    configure: HttpClient.() -> Unit = {},
-): KtorNetworkTransport {
-    val client = HttpClient(CIO)
-    client.configure()
-    return KtorNetworkTransport(client)
-}
+fun createKtorNetworkTransport(): KtorNetworkTransport =
+    KtorNetworkTransport(HttpClient(CIO))
