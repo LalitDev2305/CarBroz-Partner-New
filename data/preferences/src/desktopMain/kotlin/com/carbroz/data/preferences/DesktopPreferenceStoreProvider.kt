@@ -1,7 +1,7 @@
 package com.carbroz.data.preferences
 
 import androidx.datastore.core.FileStorage
-import androidx.datastore.preferences.core.PreferencesFileSerializer
+import androidx.datastore.preferences.core.PreferencesSerializer
 import java.io.File
 
 /** Desktop Preferences DataStore backed by an application-owned persistent directory. */
@@ -16,7 +16,7 @@ class DesktopPreferenceStoreProvider(
         DataStorePreferenceStore(
             createPreferencesDataStore(
                 storage = FileStorage(
-                    serializer = PreferencesFileSerializer,
+                    serializer = PreferencesSerializer,
                     produceFile = { directory.resolve(PREFERENCES_FILE_NAME) },
                 ),
             ),
