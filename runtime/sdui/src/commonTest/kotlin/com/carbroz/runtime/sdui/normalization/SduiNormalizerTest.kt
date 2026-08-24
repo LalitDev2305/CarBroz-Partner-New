@@ -26,6 +26,7 @@ import kotlin.test.assertIs
 class SduiNormalizerTest {
     @Test
     fun validRequestCommandNormalizesIntoTrustedDestinationContract() {
+        val binding = "\$form.phone"
         val envelope = envelope(
             RequestCommandDto(
                 method = "post",
@@ -33,7 +34,7 @@ class SduiNormalizerTest {
                 screenId = "otp",
                 templateId = "auth_otp",
                 templateType = "FORM_TEMPLATE",
-                payload = JsonObject(mapOf("phone" to JsonPrimitive("$form.phone"))),
+                payload = JsonObject(mapOf("phone" to JsonPrimitive(binding))),
             ),
         )
         assertEquals(SduiValidationResult.Valid, SduiSchemaValidator().validate(envelope))
@@ -51,7 +52,7 @@ class SduiNormalizerTest {
         assertEquals("otp", command.destination.screenId)
         assertEquals("auth_otp", command.destination.templateId)
         assertEquals(NodeType("FORM_TEMPLATE"), command.destination.templateType)
-        assertEquals(JsonPrimitive("$form.phone"), command.payload["phone"])
+        assertEquals(JsonPrimitive(binding), command.payload["phone"])
     }
 
     @Test
