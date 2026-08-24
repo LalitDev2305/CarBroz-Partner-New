@@ -8,6 +8,8 @@ import com.carbroz.data.network.ExecutorNetworkDataSource
 import com.carbroz.data.network.InMemoryNetworkResponseCache
 import com.carbroz.data.network.KtorNetworkTransport
 import com.carbroz.data.network.NetworkAuthorizationProvider
+import com.carbroz.data.network.NetworkConnectivityObserver
+import com.carbroz.data.network.NetworkConnectivityProvider
 import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.NetworkEnvironment
 import com.carbroz.data.network.NetworkEnvironmentProvider
@@ -85,6 +87,9 @@ fun carBrozApplicationModule(
     single<PreferenceStoreProvider> { preferenceStoreProvider }
     single<PreferenceStore> { get<PreferenceStoreProvider>().get() }
 
+    single { ApplicationConnectivity() }
+    single<NetworkConnectivityObserver> { get<ApplicationConnectivity>() }
+    single<NetworkConnectivityProvider> { get<ApplicationConnectivity>() }
     single { NetworkEnvironmentProvider(configurationProvider = get()) }
     single<NetworkEnvironment> { get<NetworkEnvironmentProvider>().get() }
     single { createKtorNetworkTransport() }
@@ -96,6 +101,7 @@ fun carBrozApplicationModule(
             environment = get(),
             transport = get(),
             authorizationProvider = get(),
+            connectivityProvider = get(),
             responseCache = get(),
             clock = get(),
         )
@@ -123,6 +129,13 @@ fun carBrozApplicationModule(
 
     single { DefaultAppLifecycle() } bind AppLifecycleController::class
     single<AppLifecycle> { get<AppLifecycleController>() }
+    single {
+        SyncActivationCoordinator(
+            lifecycle = get(),
+            connectivity = get(),
+            syncCoordinator = get(),
+        )
+    }
 
     single { StartupCoordinator(tasks = listOf(get<SessionRestoreStartupTask>())) }
     single<ApplicationRuntime> { DefaultApplicationRuntime(startupCoordinator = get()) }
