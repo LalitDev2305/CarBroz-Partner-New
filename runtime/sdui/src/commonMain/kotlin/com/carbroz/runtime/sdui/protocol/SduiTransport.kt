@@ -1,7 +1,7 @@
 package com.carbroz.runtime.sdui.protocol
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 /** Untrusted transport envelope. Never render or execute this model directly. */
 @Serializable
@@ -10,7 +10,7 @@ data class SduiEnvelopeDto(
     val schemaVersion: Int,
     val minimumClientVersion: Int = 1,
     val screen: ScreenDto,
-    val requiredRenderers: Set<String> = emptySet(),
+    val requiredDefinitions: Set<String> = emptySet(),
     val requiredCapabilities: Set<String> = emptySet(),
 )
 
@@ -25,39 +25,40 @@ data class ScreenDto(
 data class TemplateDto(
     val id: String,
     val type: String,
-    val components: List<ComponentDto> = emptyList(),
-    val children: List<ChildDto> = emptyList(),
+    val properties: JsonObject = JsonObject(emptyMap()),
+    val components: List<ComponentDto>,
 )
 
 @Serializable
 data class ComponentDto(
     val id: String,
     val type: String,
-    val subComponents: List<SubComponentDto> = emptyList(),
-    val children: List<ChildDto> = emptyList(),
+    val properties: JsonObject = JsonObject(emptyMap()),
+    val sections: List<SectionDto> = emptyList(),
+    val elements: List<ElementDto> = emptyList(),
 )
 
 @Serializable
-data class SubComponentDto(
+data class SectionDto(
     val id: String,
     val type: String,
-    val children: List<ChildDto> = emptyList(),
+    val properties: JsonObject = JsonObject(emptyMap()),
+    val groups: List<GroupDto> = emptyList(),
+    val elements: List<ElementDto> = emptyList(),
 )
 
 @Serializable
-data class ChildDto(
+data class GroupDto(
     val id: String,
     val type: String,
-    val data: List<ChildDataDto>,
+    val properties: JsonObject = JsonObject(emptyMap()),
+    val elements: List<ElementDto>,
 )
 
-/**
- * Terminal protocol node. Payload remains data-only until a registered renderer
- * interprets an allow-listed [type] after validation/normalization.
- */
+/** Terminal protocol node. Raw properties are decoded only by an allow-listed definition. */
 @Serializable
-data class ChildDataDto(
+data class ElementDto(
     val id: String,
     val type: String,
-    val payload: JsonElement,
+    val properties: JsonObject = JsonObject(emptyMap()),
 )
