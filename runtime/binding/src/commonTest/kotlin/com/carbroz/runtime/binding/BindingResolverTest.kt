@@ -15,16 +15,16 @@ class BindingResolverTest {
     fun parsesOnlyStrictSemanticReferences() {
         assertEquals(
             BindingReference(BindingNamespace.FORM, listOf("phone")),
-            BindingReference.parse("$form.phone"),
+            BindingReference.parse("${'$'}form.phone"),
         )
         assertEquals(
             BindingReference(BindingNamespace.SCREEN, listOf("booking", "id")),
-            BindingReference.parse("$screen.booking.id"),
+            BindingReference.parse("${'$'}screen.booking.id"),
         )
         assertNull(BindingReference.parse("form.phone"))
-        assertNull(BindingReference.parse("$unknown.value"))
-        assertNull(BindingReference.parse("$form"))
-        assertNull(BindingReference.parse("$form..phone"))
+        assertNull(BindingReference.parse("${'$'}unknown.value"))
+        assertNull(BindingReference.parse("${'$'}form"))
+        assertNull(BindingReference.parse("${'$'}form..phone"))
     }
 
     @Test
@@ -41,8 +41,8 @@ class BindingResolverTest {
 
         val payload = JsonObject(
             mapOf(
-                "phone" to JsonPrimitive("$form.phone"),
-                "rememberMe" to JsonPrimitive("$form.rememberMe"),
+                "phone" to JsonPrimitive("${'$'}form.phone"),
+                "rememberMe" to JsonPrimitive("${'$'}form.rememberMe"),
             ),
         )
 
@@ -63,7 +63,7 @@ class BindingResolverTest {
             mapOf(
                 "items" to JsonArray(
                     listOf(
-                        JsonObject(mapOf("bookingId" to JsonPrimitive("$screen.bookingId"))),
+                        JsonObject(mapOf("bookingId" to JsonPrimitive("${'$'}screen.bookingId"))),
                     ),
                 ),
             ),
@@ -78,20 +78,21 @@ class BindingResolverTest {
 
     @Test
     fun leavesLiteralStringsUntouched() {
-        val result = resolver.resolve(JsonPrimitive("Call $form.phone now"), BindingContext.of())
+        val literal = "Call ${'$'}form.phone now"
+        val result = resolver.resolve(JsonPrimitive(literal), BindingContext.of())
         val success = assertIs<BindingResolutionResult.Success>(result)
-        assertEquals(JsonPrimitive("Call $form.phone now"), success.value)
+        assertEquals(JsonPrimitive(literal), success.value)
     }
 
     @Test
     fun failsClosedWhenSourceOrValueIsUnavailable() {
-        val noSource = resolver.resolve(JsonPrimitive("$form.phone"), BindingContext.of())
+        val noSource = resolver.resolve(JsonPrimitive("${'$'}form.phone"), BindingContext.of())
         assertIs<BindingResolutionError.MissingSource>(
             assertIs<BindingResolutionResult.Failure>(noSource).error,
         )
 
         val context = BindingContext.of(BindingNamespace.FORM to BindingValueSource { null })
-        val noValue = resolver.resolve(JsonPrimitive("$form.phone"), context)
+        val noValue = resolver.resolve(JsonPrimitive("${'$'}form.phone"), context)
         assertIs<BindingResolutionError.MissingValue>(
             assertIs<BindingResolutionResult.Failure>(noValue).error,
         )
