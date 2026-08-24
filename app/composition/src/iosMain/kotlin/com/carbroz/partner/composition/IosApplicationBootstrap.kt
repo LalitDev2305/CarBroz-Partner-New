@@ -1,8 +1,9 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.database.IosCarBrozDatabaseBuilderProvider
 import com.carbroz.data.securestorage.KeychainSecureStorage
 
-/** Thin Swift-to-common bootstrap bridge with Keychain-backed secure storage. */
+/** Thin Swift-to-common bootstrap bridge with Keychain and Room platform adapters. */
 fun initializeCarBrozIosApplication(
     environment: String,
     apiBaseUrl: String,
@@ -19,5 +20,6 @@ fun initializeCarBrozIosApplication(
             applicationId = applicationId,
         ),
         secureStorage = KeychainSecureStorage(service = applicationId),
+        databaseBuilderProvider = IosCarBrozDatabaseBuilderProvider(),
     )
 }
