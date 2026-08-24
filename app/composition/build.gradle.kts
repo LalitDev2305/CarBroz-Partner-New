@@ -41,6 +41,8 @@ kotlin {
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":runtime:application"))
+            implementation(project(":runtime:action"))
+            implementation(project(":runtime:sdui"))
             implementation(project(":data:network"))
             implementation(project(":data:database"))
             implementation(project(":data:preferences"))
