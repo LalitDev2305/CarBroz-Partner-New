@@ -8,11 +8,16 @@ fun interface CarBrozDatabaseBuilderProvider {
     fun builder(): RoomDatabase.Builder<CarBrozDatabase>
 }
 
+/** Composition-facing provider that hides Room builder mechanics from higher layers. */
+fun interface CarBrozDatabaseProvider {
+    fun get(): CarBrozDatabase
+}
+
 /** Builds the canonical database with the shared production driver configuration. */
 class CarBrozDatabaseFactory(
     private val builderProvider: CarBrozDatabaseBuilderProvider,
-) {
-    fun create(): CarBrozDatabase = builderProvider.builder()
+) : CarBrozDatabaseProvider {
+    override fun get(): CarBrozDatabase = builderProvider.builder()
         .setDriver(BundledSQLiteDriver())
         .build()
 }
