@@ -1,5 +1,7 @@
 package com.carbroz.data.network
 
+import kotlinx.coroutines.flow.StateFlow
+
 /**
  * Network-facing connectivity capability.
  *
@@ -8,6 +10,13 @@ package com.carbroz.data.network
  */
 fun interface NetworkConnectivityProvider {
     fun connectivity(): NetworkConnectivity
+}
+
+/** Read-only observable connectivity for long-lived runtime consumers such as sync activation. */
+interface NetworkConnectivityObserver : NetworkConnectivityProvider {
+    val state: StateFlow<NetworkConnectivity>
+
+    override fun connectivity(): NetworkConnectivity = state.value
 }
 
 enum class NetworkConnectivity {
