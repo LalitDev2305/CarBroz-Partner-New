@@ -1,5 +1,6 @@
 package com.carbroz.data.sync
 
+import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
 import kotlinx.coroutines.flow.Flow
 
@@ -17,6 +18,7 @@ data class OutboxOperation(
 ) {
     init {
         require(attemptCount >= 0)
+        require(request.method != NetworkMethod.GET) { "Only mutations may be queued in the sync outbox" }
         require(request.idempotencyKey != null) { "Queued mutations require an idempotency key" }
     }
 }
