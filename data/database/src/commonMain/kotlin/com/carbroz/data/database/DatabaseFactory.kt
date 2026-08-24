@@ -3,7 +3,6 @@ package com.carbroz.data.database
 import androidx.room3.RoomDatabase
 import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
-import androidx.sqlite.executeSQL
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 
 /** Platform-owned source of a Room database builder for the canonical application database. */
@@ -18,7 +17,7 @@ fun interface CarBrozDatabaseProvider {
 
 private val Migration1To2 = object : Migration(1, 2) {
     override suspend fun migrate(connection: SQLiteConnection) {
-        connection.executeSQL(
+        connection.prepare(
             """
             CREATE TABLE IF NOT EXISTS sync_outbox (
                 operationId TEXT NOT NULL PRIMARY KEY,
@@ -38,7 +37,9 @@ private val Migration1To2 = object : Migration(1, 2) {
                 nextAttemptAtEpochMilliseconds INTEGER NOT NULL
             )
             """.trimIndent(),
-        )
+        ).use { statement ->
+            statement.step()
+        }
     }
 }
 
