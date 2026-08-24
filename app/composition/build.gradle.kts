@@ -41,6 +41,7 @@ kotlin {
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":runtime:application"))
+            implementation(project(":data:network"))
             implementation(project(":data:secure-storage"))
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
