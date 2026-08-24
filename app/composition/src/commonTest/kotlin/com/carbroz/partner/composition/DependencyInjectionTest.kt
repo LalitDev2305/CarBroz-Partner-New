@@ -14,6 +14,9 @@ import com.carbroz.data.network.SessionNetworkAuthorizationProvider
 import com.carbroz.data.preferences.PreferenceKey
 import com.carbroz.data.preferences.PreferenceStore
 import com.carbroz.data.preferences.PreferenceStoreProvider
+import com.carbroz.data.realtime.KtorRealtimeTransport
+import com.carbroz.data.realtime.RealtimeDeliveryGate
+import com.carbroz.data.realtime.RealtimeTransport
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.BuildInformation
@@ -52,7 +55,7 @@ class DependencyInjectionTest {
     )
 
     @Test
-    fun applicationModuleResolvesCanonicalRuntimeSessionNetworkAndPreferenceGraph() {
+    fun applicationModuleResolvesCanonicalRuntimeSessionNetworkRealtimeAndPreferenceGraph() {
         val secureStorage = FakeSecureStorage()
         val databaseProvider = FailingDatabaseProvider()
         val preferenceStore = FakePreferenceStore()
@@ -69,6 +72,7 @@ class DependencyInjectionTest {
             val networkEnvironment = koin.get<NetworkEnvironment>()
             val ktorTransport = koin.get<KtorNetworkTransport>()
             val authorizationProvider = koin.get<NetworkAuthorizationProvider>()
+            val realtimeTransport = koin.get<KtorRealtimeTransport>()
 
             assertSame(controller, koin.get<AppLifecycle>())
             assertSame(configuration, koin.get<AppConfiguration>())
@@ -91,6 +95,9 @@ class DependencyInjectionTest {
             koin.get<NetworkExecutor>()
             koin.get<NetworkDataSource>()
             koin.get<NetworkActionExecutor>()
+
+            assertSame(realtimeTransport, koin.get<RealtimeTransport>())
+            koin.get<RealtimeDeliveryGate>()
 
             koin.get<StartupCoordinator>()
             koin.get<ApplicationRuntime>()
