@@ -29,6 +29,13 @@ class SessionRefreshCoordinator(
         }
     }
 
+    /** Forces refresh after a server authentication rejection, regardless of local expiry metadata. */
+    suspend fun refreshAfterAuthenticationFailure(): SessionRefreshResult {
+        val current = sessionStore.current() as? SessionState.Authenticated
+            ?: return SessionRefreshResult.NotAuthenticated
+        return refresh(current.tokens)
+    }
+
     private suspend fun refresh(expectedTokens: AuthTokens): SessionRefreshResult {
         if (expectedTokens.refreshToken == null) {
             return SessionRefreshResult.Failed(TokenRefreshFailure.MissingRefreshToken)
@@ -51,8 +58,6 @@ class SessionRefreshCoordinator(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (_: Throwable) {
-            // Never surface Throwable.message here: it may contain response data,
-            // credentials, identifiers or other sensitive implementation detail.
             TokenRefreshResult.Failed(TokenRefreshFailure.Unexpected)
         }
 }
