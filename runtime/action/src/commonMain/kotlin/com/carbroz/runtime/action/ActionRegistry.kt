@@ -10,7 +10,7 @@ interface ActionDefinition {
     fun prepare(command: Command, context: ActionPreparationContext): ActionPreparationResult?
 }
 
-class ActionRegistry private constructor(
+class ActionRegistry internal constructor(
     private val definitions: Map<CommandKind, ActionDefinition>,
 ) {
     val size: Int get() = definitions.size
@@ -28,9 +28,10 @@ class ActionRegistryBuilder {
     private val definitions = linkedMapOf<CommandKind, ActionDefinition>()
 
     fun register(definition: ActionDefinition): ActionRegistryBuilder = apply {
-        require(definitions.put(definition.kind, definition) == null) {
+        require(definition.kind !in definitions) {
             "Duplicate action definition for '${definition.kind.value}'"
         }
+        definitions[definition.kind] = definition
     }
 
     fun registerAll(values: Iterable<ActionDefinition>): ActionRegistryBuilder = apply {
