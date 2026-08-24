@@ -15,9 +15,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.receiveAsFlow
 
 /** Ktor WebSocket adapter kept behind the neutral [RealtimeTransport] boundary. */
 class KtorRealtimeTransport(
@@ -47,6 +49,7 @@ private class KtorRealtimeConnection(
     override val state: StateFlow<RealtimeConnectionState> = mutableState
 
     override val incoming: Flow<RealtimeMessage> = session.incoming
+        .receiveAsFlow()
         .filterIsInstance<Frame.Text>()
         .map { frame -> RealtimeMessage(frame.readText()) }
         .onCompletion { cause ->
@@ -75,7 +78,7 @@ private class FailedRealtimeConnection(
     private val mutableState = MutableStateFlow<RealtimeConnectionState>(RealtimeConnectionState.Failed(failure))
 
     override val state: StateFlow<RealtimeConnectionState> = mutableState
-    override val incoming: Flow<RealtimeMessage> = kotlinx.coroutines.flow.emptyFlow()
+    override val incoming: Flow<RealtimeMessage> = emptyFlow()
 
     override suspend fun send(message: RealtimeMessage) = Unit
 
