@@ -98,8 +98,8 @@ No generic `if tablet`, `if iPad`, `if foldable`, `if desktop` layout architectu
 ## 23. Adaptive state must survive resize
 Continuous Desktop resize, split-screen, orientation changes and fold/unfold transitions must not destroy canonical application/screen state.
 
-## 24. Design system is not SDUI
-The design system owns tokens, styling, accessibility and true visual primitives. It must never recreate ChildData as a competing public UI hierarchy.
+## 24. Design system and adaptive policy are not SDUI
+The design system owns semantic visual tokens, styling, accessibility and true visual primitives. `foundation:adaptive` owns responsive environment/classification and reusable layout policy. SDUI describes semantic UI intent and consumes these foundations during rendering; it does not duplicate them or hardcode device categories. Backend semantic tokens such as typography/spacing/size variants resolve through design-system/adaptive policy. Raw numeric values, when protocol-supported, remain logical values and are not blindly multiplied by screen size.
 
 ## 25. Accessibility is mandatory
 Large fonts, semantics, keyboard focus, pointer input, touch targets, IME, safe areas and platform accessibility behavior are architecture concerns, not later polish.
@@ -107,44 +107,44 @@ Large fonts, semantics, keyboard focus, pointer input, touch targets, IME, safe 
 ## 26. SDUI is a protocol pipeline
 Backend payload -> transport decode -> schema validation -> compatibility -> normalization -> runtime IR -> binding -> rendering. Transport DTOs are not the rendering model.
 
-## 27. SDUI hierarchy is preserved
-Logical hierarchy: Screen -> Template -> Component -> SubComponent -> Child -> ChildData.
+## 27. SDUI hierarchy is preserved with semantic names
+Logical hierarchy: `Screen -> Template -> Component -> Section -> Group -> Element`. These are protocol/runtime structural concepts, not feature modules. `Section` supersedes the earlier `SubComponent` terminology, `Group` supersedes `Child`, and terminal `Element` supersedes `ChildData`/`ChildrenData`. New code must use the semantic names; old names are migration-only and must be deleted after the Phase 8 migration passes.
 
-## 28. SDUI depth is variable
-Intermediate levels are optional. Do not manufacture empty Child/SubComponent objects. Every surviving branch ends in one or more ChildData terminal nodes.
+## 28. SDUI depth is variable but structurally constrained
+`Template` owns Components. A Component may terminate in Elements or continue through Sections. A Section may terminate in Elements or continue through Groups. A Group terminates in one or more Elements. Do not manufacture empty intermediate objects. Invalid combinations are rejected before trusted runtime IR is created. Slots such as leading/content/trailing are constrained presentation slots, not another recursive SDUI hierarchy.
 
-## 29. ChildData is terminal
-No second public hierarchy may independently model dynamic text/image/button/input/etc. Renderers translate ChildData into Compose/design-system implementation.
+## 29. Element is terminal
+`Element` is the only terminal dynamic UI node family for text/image/icon/button/input/etc. No second public hierarchy may independently model these dynamic primitives. Renderers translate normalized Elements into Compose/design-system primitives and emit interaction; terminal Elements do not recursively own arbitrary SDUI nodes.
 
 ## 30. Server screen is immutable
 Backend canonical screen data is immutable. Client interaction state lives in a separate runtime overlay.
 
 ## 31. Runtime IR is canonical
-Rendering and action execution consume safe normalized/runtime models, not arbitrary raw JSON DTOs.
+Rendering and action execution consume safe normalized/runtime models, not arbitrary raw JSON DTOs. Raw `JsonObject`/`JsonElement` property payloads may exist only at the untrusted transport/definition-decoding boundary; Compose renderers receive typed normalized properties.
 
 ## 32. SDUI is untrusted instruction data
-Only allow-listed template/component/node/action/capability/business-operation identifiers may execute. No reflection-based arbitrary execution, dynamic Kotlin evaluation or remote executable code.
+Only allow-listed template/component/section/group/element/action/capability/business-operation identifiers may execute. No reflection-based arbitrary execution, dynamic Kotlin evaluation, classpath scanning for executable behavior or remote executable code.
 
 ## 33. Protocol limits are mandatory
-Validate nesting depth, collection size, duplicate identifiers, mandatory fields, URLs, bindings, capabilities and version compatibility to prevent malformed/pathological payload crashes.
+Validate nesting depth, collection size, sibling/path identity, mandatory fields, URLs, bindings, capabilities and version compatibility to prevent malformed/pathological payload crashes. `NodeId` is local semantic identity; normalized `NodePath` is canonical screen-tree identity. Sibling IDs must be unique, while reusable IDs in different branches are permitted where their canonical paths differ.
 
 ## 34. Version compatibility is explicit
-Support protocol/schema/screen versions, minimum client compatibility and required renderer/capability metadata.
+Support protocol/schema/screen versions, minimum client compatibility and required definition/capability metadata. Required unsupported definitions fail before normal rendering; optional omission/fallback is allowed only where the protocol explicitly declares it safe.
 
 ## 35. Renderer responsibility is pure UI
-Renderer receives normalized runtime data/context, renders Compose and emits interaction. It does not call Ktor, repositories, navigation framework APIs, payment SDKs or platform APIs directly.
+Renderer receives normalized runtime data/context, renders Compose and emits interaction. It does not call Ktor, repositories, navigation framework APIs, payment SDKs or platform APIs directly. `RenderContext` remains intentionally small and must not become a service locator.
 
 ## 36. Registry/Strategy extension model
-New renderer/action/validation/capability/business operation follows CREATE -> REGISTER -> USE. Adding one extension must not require modifying unrelated engines.
+New Template/Component/Section/Group/Element/action/validation/capability/business operation follows `CREATE -> REGISTER -> TEST -> USE`. A normal SDUI UI type owns typed properties plus one definition; a separate renderer file is created only when rendering complexity justifies it. Adding an extension must not require modifying decoder core, hierarchy models, normalizer engine, dispatcher, existing renderers or unrelated engines.
 
-## 37. Prefer one generic renderer registry first
-Do not prematurely create five independent registry implementations. Specialized registries are introduced only if implementation evidence requires them.
+## 37. One immutable generic SDUI definition registry
+Do not create five independent registry engines or parallel property/mapper/renderer registries. SDUI uses one generic immutable registry keyed by `(NodeKind, NodeType)`. `NodeKind` is the closed structural set `TEMPLATE / COMPONENT / SECTION / GROUP / ELEMENT`; `NodeType` is an open server-defined string value. A definition atomically owns its type metadata, typed-property decoding/normalization contract and renderer strategy. Duplicate keys fail during registry construction. Application composition explicitly registers supported definitions; no reflection/classpath auto-discovery.
 
 ## 38. Dynamic screen state uses MVI
 Renderer interaction -> DynamicScreenIntent -> Store -> Effect/Action Runtime -> Result -> Reducer -> DynamicScreenState.
 
 ## 39. Typed binding engine
-Bindings are typed, validated and redaction-aware across runtime/session/screen/form/navigation/action-result/environment scopes.
+Bindings are typed, validated and redaction-aware across runtime/session/screen/form/navigation/action-result/environment scopes. Static values normalize eagerly; dynamic values remain typed literal/binding expressions and resolve against current runtime state rather than being frozen during normalization.
 
 ## 40. Form engine is generic
 Dynamic forms own field state, validation, async validation, cross-field rules, visibility and submission state without feature-specific rewrites.
@@ -252,7 +252,7 @@ Partner and Customer remain independent products but should consume versioned ne
 Platform hosts -> application composition -> features/runtime -> contracts; data/adapters implement inward-owned contracts; external SDK/platform APIs remain outermost. Product domains follow Clean Architecture independently.
 
 ## 75. Extension experience is a quality metric
-A new template/component/ChildData/action/validation/capability/business operation should normally require creating and registering the new implementation, not editing unrelated central engines.
+A new Template/Component/Section/Group/Element/action/validation/capability/business operation should normally require only its isolated implementation plus explicit registration and tests, not edits to unrelated central engines. SDUI concrete UI types are vertically sliced under `template/`, `component/`, `section/`, `group/` and `element/`; generic protocol/model/extension/registry/normalization/rendering infrastructure exists once.
 
 ## 76. Constitution-before-code rule
 This file is the canonical architecture constitution. Before every new phase, implementation must first re-read this document, compare the current repository to the target ownership/dependency rules, document deviations, repair completed-phase drift when necessary, and only then start new code. Any architecture change requires updating this constitution first with the reason and migration impact. Every implementation or migration also requires a repository-wide hygiene and simplification pass: no superseded/duplicate code, module, resource, configuration or dependency may remain after the slice is frozen, and the resulting design must be reviewed for a simpler, clearer or more efficient implementation without weakening correctness, maintainability, testability or multiplatform ownership.
@@ -354,14 +354,37 @@ Dynamic MVI Store + Runtime Overlay
 
 Canonical Screen + Runtime Overlay
   ↓
-RendererRegistry
+SduiRegistry / NodeRendererDispatcher
   ↓
-Template -> Component -> SubComponent -> Child -> ChildData
+Template -> Component -> Section -> Group -> Element
   ↓
-Compose Multiplatform / Design System
+foundation:adaptive + foundation:design-system
+  ↓
+Compose Multiplatform
   ↓
 Android / iOS / Desktop
 ```
+
+### SDUI responsive rendering law
+
+The backend sends semantic UI intent, not device-specific final pixels. Templates/Components/Sections/Groups/Elements may expose semantic layout, typography, spacing, size and style tokens. During rendering, `foundation:adaptive` supplies the current available-space environment and reusable responsive policy, while `foundation:design-system` resolves visual tokens/accessibility-aware primitives. Major layout adaptation belongs primarily to Template/Component policy; terminal Elements adapt through semantic design-system variants and accessibility. Do not scatter screen-width multipliers or `if tablet/desktop` branches through renderers. The same normalized screen must survive resize and recompose against the current adaptive environment without losing canonical MVI state.
+
+### SDUI extension law
+
+```text
+CREATE isolated type package
+  ├── <Type>Properties
+  ├── <Type>Definition
+  └── <Type>Renderer only when complexity justifies it
+        ↓
+REGISTER explicitly in application SDUI definition set
+        ↓
+TEST definition/property/renderer behavior and registry collision safety
+        ↓
+USE by backend NodeType
+```
+
+Adding a normal Template, Component, Section, Group or Element must not require editing the decoder core, hierarchy model, generic normalizer engine, dispatcher, existing definitions or action/network/navigation engines. The application registration set is the intentional controlled integration point.
 
 ### Production bootstrap and dynamic request path
 
@@ -429,7 +452,7 @@ Dedicated adaptive ownership; window/container classification; responsive layout
 Semantic destinations and commands; application-owned back stack; Navigation 3 adapter; deep links; guards/prerequisite redirects; pending destinations; adaptive navigation; restoration; SDUI isolation from framework types.
 
 ## Phase 8 — SDUI Protocol & Rendering Runtime
-Envelope/contracts; decoder; strict validation; protocol limits; compatibility; normalization; runtime IR; immutable screen; variable-depth Screen->Template->Component->SubComponent->Child->ChildData; renderer registry; fallback/unsupported behavior. The protocol/runtime must be production-complete for generic backend-driven screen delivery, not only a fixture decoder.
+Envelope/contracts; decoder; strict validation; protocol limits; compatibility; normalization; immutable trusted runtime IR; path-scoped node identity; variable-depth `Screen -> Template -> Component -> Section -> Group -> Element`; one immutable generic `(NodeKind, NodeType)` definition registry; typed property definitions; centralized renderer dispatch/traversal; adaptive/design-system rendering bridge; fallback/unsupported behavior; architecture tests proving protocol/normalization remain Compose-free and renderers remain side-effect-free. Concrete UI types are vertically sliced under `template/`, `component/`, `section/`, `group/`, `element/` and follow CREATE -> REGISTER -> TEST -> USE. The protocol/runtime must be production-complete for generic backend-driven screen delivery, not only a fixture decoder.
 
 ## Phase 9 — Binding, Dynamic Forms & Action Runtime
 Typed/redaction-aware binding scopes; dynamic form state/validation; action dispatcher/registry; validation/security/authorization; API/navigation/dialog/sheet/URI/capability semantics; trusted endpoint/idempotency policy. API actions must be generic and data-driven so ordinary server-defined button/form actions execute without screen-specific Kotlin networking code.
@@ -534,3 +557,25 @@ Current repository implementation has useful production work, but the following 
 - foundation versioning/product adoption -> Phase 17.
 
 Phase 7 MUST NOT begin until the completed Phase 1–6 reconciliation items above are implemented, tested, optimized, cleaned of superseded/duplicate artifacts and audited.
+
+---
+
+# Part F — Frozen Phase 8 SDUI Implementation Rules
+
+1. **Canonical terminology:** `Screen -> Template -> Component -> Section -> Group -> Element`. Earlier `SubComponent`, `Child`, `ChildData` and `ChildrenData` names are superseded and must not survive the migration as parallel public models.
+2. **One Gradle module first:** keep `:runtime:sdui` as one module until measured dependency/build/test evidence justifies a split. Inside it, package boundaries separate protocol, model, extension, registry, normalization, rendering and concrete type implementations.
+3. **Generic infrastructure once:** use one `NodeKind`, open `NodeType`, one `SduiDefinition` family, one immutable registry implementation and one centralized renderer dispatcher/traversal. Do not duplicate five mini-frameworks.
+4. **Strong structural runtime IR:** do not replace the hierarchy with arbitrary recursive `Node(children: List<Node>)`. Kotlin runtime types must make invalid parent/child combinations unrepresentable after normalization.
+5. **Vertical concrete type packages:** concrete implementations live under `template/<type>`, `component/<type>`, `section/<type>`, `group/<type>`, `element/<type>`. A simple type normally needs `<Type>Properties` + `<Type>Definition`; split `<Type>Renderer` only when complexity warrants it.
+6. **Atomic registration:** a definition owns its type metadata, property decoding/normalization and renderer strategy. There are no synchronized mapper/property/renderer registries. Production registry is immutable after construction; duplicate `(NodeKind, NodeType)` registration fails.
+7. **Explicit registration:** application composition registers definition sets. No reflection/classpath scanning. The normal future extension flow is CREATE -> REGISTER -> TEST -> USE.
+8. **Typed properties:** transport may hold raw JSON properties, but normalization converts them to typed properties before Compose. Static semantic tokens normalize once; dynamic bindings remain typed expressions for `runtime:binding`.
+9. **Responsive law:** server JSON describes semantic intent. `foundation:adaptive` resolves current available-space policy; `foundation:design-system` resolves visual/accessibility tokens. Do not blindly scale every numeric value or branch on device marketing category.
+10. **Pure rendering:** definitions/renderers render UI and emit `RenderEvent`; API, repository, navigation, business and platform side effects execute outside rendering through MVI/action/capability architecture.
+11. **Central traversal:** container definitions choose layout but delegate descendant rendering to the centralized dispatcher so lookup, keys, diagnostics, unsupported handling and tracing remain consistent.
+12. **Identity:** local `NodeId` plus normalized `NodePath` provide stable Compose/runtime identity. Never use collection index as canonical identity. Duplicate sibling IDs are invalid; reusable IDs in different branches are allowed when paths differ.
+13. **Compatibility before render:** unsupported required definitions/capabilities and malformed properties fail before normal Compose traversal. Optional fallback/omission requires explicit protocol semantics.
+14. **Constrained slots:** leading/content/trailing slots may exist for terminal presentation composition but are not another recursive SDUI hierarchy.
+15. **Adaptive state safety:** resize/orientation/posture/container changes re-resolve layout without replacing canonical screen/MVI state.
+16. **Architecture tests:** protocol/model/normalization must remain Compose-free; renderers must remain free of Ktor/repository/Navigation 3/platform side effects; registry duplicate/unsupported behavior and hierarchy normalization are tested.
+17. **Migration hygiene:** Phase 8 is not frozen while old SubComponent/Child/ChildData public models, duplicate registries, giant type `when` dispatchers, raw JSON render paths or superseded tests remain.
