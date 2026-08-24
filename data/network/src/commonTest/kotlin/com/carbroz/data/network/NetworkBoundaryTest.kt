@@ -14,11 +14,13 @@ import kotlin.test.assertIs
 
 class NetworkBoundaryTest {
     @Test
-    fun preparedActionBecomesRelativeTrustedRequest() {
-        val request = prepared().toNetworkRequest()
+    fun preparedActionBecomesRelativeTransportRequest() {
+        val action = prepared()
+        val request = action.toNetworkRequest()
 
         assertEquals("/auth/send-otp", request.endpoint.value)
-        assertEquals("otp", request.destination.screenId)
+        assertEquals(NetworkMethod.POST, request.method)
+        assertEquals("otp", action.destination.screenId)
     }
 
     @Test
