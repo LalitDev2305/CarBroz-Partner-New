@@ -3,7 +3,7 @@ package com.carbroz.data.preferences
 import kotlinx.coroutines.flow.Flow
 
 /** Strongly typed identifier for a non-sensitive preference value. */
-sealed class PreferenceKey<T> internal constructor(val name: String) {
+sealed class PreferenceKey<T> protected constructor(val name: String) {
     class StringKey(name: String) : PreferenceKey<String>(validated(name))
     class BooleanKey(name: String) : PreferenceKey<Boolean>(validated(name))
     class IntKey(name: String) : PreferenceKey<Int>(validated(name))
