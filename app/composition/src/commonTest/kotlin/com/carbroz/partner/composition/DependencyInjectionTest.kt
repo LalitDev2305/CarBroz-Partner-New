@@ -1,5 +1,12 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.network.KtorNetworkTransport
+import com.carbroz.data.network.NetworkAuthorizationProvider
+import com.carbroz.data.network.NetworkEnvironment
+import com.carbroz.data.network.NetworkEnvironmentProvider
+import com.carbroz.data.network.NetworkExecutor
+import com.carbroz.data.network.NetworkTransport
+import com.carbroz.data.network.SessionNetworkAuthorizationProvider
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.BuildInformation
@@ -17,6 +24,7 @@ import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertSame
 import org.koin.core.context.stopKoin
@@ -35,7 +43,7 @@ class DependencyInjectionTest {
     )
 
     @Test
-    fun applicationModuleResolvesCanonicalRuntimeAndSessionGraph() {
+    fun applicationModuleResolvesCanonicalRuntimeSessionAndNetworkGraph() {
         val secureStorage = FakeSecureStorage()
         val application = koinApplication {
             modules(carBrozApplicationModule(configuration, secureStorage))
@@ -45,6 +53,10 @@ class DependencyInjectionTest {
             val koin = application.koin
             val controller = koin.get<AppLifecycleController>()
             val sessionStore = koin.get<SessionStore>()
+            val networkEnvironmentProvider = koin.get<NetworkEnvironmentProvider>()
+            val networkEnvironment = koin.get<NetworkEnvironment>()
+            val ktorTransport = koin.get<KtorNetworkTransport>()
+            val authorizationProvider = koin.get<NetworkAuthorizationProvider>()
 
             assertSame(controller, koin.get<AppLifecycle>())
             assertSame(configuration, koin.get<AppConfiguration>())
@@ -55,6 +67,13 @@ class DependencyInjectionTest {
             koin.get<SessionPersistence>()
             koin.get<TokenExpiryPolicy>()
             koin.get<SessionRestoreStartupTask>()
+
+            assertEquals(networkEnvironmentProvider.get(), networkEnvironment)
+            assertSame(ktorTransport, koin.get<NetworkTransport>())
+            assertIs<SessionNetworkAuthorizationProvider>(authorizationProvider)
+            assertSame(authorizationProvider, koin.get<NetworkAuthorizationProvider>())
+            koin.get<NetworkExecutor>()
+
             koin.get<StartupCoordinator>()
             koin.get<ApplicationRuntime>()
         } finally {
