@@ -3,9 +3,11 @@ package com.carbroz.data.network
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.request.contentType
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.headers
@@ -31,7 +33,7 @@ class KtorNetworkTransport(
             }
             request.body?.let { body ->
                 if (request.headers.keys.none { it.equals(HttpHeaders.ContentType, ignoreCase = true) }) {
-                    headers.append(HttpHeaders.ContentType, "application/json")
+                    contentType(ContentType.Application.Json)
                 }
                 setBody(body)
             }
