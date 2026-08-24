@@ -18,6 +18,8 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":foundation:session"))
+            implementation(project(":foundation:security"))
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.ktor.client.core)
