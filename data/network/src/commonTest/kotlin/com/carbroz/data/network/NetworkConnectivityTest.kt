@@ -72,7 +72,7 @@ class NetworkConnectivityTest {
             environment = NetworkEnvironment("https://api.carbroz.example"),
             transport = NetworkTransport {
                 transportCalls += 1
-                NetworkResult.Failure(NetworkFailure.Transport("temporary"))
+                NetworkResult.Failure(NetworkFailure.Transport)
             },
             connectivityProvider = NetworkConnectivityProvider {
                 connectivityChecks += 1
