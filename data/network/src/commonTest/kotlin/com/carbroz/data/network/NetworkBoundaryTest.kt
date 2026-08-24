@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class NetworkBoundaryTest {
     @Test
@@ -24,7 +25,7 @@ class NetworkBoundaryTest {
     }
 
     @Test
-    fun executorOwnsBaseUrlAndTransportHeaders() = runTest {
+    fun executorOwnsBaseUrlTransportHeadersAndJsonEncoding() = runTest {
         var captured: TransportRequest? = null
         val executor = NetworkExecutor(
             environment = NetworkEnvironment("https://api.carbroz.example"),
@@ -43,6 +44,32 @@ class NetworkBoundaryTest {
         assertEquals("Bearer token", transportRequest.headers["Authorization"])
         assertEquals("123", transportRequest.headers["X-Request-Id"])
         assertEquals("POST", transportRequest.method)
+        assertEquals("{\"phone\":\"9876543210\"}", transportRequest.body)
+    }
+
+    @Test
+    fun bodylessRequestReachesTransportWithoutSyntheticBody() = runTest {
+        var captured: TransportRequest? = null
+        val executor = NetworkExecutor(
+            environment = NetworkEnvironment("https://api.carbroz.example"),
+            transport = NetworkTransport { transportRequest ->
+                captured = transportRequest
+                NetworkResult.Success(NetworkResponse(statusCode = 200))
+            },
+        )
+
+        val result = executor.execute(
+            NetworkRequest(
+                method = NetworkMethod.GET,
+                endpoint = NetworkEndpoint("/bootstrap"),
+            ),
+        )
+        val transportRequest = requireNotNull(captured)
+
+        assertIs<NetworkResult.Success>(result)
+        assertEquals("GET", transportRequest.method)
+        assertEquals("https://api.carbroz.example/bootstrap", transportRequest.url)
+        assertNull(transportRequest.body)
     }
 
     @Test
