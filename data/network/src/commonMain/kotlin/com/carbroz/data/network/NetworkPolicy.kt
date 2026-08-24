@@ -20,9 +20,14 @@ object EmptyNetworkHeaderProvider : NetworkHeaderProvider {
     override suspend fun headers(): Map<String, String> = emptyMap()
 }
 
-/** Prevents dynamic commands from overriding transport-owned security headers. */
+/** Prevents dynamic commands from overriding transport-owned security and execution headers. */
 class NetworkHeaderPolicy(
-    private val reservedNames: Set<String> = setOf("authorization", "host", "content-length"),
+    private val reservedNames: Set<String> = setOf(
+        "authorization",
+        "host",
+        "content-length",
+        "idempotency-key",
+    ),
 ) {
     fun merge(
         transportHeaders: Map<String, String>,
