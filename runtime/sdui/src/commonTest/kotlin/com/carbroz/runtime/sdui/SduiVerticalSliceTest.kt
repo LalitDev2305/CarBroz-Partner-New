@@ -9,6 +9,7 @@ import com.carbroz.runtime.sdui.protocol.SduiDecoder
 import com.carbroz.runtime.sdui.protocol.SduiSchemaValidator
 import com.carbroz.runtime.sdui.registry.CoreSduiDefinitions
 import com.carbroz.runtime.sdui.registry.SduiRegistryBuilder
+import com.carbroz.runtime.sdui.rendering.SduiRenderEvent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -39,10 +40,11 @@ class SduiVerticalSliceTest {
 
         val component = screen.template.components.single()
         val commandIndex = SduiCommandIndex.from(screen)
-        assertEquals("login/form/credentials/fields/inputs/continue", buttonPath(screen).toString())
+        val path = buttonPath(screen)
+        assertEquals("login/form/credentials/fields/inputs/continue", path.toString())
         assertEquals(1, commandIndex.size)
 
-        val command = assertNotNull(commandIndex.commandAt(buttonPath(screen)))
+        val command = assertNotNull(commandIndex.commandFor(SduiRenderEvent.Activated(path)))
         val request = assertIs<RequestCommand>(command)
         assertEquals("/auth/send-otp", request.endpoint)
         assertEquals("otp", request.destination.screenId)
