@@ -25,6 +25,7 @@ data class NetworkRequest(
     val executionPolicy: NetworkExecutionPolicy = NetworkExecutionPolicy(),
     val idempotencyKey: String? = null,
     val authentication: NetworkAuthentication = NetworkAuthentication.NONE,
+    val cachePolicy: NetworkCachePolicy = NetworkCachePolicy.NetworkOnly,
 ) {
     init {
         idempotencyKey?.let { key ->
