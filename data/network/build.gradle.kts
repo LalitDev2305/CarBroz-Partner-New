@@ -20,7 +20,6 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.kotlinx.serialization.json)
             implementation(project(":runtime:action"))
-            implementation(project(":runtime:sdui"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
