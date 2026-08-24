@@ -16,6 +16,7 @@ import com.carbroz.data.preferences.PreferenceStore
 import com.carbroz.data.preferences.PreferenceStoreProvider
 import com.carbroz.data.realtime.KtorRealtimeTransport
 import com.carbroz.data.realtime.RealtimeDeliveryGate
+import com.carbroz.data.realtime.RealtimeStream
 import com.carbroz.data.realtime.RealtimeTransport
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
@@ -97,6 +98,7 @@ class DependencyInjectionTest {
             koin.get<NetworkActionExecutor>()
 
             assertSame(realtimeTransport, koin.get<RealtimeTransport>())
+            koin.get<RealtimeStream>()
             koin.get<RealtimeDeliveryGate>()
 
             koin.get<StartupCoordinator>()
