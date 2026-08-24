@@ -36,8 +36,10 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
         }
-        desktopTest.dependencies {
-            implementation(kotlin("test-junit5"))
+        named("desktopTest") {
+            dependencies {
+                implementation(kotlin("test-junit5"))
+            }
         }
     }
 }
