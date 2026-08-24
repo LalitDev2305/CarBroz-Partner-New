@@ -28,9 +28,9 @@ class NetworkExecutor(
         if (validationFailure != null) return validationFailure
 
         val headers = try {
-            buildMap {
+            buildMap<String, String> {
                 putAll(headerPolicy.merge(headerProvider.headers(), request.headers))
-                request.idempotencyKey?.let { put(IDEMPOTENCY_HEADER, it) }
+                request.idempotencyKey?.let { key -> put(IDEMPOTENCY_HEADER, key) }
             }
         } catch (error: IllegalArgumentException) {
             return NetworkResult.Failure(NetworkFailure.InvalidRequest(error.message.orEmpty()))
