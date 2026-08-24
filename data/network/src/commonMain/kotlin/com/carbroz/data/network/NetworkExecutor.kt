@@ -37,8 +37,11 @@ class NetworkExecutor(
     }
 
     private suspend fun executeWithPolicy(request: NetworkRequest): NetworkResult {
-        val transportRequest = buildTransportRequest(request)
-            ?: return NetworkResult.Failure(NetworkFailure.InvalidRequest("Authenticated session is required"))
+        val transportRequest = try {
+            buildTransportRequest(request)
+        } catch (error: IllegalArgumentException) {
+            return NetworkResult.Failure(NetworkFailure.InvalidRequest(error.message.orEmpty()))
+        } ?: return NetworkResult.Failure(NetworkFailure.InvalidRequest("Authenticated session is required"))
 
         repeat(request.executionPolicy.maxAttempts) { attemptIndex ->
             val result = withTimeoutOrNull(request.executionPolicy.timeoutMillis) {
@@ -55,17 +58,13 @@ class NetworkExecutor(
     }
 
     private suspend fun buildTransportRequest(request: NetworkRequest): TransportRequest? {
-        val headers = try {
-            buildMap<String, String> {
-                putAll(headerPolicy.merge(headerProvider.headers(), request.headers))
-                request.idempotencyKey?.let { key -> put(IDEMPOTENCY_HEADER, key) }
-                if (request.authentication == NetworkAuthentication.SESSION) {
-                    val authorization = authorizationProvider.authorizationHeader() ?: return null
-                    put(AUTHORIZATION_HEADER, authorization)
-                }
+        val headers = buildMap<String, String> {
+            putAll(headerPolicy.merge(headerProvider.headers(), request.headers))
+            request.idempotencyKey?.let { key -> put(IDEMPOTENCY_HEADER, key) }
+            if (request.authentication == NetworkAuthentication.SESSION) {
+                val authorization = authorizationProvider.authorizationHeader() ?: return null
+                put(AUTHORIZATION_HEADER, authorization)
             }
-        } catch (error: IllegalArgumentException) {
-            throw InvalidNetworkRequestException(error.message.orEmpty())
         }
 
         return TransportRequest(
@@ -98,5 +97,3 @@ class NetworkExecutor(
         const val IDEMPOTENCY_HEADER = "Idempotency-Key"
     }
 }
-
-private class InvalidNetworkRequestException(message: String) : IllegalArgumentException(message)
