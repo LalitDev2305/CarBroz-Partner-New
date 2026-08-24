@@ -11,10 +11,15 @@ import kotlin.test.assertEquals
 
 class RealtimeStreamTest {
     @Test
-    fun reconnectsAfterClosedConnectionAndEmitsSubsequentMessages() = runTest {
+    fun successfulConnectionsResetReconnectFailureBudget() = runTest {
         val attempts = ArrayDeque<RealtimeConnection>()
         attempts += FakeConnection(messages = listOf(RealtimeMessage("first")))
         attempts += FakeConnection(messages = listOf(RealtimeMessage("second")))
+        attempts += FailedConnection()
+        attempts += FailedConnection()
+        attempts += FakeConnection(messages = listOf(RealtimeMessage("third")))
+        attempts += FailedConnection()
+        attempts += FailedConnection()
         attempts += FailedConnection()
         val delays = mutableListOf<Long>()
         val stream = RealtimeStream(
@@ -25,8 +30,8 @@ class RealtimeStreamTest {
 
         val result = stream.observe(RealtimeConnectRequest("wss://example.invalid/events")).toList()
 
-        assertEquals(listOf("first", "second"), result.map { it.payload })
-        assertEquals(listOf(10L, 20L), delays)
+        assertEquals(listOf("first", "second", "third"), result.map { it.payload })
+        assertEquals(listOf(10L, 10L, 10L, 20L, 10L, 10L, 20L), delays)
     }
 
     @Test
