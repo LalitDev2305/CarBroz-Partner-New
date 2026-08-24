@@ -9,25 +9,27 @@ import androidx.room3.Query
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import androidx.room3.Upsert
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Canonical application database.
  *
- * Business entities are intentionally absent until their owning repository contracts exist.
- * The metadata row is infrastructure-owned and gives the database a real schema anchor for
- * versioning, migrations, health checks, and deterministic bootstrap verification.
+ * Product/business entities remain absent until their owning repository contracts exist.
+ * Infrastructure-owned metadata and sync outbox records are permitted because their ownership
+ * and lifecycle are defined by foundation data contracts rather than product feature models.
  */
 @Database(
-    entities = [DatabaseMetadataEntity::class],
+    entities = [DatabaseMetadataEntity::class, SyncOutboxEntity::class],
     version = CarBrozDatabase.SCHEMA_VERSION,
     exportSchema = true,
 )
 @ConstructedBy(CarBrozDatabaseConstructor::class)
 abstract class CarBrozDatabase : RoomDatabase() {
     abstract fun metadataDao(): DatabaseMetadataDao
+    abstract fun syncOutboxDao(): SyncOutboxDao
 
     companion object {
-        const val SCHEMA_VERSION: Int = 1
+        const val SCHEMA_VERSION: Int = 2
         const val DATABASE_NAME: String = "carbroz.db"
     }
 }
@@ -53,4 +55,45 @@ interface DatabaseMetadataDao {
 
     @Query("DELETE FROM database_metadata WHERE `key` = :key")
     suspend fun remove(key: String)
+}
+
+@Entity(tableName = "sync_outbox")
+data class SyncOutboxEntity(
+    @PrimaryKey val operationId: String,
+    val method: String,
+    val endpoint: String,
+    val payloadJson: String?,
+    val headersJson: String,
+    val authentication: String,
+    val idempotencyKey: String,
+    val timeoutMillis: Long,
+    val maxAttempts: Int,
+    val initialRetryDelayMillis: Long,
+    val maxRetryDelayMillis: Long,
+    val backoffMultiplier: Double,
+    val createdAtEpochMilliseconds: Long,
+    val attemptCount: Int,
+    val nextAttemptAtEpochMilliseconds: Long,
+)
+
+@Dao
+interface SyncOutboxDao {
+    @Query("SELECT COUNT(*) FROM sync_outbox")
+    fun observePendingCount(): Flow<Int>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM sync_outbox WHERE operationId = :operationId)")
+    suspend fun contains(operationId: String): Boolean
+
+    @Query(
+        "SELECT * FROM sync_outbox " +
+            "WHERE nextAttemptAtEpochMilliseconds <= :nowEpochMilliseconds " +
+            "ORDER BY createdAtEpochMilliseconds ASC, operationId ASC LIMIT :limit",
+    )
+    suspend fun ready(nowEpochMilliseconds: Long, limit: Int): List<SyncOutboxEntity>
+
+    @Upsert
+    suspend fun upsert(entity: SyncOutboxEntity)
+
+    @Query("DELETE FROM sync_outbox WHERE operationId = :operationId")
+    suspend fun remove(operationId: String)
 }
