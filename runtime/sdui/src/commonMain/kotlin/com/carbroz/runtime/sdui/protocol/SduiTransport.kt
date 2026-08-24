@@ -55,10 +55,15 @@ data class GroupDto(
     val elements: List<ElementDto>,
 )
 
-/** Terminal protocol node. Raw properties are decoded only by an allow-listed definition. */
+/**
+ * Terminal protocol node. Raw properties are decoded only by an allow-listed definition.
+ * Interactive Elements may declare one semantic [command]; the Element definition owns
+ * the native activation semantics, so the wire protocol does not repeat click/toggle triggers.
+ */
 @Serializable
 data class ElementDto(
     val id: String,
     val type: String,
     val properties: JsonObject = JsonObject(emptyMap()),
+    val command: CommandDto? = null,
 )
