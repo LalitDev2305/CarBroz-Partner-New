@@ -1,8 +1,10 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.database.DesktopCarBrozDatabaseBuilderProvider
 import com.carbroz.data.securestorage.EphemeralDesktopSecureStorage
+import java.io.File
 
-/** Desktop host bridge using the frozen process-ephemeral credential policy. */
+/** Desktop host bridge using frozen credential policy and application-owned database storage. */
 fun initializeCarBrozDesktopApplication(
     environment: String,
     apiBaseUrl: String,
@@ -19,5 +21,8 @@ fun initializeCarBrozDesktopApplication(
             applicationId = applicationId,
         ),
         secureStorage = EphemeralDesktopSecureStorage(),
+        databaseBuilderProvider = DesktopCarBrozDatabaseBuilderProvider(
+            databaseDirectory = File(System.getProperty("user.home"), ".carbroz/$applicationId/database"),
+        ),
     )
 }
