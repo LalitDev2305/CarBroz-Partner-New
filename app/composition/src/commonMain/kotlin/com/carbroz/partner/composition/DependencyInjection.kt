@@ -1,8 +1,7 @@
 package com.carbroz.partner.composition
 
 import com.carbroz.data.database.CarBrozDatabase
-import com.carbroz.data.database.CarBrozDatabaseBuilderProvider
-import com.carbroz.data.database.CarBrozDatabaseFactory
+import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.database.DatabaseHealthCheck
 import com.carbroz.data.database.RoomDatabaseHealthCheck
 import com.carbroz.data.network.KtorNetworkTransport
@@ -42,7 +41,7 @@ import org.koin.mp.KoinPlatform
 fun carBrozApplicationModule(
     configuration: AppConfiguration,
     secureStorage: SecureStorage,
-    databaseBuilderProvider: CarBrozDatabaseBuilderProvider,
+    databaseProvider: CarBrozDatabaseProvider,
 ) = module {
     single { configuration }
     single<ConfigurationProvider> { ConfigurationProvider { get<AppConfiguration>() } }
@@ -61,9 +60,9 @@ fun carBrozApplicationModule(
     single { TokenExpiryPolicy(clock = get()) }
     single { SessionRestoreStartupTask(sessionStore = get()) }
 
-    single { databaseBuilderProvider }
-    single { CarBrozDatabaseFactory(builderProvider = get()).create() }
-    single<DatabaseHealthCheck> { RoomDatabaseHealthCheck(database = get<CarBrozDatabase>()) }
+    single<CarBrozDatabaseProvider> { databaseProvider }
+    single<CarBrozDatabase> { get<CarBrozDatabaseProvider>().get() }
+    single<DatabaseHealthCheck> { RoomDatabaseHealthCheck(database = get()) }
 
     single { NetworkEnvironmentProvider(configurationProvider = get()) }
     single<NetworkEnvironment> { get<NetworkEnvironmentProvider>().get() }
@@ -91,12 +90,12 @@ fun carBrozApplicationModule(
 internal fun initializeCarBrozDependencyInjection(
     configuration: AppConfiguration,
     secureStorage: SecureStorage,
-    databaseBuilderProvider: CarBrozDatabaseBuilderProvider,
+    databaseProvider: CarBrozDatabaseProvider,
 ) {
     if (KoinPlatform.getKoinOrNull() != null) return
 
     startKoin {
         allowOverride(false)
-        modules(carBrozApplicationModule(configuration, secureStorage, databaseBuilderProvider))
+        modules(carBrozApplicationModule(configuration, secureStorage, databaseProvider))
     }
 }
