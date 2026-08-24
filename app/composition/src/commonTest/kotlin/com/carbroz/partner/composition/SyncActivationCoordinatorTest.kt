@@ -24,7 +24,7 @@ class SyncActivationCoordinatorTest {
         val connectivity = FakeConnectivity()
         val sync = RecordingSyncCoordinator()
         val coordinator = SyncActivationCoordinator(lifecycle, connectivity, sync)
-        val job = coordinator.start(backgroundScope)
+        val job = coordinator.start(this)
         runCurrent()
 
         lifecycle.mutable.value = AppLifecycleState.Foreground
@@ -47,7 +47,7 @@ class SyncActivationCoordinatorTest {
         val connectivity = FakeConnectivity()
         val sync = RecordingSyncCoordinator(failFirst = true)
         val coordinator = SyncActivationCoordinator(lifecycle, connectivity, sync)
-        val job = coordinator.start(backgroundScope)
+        val job = coordinator.start(this)
         runCurrent()
 
         lifecycle.mutable.value = AppLifecycleState.Foreground
