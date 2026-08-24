@@ -59,7 +59,7 @@ internal fun NetworkResult.isRetryable(): Boolean = when (this) {
     is NetworkResult.Failure -> when (val failure = error) {
         NetworkFailure.Offline,
         NetworkFailure.Timeout,
-        is NetworkFailure.Transport,
+        NetworkFailure.Transport,
         -> true
 
         is NetworkFailure.Http ->
