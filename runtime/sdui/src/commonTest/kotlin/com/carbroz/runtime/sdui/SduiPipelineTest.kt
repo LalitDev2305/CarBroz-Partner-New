@@ -39,25 +39,14 @@ class SduiPipelineTest {
 
     @Test
     fun structurallyInvalidPayloadStopsAtValidation() {
-        val result = pipeline(registry()).process(
-            validPayload().replace(
-                "\"components\":[{\n                \"id\":\"form\"",
-                "\"components\":[]",
-            ).replace(
-                ",\n                \"type\":\"FORM\",\n                \"elements\":[{\n                  \"id\":\"continue\",\n                  \"type\":\"BUTTON\",\n                  \"command\":{\n                    \"kind\":\"REQUEST\",\n                    \"method\":\"POST\",\n                    \"endpoint\":\"/auth/send-otp\",\n                    \"screenId\":\"otp\",\n                    \"templateId\":\"auth_otp\",\n                    \"templateType\":\"FORM_TEMPLATE\",\n                    \"payload\":{}\n                  }\n                }]\n              }]",
-                "",
-            ),
-        )
+        val result = pipeline(registry()).process(validPayload(emptyComponents = true))
 
         assertIs<SduiPipelineResult.ValidationFailure>(result)
     }
 
     @Test
     fun unsupportedRequiredDefinitionStopsAtCompatibility() {
-        val payload = validPayload().replace(
-            "\"requiredDefinitions\":[]",
-            "\"requiredDefinitions\":[\"MISSING\"]",
-        )
+        val payload = validPayload(requiredDefinitions = listOf("MISSING"))
 
         val result = pipeline(registry()).process(payload)
 
@@ -81,9 +70,9 @@ class SduiPipelineTest {
 
     @Test
     fun unsupportedRequestDestinationTemplateStopsAtCompatibilityBeforeNormalization() {
-        val payload = validPayload(commandTemplateType = "GRID_TEMPLATE")
-
-        val result = pipeline(registry()).process(payload)
+        val result = pipeline(registry()).process(
+            validPayload(commandTemplateType = "GRID_TEMPLATE"),
+        )
 
         assertIs<SduiPipelineResult.CompatibilityFailure>(result)
     }
@@ -110,20 +99,16 @@ class SduiPipelineTest {
         register(elementDefinition)
     }.build()
 
-    private fun validPayload(commandTemplateType: String = "FORM_TEMPLATE"): String = """
-        {
-          "protocolVersion":1,
-          "schemaVersion":1,
-          "minimumClientVersion":1,
-          "requiredDefinitions":[],
-          "requiredCapabilities":[],
-          "screen":{
-            "id":"screen",
-            "version":1,
-            "template":{
-              "id":"template",
-              "type":"FORM_TEMPLATE",
-              "components":[{
+    private fun validPayload(
+        commandTemplateType: String = "FORM_TEMPLATE",
+        requiredDefinitions: List<String> = emptyList(),
+        emptyComponents: Boolean = false,
+    ): String {
+        val required = requiredDefinitions.joinToString(",") { "\"$it\"" }
+        val components = if (emptyComponents) {
+            "[]"
+        } else {
+            """[{
                 "id":"form",
                 "type":"FORM",
                 "elements":[{
@@ -139,11 +124,28 @@ class SduiPipelineTest {
                     "payload":{}
                   }
                 }]
-              }]
-            }
-          }
+              }]"""
         }
-    """.trimIndent()
+
+        return """
+            {
+              "protocolVersion":1,
+              "schemaVersion":1,
+              "minimumClientVersion":1,
+              "requiredDefinitions":[$required],
+              "requiredCapabilities":[],
+              "screen":{
+                "id":"screen",
+                "version":1,
+                "template":{
+                  "id":"template",
+                  "type":"FORM_TEMPLATE",
+                  "components":$components
+                }
+              }
+            }
+        """.trimIndent()
+    }
 
     private class TestDefinition(
         override val kind: NodeKind,
