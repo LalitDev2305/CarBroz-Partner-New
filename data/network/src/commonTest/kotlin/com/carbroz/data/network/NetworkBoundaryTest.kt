@@ -1,5 +1,6 @@
 package com.carbroz.data.network
 
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -73,19 +74,160 @@ class NetworkBoundaryTest {
     }
 
     @Test
-    fun requestCannotOverrideAuthorization() = runTest {
+    fun requestCannotOverrideAuthorizationOrIdempotencyHeader() = runTest {
         val executor = NetworkExecutor(
             environment = NetworkEnvironment("https://api.carbroz.example"),
             transport = NetworkTransport { NetworkResult.Success(NetworkResponse(200)) },
             headerProvider = NetworkHeaderProvider { mapOf("Authorization" to "trusted") },
         )
 
+        listOf("authorization", "Idempotency-Key").forEach { forbiddenHeader ->
+            val result = executor.execute(request(mapOf(forbiddenHeader to "untrusted")))
+            val failure = assertIs<NetworkResult.Failure>(result)
+            assertIs<NetworkFailure.InvalidRequest>(failure.error)
+        }
+    }
+
+    @Test
+    fun timeoutIsNormalizedAtExecutorBoundary() = runTest {
+        val executor = NetworkExecutor(
+            environment = NetworkEnvironment("https://api.carbroz.example"),
+            transport = NetworkTransport {
+                awaitCancellation()
+            },
+        )
+
         val result = executor.execute(
-            request(mapOf("authorization" to "untrusted")),
+            NetworkRequest(
+                method = NetworkMethod.GET,
+                endpoint = NetworkEndpoint("/bootstrap"),
+                executionPolicy = NetworkExecutionPolicy(timeoutMillis = 100),
+            ),
         )
 
         val failure = assertIs<NetworkResult.Failure>(result)
-        assertIs<NetworkFailure.InvalidRequest>(failure.error)
+        assertEquals(NetworkFailure.Timeout, failure.error)
+    }
+
+    @Test
+    fun retryableFailureRetriesThenReturnsSuccess() = runTest {
+        var attempts = 0
+        val delays = mutableListOf<Long>()
+        val executor = NetworkExecutor(
+            environment = NetworkEnvironment("https://api.carbroz.example"),
+            transport = NetworkTransport {
+                attempts += 1
+                if (attempts == 1) {
+                    NetworkResult.Failure(NetworkFailure.Transport("temporary"))
+                } else {
+                    NetworkResult.Success(NetworkResponse(200))
+                }
+            },
+            retryDelay = NetworkRetryDelay { delays += it },
+        )
+
+        val result = executor.execute(
+            NetworkRequest(
+                method = NetworkMethod.GET,
+                endpoint = NetworkEndpoint("/bootstrap"),
+                executionPolicy = NetworkExecutionPolicy(
+                    maxAttempts = 3,
+                    initialRetryDelayMillis = 100,
+                ),
+            ),
+        )
+
+        assertIs<NetworkResult.Success>(result)
+        assertEquals(2, attempts)
+        assertEquals(listOf(100L), delays)
+    }
+
+    @Test
+    fun nonRetryableHttpFailureDoesNotRetry() = runTest {
+        var attempts = 0
+        val executor = NetworkExecutor(
+            environment = NetworkEnvironment("https://api.carbroz.example"),
+            transport = NetworkTransport {
+                attempts += 1
+                NetworkResult.Failure(NetworkFailure.Http(400))
+            },
+            retryDelay = NetworkRetryDelay { error("delay must not run") },
+        )
+
+        val result = executor.execute(
+            NetworkRequest(
+                method = NetworkMethod.GET,
+                endpoint = NetworkEndpoint("/bootstrap"),
+                executionPolicy = NetworkExecutionPolicy(maxAttempts = 3),
+            ),
+        )
+
+        val failure = assertIs<NetworkResult.Failure>(result)
+        assertIs<NetworkFailure.Http>(failure.error)
+        assertEquals(1, attempts)
+    }
+
+    @Test
+    fun postRetryRequiresAndAppliesIdempotencyKey() = runTest {
+        var attemptsWithoutKey = 0
+        val executorWithoutKey = NetworkExecutor(
+            environment = NetworkEnvironment("https://api.carbroz.example"),
+            transport = NetworkTransport {
+                attemptsWithoutKey += 1
+                NetworkResult.Failure(NetworkFailure.Transport())
+            },
+            retryDelay = NetworkRetryDelay { },
+        )
+
+        val invalidResult = executorWithoutKey.execute(
+            request().copy(executionPolicy = NetworkExecutionPolicy(maxAttempts = 2)),
+        )
+
+        val invalidFailure = assertIs<NetworkResult.Failure>(invalidResult)
+        assertIs<NetworkFailure.InvalidRequest>(invalidFailure.error)
+        assertEquals(0, attemptsWithoutKey)
+
+        var attemptsWithKey = 0
+        var capturedIdempotencyKey: String? = null
+        val executorWithKey = NetworkExecutor(
+            environment = NetworkEnvironment("https://api.carbroz.example"),
+            transport = NetworkTransport { transportRequest ->
+                attemptsWithKey += 1
+                capturedIdempotencyKey = transportRequest.headers["Idempotency-Key"]
+                if (attemptsWithKey == 1) {
+                    NetworkResult.Failure(NetworkFailure.Http(503))
+                } else {
+                    NetworkResult.Success(NetworkResponse(200))
+                }
+            },
+            retryDelay = NetworkRetryDelay { },
+        )
+
+        val successResult = executorWithKey.execute(
+            request().copy(
+                executionPolicy = NetworkExecutionPolicy(maxAttempts = 2),
+                idempotencyKey = "send-otp-123",
+            ),
+        )
+
+        assertIs<NetworkResult.Success>(successResult)
+        assertEquals(2, attemptsWithKey)
+        assertEquals("send-otp-123", capturedIdempotencyKey)
+    }
+
+    @Test
+    fun retryBackoffIsBounded() {
+        val policy = NetworkExecutionPolicy(
+            maxAttempts = 5,
+            initialRetryDelayMillis = 100,
+            maxRetryDelayMillis = 250,
+            backoffMultiplier = 2.0,
+        )
+
+        assertEquals(100, policy.retryDelayMillis(0))
+        assertEquals(200, policy.retryDelayMillis(1))
+        assertEquals(250, policy.retryDelayMillis(2))
+        assertEquals(250, policy.retryDelayMillis(3))
     }
 
     private fun request(headers: Map<String, String> = emptyMap()) = NetworkRequest(
