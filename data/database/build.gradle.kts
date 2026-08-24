@@ -25,8 +25,8 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.androidx.room3.runtime)
-            implementation(libs.androidx.sqlite.bundled)
+            api(libs.androidx.room3.runtime)
+            api(libs.androidx.sqlite.bundled)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
