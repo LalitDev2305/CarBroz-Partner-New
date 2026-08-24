@@ -10,7 +10,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -27,26 +26,22 @@ class SyncActivationCoordinator(
 ) {
     fun start(scope: CoroutineScope): Job = scope.launch {
         launch {
-            lifecycle.state
-                .distinctUntilChanged()
-                .collect { state ->
-                    if (state == AppLifecycleState.Foreground) {
-                        synchronizeSafely(SyncTrigger.FOREGROUND)
-                    }
+            lifecycle.state.collect { state ->
+                if (state == AppLifecycleState.Foreground) {
+                    synchronizeSafely(SyncTrigger.FOREGROUND)
                 }
+            }
         }
 
         launch {
             var previous = connectivity.state.value
-            connectivity.state
-                .distinctUntilChanged()
-                .collect { current ->
-                    val restored = current == NetworkConnectivity.ONLINE && previous != NetworkConnectivity.ONLINE
-                    previous = current
-                    if (restored) {
-                        synchronizeSafely(SyncTrigger.CONNECTIVITY_RESTORED)
-                    }
+            connectivity.state.collect { current ->
+                val restored = current == NetworkConnectivity.ONLINE && previous != NetworkConnectivity.ONLINE
+                previous = current
+                if (restored) {
+                    synchronizeSafely(SyncTrigger.CONNECTIVITY_RESTORED)
                 }
+            }
         }
     }
 
