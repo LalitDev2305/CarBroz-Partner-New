@@ -9,7 +9,7 @@ import com.carbroz.foundation.lifecycle.AppLifecycleState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -29,7 +29,7 @@ class SyncActivationCoordinator(
         launch {
             lifecycle.state
                 .distinctUntilChanged()
-                .collectLatest { state ->
+                .collect { state ->
                     if (state == AppLifecycleState.Foreground) {
                         synchronizeSafely(SyncTrigger.FOREGROUND)
                     }
@@ -40,7 +40,7 @@ class SyncActivationCoordinator(
             var previous = connectivity.state.value
             connectivity.state
                 .distinctUntilChanged()
-                .collectLatest { current ->
+                .collect { current ->
                     val restored = current == NetworkConnectivity.ONLINE && previous != NetworkConnectivity.ONLINE
                     previous = current
                     if (restored) {
