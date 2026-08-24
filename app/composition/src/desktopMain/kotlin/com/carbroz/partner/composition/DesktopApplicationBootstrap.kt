@@ -2,10 +2,11 @@ package com.carbroz.partner.composition
 
 import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.DesktopCarBrozDatabaseBuilderProvider
+import com.carbroz.data.preferences.DesktopPreferenceStoreProvider
 import com.carbroz.data.securestorage.EphemeralDesktopSecureStorage
 import java.io.File
 
-/** Desktop host bridge using frozen credential policy and application-owned database storage. */
+/** Desktop host bridge using frozen credential policy and application-owned persistent storage. */
 fun initializeCarBrozDesktopApplication(
     environment: String,
     apiBaseUrl: String,
@@ -13,6 +14,7 @@ fun initializeCarBrozDesktopApplication(
     versionCode: Long,
     applicationId: String,
 ) {
+    val appDirectory = File(System.getProperty("user.home"), ".carbroz/$applicationId")
     initializeCarBrozDependencyInjection(
         configuration = createCarBrozAppConfiguration(
             environment = environment,
@@ -24,8 +26,11 @@ fun initializeCarBrozDesktopApplication(
         secureStorage = EphemeralDesktopSecureStorage(),
         databaseProvider = CarBrozDatabaseFactory(
             builderProvider = DesktopCarBrozDatabaseBuilderProvider(
-                databaseDirectory = File(System.getProperty("user.home"), ".carbroz/$applicationId/database"),
+                databaseDirectory = File(appDirectory, "database"),
             ),
+        ),
+        preferenceStoreProvider = DesktopPreferenceStoreProvider(
+            storageDirectory = File(appDirectory, "preferences"),
         ),
     )
 }
