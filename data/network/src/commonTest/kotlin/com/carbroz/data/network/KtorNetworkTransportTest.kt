@@ -14,6 +14,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.fail
 
 class KtorNetworkTransportTest {
     @Test
@@ -39,7 +40,10 @@ class KtorNetworkTransportTest {
             ),
         )
 
-        val success = assertIs<NetworkResult.Success>(result)
+        val success = when (result) {
+            is NetworkResult.Success -> result
+            is NetworkResult.Failure -> fail("Expected success, got failure: ${result.error}")
+        }
         assertEquals(200, success.response.statusCode)
         assertEquals(
             JsonObject(mapOf("ok" to JsonPrimitive(true))),
