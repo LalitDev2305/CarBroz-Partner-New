@@ -22,7 +22,7 @@ class KtorNetworkTransportTest {
             assertEquals("POST", request.method.value)
             assertEquals("https://api.carbroz.example/action", request.url.toString())
             assertEquals("request-123", request.headers["X-Request-Id"])
-            assertEquals("application/json", request.headers[HttpHeaders.ContentType])
+            assertEquals("application/json", request.body.contentType?.toString())
             respond(
                 content = """{"ok":true}""",
                 status = HttpStatusCode.OK,
