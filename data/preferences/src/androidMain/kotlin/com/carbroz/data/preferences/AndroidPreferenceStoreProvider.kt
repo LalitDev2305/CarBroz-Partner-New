@@ -2,7 +2,7 @@ package com.carbroz.data.preferences
 
 import android.content.Context
 import androidx.datastore.core.FileStorage
-import androidx.datastore.preferences.core.PreferencesSerializer
+import androidx.datastore.preferences.core.PreferencesFileSerializer
 
 /** Android Preferences DataStore backed by the application's private files directory. */
 class AndroidPreferenceStoreProvider(
@@ -13,7 +13,7 @@ class AndroidPreferenceStoreProvider(
         DataStorePreferenceStore(
             createPreferencesDataStore(
                 storage = FileStorage(
-                    serializer = PreferencesSerializer,
+                    serializer = PreferencesFileSerializer,
                     produceFile = { applicationContext.filesDir.resolve(PREFERENCES_FILE_NAME) },
                 ),
             ),
