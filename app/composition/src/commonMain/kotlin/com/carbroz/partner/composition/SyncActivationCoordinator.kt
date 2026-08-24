@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * and semantic connectivity transitions into sync triggers. Failures are isolated so long-lived
  * observation survives an individual synchronization failure.
  */
-class SyncActivationCoordinator(
+internal class SyncActivationCoordinator(
     private val lifecycle: AppLifecycle,
     private val connectivity: NetworkConnectivityObserver,
     private val syncCoordinator: SyncCoordinator,
