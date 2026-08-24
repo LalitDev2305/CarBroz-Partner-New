@@ -1,7 +1,7 @@
 package com.carbroz.data.network
 
 /** Stable identity for one logical network execution, including retries and auth recovery. */
-@JvmInline
+@kotlin.jvm.JvmInline
 value class NetworkRequestId(val value: String) {
     init {
         require(value.isNotBlank()) { "Network request id must not be blank" }
