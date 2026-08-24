@@ -37,6 +37,50 @@ class SduiProtocolTest {
     }
 
     @Test
+    fun decoderAcceptsMinimalRequestCommandWithoutTriggerOrResponseWrapper() {
+        val payload = """
+            {
+              "protocolVersion": 1,
+              "schemaVersion": 1,
+              "screen": {
+                "id": "login",
+                "version": 1,
+                "template": {
+                  "id": "auth_login",
+                  "type": "FORM_TEMPLATE",
+                  "components": [{
+                    "id": "form",
+                    "type": "FORM",
+                    "elements": [{
+                      "id": "continue",
+                      "type": "BUTTON",
+                      "properties": {"text":"Continue"},
+                      "command": {
+                        "kind": "REQUEST",
+                        "method": "POST",
+                        "endpoint": "/auth/send-otp",
+                        "screenId": "otp",
+                        "templateId": "auth_otp",
+                        "templateType": "FORM_TEMPLATE",
+                        "payload": {"phone":"${'$'}form.phone"}
+                      }
+                    }]
+                  }]
+                }
+              }
+            }
+        """.trimIndent()
+
+        val success = assertIs<SduiDecodeResult.Success>(SduiDecoder().decode(payload))
+        val command = success.envelope.screen.template.components.single().elements.single().command
+        val request = assertIs<RequestCommandDto>(command)
+        assertEquals("/auth/send-otp", request.endpoint)
+        assertEquals("otp", request.screenId)
+        assertEquals("auth_otp", request.templateId)
+        assertEquals("FORM_TEMPLATE", request.templateType)
+    }
+
+    @Test
     fun decoderRejectsUnknownTransportFields() {
         val payload = """
             {
