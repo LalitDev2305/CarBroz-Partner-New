@@ -11,8 +11,8 @@ import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.rendering.RenderableSduiDefinition
 import com.carbroz.runtime.sdui.rendering.SduiRenderContext
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 enum class TextStyleToken {
     TITLE_LARGE,
@@ -30,9 +30,9 @@ object TextElementDefinition : ElementDefinition<TextElementProperties>, Rendera
     override val type: NodeType = NodeType("TEXT")
 
     override fun decodeProperties(raw: JsonObject): PropertyDecodeResult<TextElementProperties> {
-        val text = raw["text"]?.jsonPrimitive?.contentOrNull
-            ?: return PropertyDecodeResult.Failure("TEXT requires non-null 'text'.")
-        val styleValue = raw["style"]?.jsonPrimitive?.contentOrNull ?: TextStyleToken.BODY_MEDIUM.name
+        val text = (raw["text"] as? JsonPrimitive)?.contentOrNull
+            ?: return PropertyDecodeResult.Failure("TEXT requires string 'text'.")
+        val styleValue = (raw["style"] as? JsonPrimitive)?.contentOrNull ?: TextStyleToken.BODY_MEDIUM.name
         val style = TextStyleToken.entries.firstOrNull { it.name == styleValue.uppercase() }
             ?: return PropertyDecodeResult.Failure("Unsupported TEXT style '$styleValue'.")
         return PropertyDecodeResult.Success(TextElementProperties(text, style))
