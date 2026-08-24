@@ -1,9 +1,5 @@
 package com.carbroz.data.network
 
-import com.carbroz.runtime.action.PreparedAction
-import com.carbroz.runtime.sdui.model.NodeType
-import com.carbroz.runtime.sdui.model.RequestMethod
-import com.carbroz.runtime.sdui.model.ScreenDestination
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -14,13 +10,11 @@ import kotlin.test.assertIs
 
 class NetworkBoundaryTest {
     @Test
-    fun preparedActionBecomesRelativeTransportRequest() {
-        val action = prepared()
-        val request = action.toNetworkRequest()
+    fun networkRequestUsesRelativeEndpoint() {
+        val request = request()
 
         assertEquals("/auth/send-otp", request.endpoint.value)
         assertEquals(NetworkMethod.POST, request.method)
-        assertEquals("otp", action.destination.screenId)
     }
 
     @Test
@@ -34,21 +28,21 @@ class NetworkBoundaryTest {
         var captured: TransportRequest? = null
         val executor = NetworkExecutor(
             environment = NetworkEnvironment("https://api.carbroz.example"),
-            transport = NetworkTransport { request ->
-                captured = request
+            transport = NetworkTransport { transportRequest ->
+                captured = transportRequest
                 NetworkResult.Success(NetworkResponse(statusCode = 200))
             },
             headerProvider = NetworkHeaderProvider { mapOf("Authorization" to "Bearer token") },
         )
 
-        val result = executor.execute(prepared().toNetworkRequest(mapOf("X-Request-Id" to "123")))
-        val request = requireNotNull(captured)
+        val result = executor.execute(request(mapOf("X-Request-Id" to "123")))
+        val transportRequest = requireNotNull(captured)
 
         assertIs<NetworkResult.Success>(result)
-        assertEquals("https://api.carbroz.example/auth/send-otp", request.url)
-        assertEquals("Bearer token", request.headers["Authorization"])
-        assertEquals("123", request.headers["X-Request-Id"])
-        assertEquals("POST", request.method)
+        assertEquals("https://api.carbroz.example/auth/send-otp", transportRequest.url)
+        assertEquals("Bearer token", transportRequest.headers["Authorization"])
+        assertEquals("123", transportRequest.headers["X-Request-Id"])
+        assertEquals("POST", transportRequest.method)
     }
 
     @Test
@@ -60,21 +54,17 @@ class NetworkBoundaryTest {
         )
 
         val result = executor.execute(
-            prepared().toNetworkRequest(mapOf("authorization" to "untrusted")),
+            request(mapOf("authorization" to "untrusted")),
         )
 
         val failure = assertIs<NetworkResult.Failure>(result)
         assertIs<NetworkFailure.InvalidRequest>(failure.error)
     }
 
-    private fun prepared() = PreparedAction.Request(
-        method = RequestMethod.POST,
-        endpoint = "/auth/send-otp",
-        destination = ScreenDestination(
-            screenId = "otp",
-            templateId = "auth_otp",
-            templateType = NodeType("FORM_TEMPLATE"),
-        ),
+    private fun request(headers: Map<String, String> = emptyMap()) = NetworkRequest(
+        method = NetworkMethod.POST,
+        endpoint = NetworkEndpoint("/auth/send-otp"),
         payload = JsonObject(mapOf("phone" to JsonPrimitive("9876543210"))),
+        headers = headers,
     )
 }
