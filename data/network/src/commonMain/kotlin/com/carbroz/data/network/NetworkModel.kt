@@ -26,7 +26,16 @@ data class NetworkRequest(
     val endpoint: NetworkEndpoint,
     val payload: JsonObject? = null,
     val headers: Map<String, String> = emptyMap(),
-)
+    val executionPolicy: NetworkExecutionPolicy = NetworkExecutionPolicy(),
+    val idempotencyKey: String? = null,
+) {
+    init {
+        idempotencyKey?.let { key ->
+            require(key.isNotBlank()) { "Idempotency key must not be blank" }
+            require(key.length <= 128) { "Idempotency key must be <= 128 characters" }
+        }
+    }
+}
 
 data class NetworkResponse(
     val statusCode: Int,
@@ -37,7 +46,6 @@ data class NetworkResponse(
 sealed interface NetworkFailure {
     data object Offline : NetworkFailure
     data object Timeout : NetworkFailure
-    data object Cancelled : NetworkFailure
     data class Http(val statusCode: Int, val body: JsonElement? = null) : NetworkFailure
     data class Transport(val reason: String? = null) : NetworkFailure
     data class InvalidRequest(val reason: String) : NetworkFailure
