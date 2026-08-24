@@ -20,7 +20,7 @@ object EmptyNetworkHeaderProvider : NetworkHeaderProvider {
     override suspend fun headers(): Map<String, String> = emptyMap()
 }
 
-/** Prevents dynamic commands from overriding transport-owned security and execution headers. */
+/** Prevents dynamic commands from overriding or injecting transport-owned HTTP headers. */
 class NetworkHeaderPolicy(
     private val reservedNames: Set<String> = setOf(
         "authorization",
@@ -33,8 +33,29 @@ class NetworkHeaderPolicy(
         transportHeaders: Map<String, String>,
         requestHeaders: Map<String, String>,
     ): Map<String, String> {
+        validateHeaders(transportHeaders)
+        validateHeaders(requestHeaders)
+
         val forbidden = requestHeaders.keys.firstOrNull { it.lowercase() in reservedNames }
         require(forbidden == null) { "Request cannot override reserved header: $forbidden" }
         return transportHeaders + requestHeaders
     }
+
+    private fun validateHeaders(headers: Map<String, String>) {
+        headers.forEach { (name, value) ->
+            require(name.isNotBlank()) { "Header name must not be blank" }
+            require(name.all(::isValidHeaderNameCharacter)) { "Header name contains invalid characters" }
+            require(value.none(::isForbiddenHeaderValueCharacter)) { "Header value contains invalid control characters" }
+        }
+    }
+
+    private fun isValidHeaderNameCharacter(character: Char): Boolean =
+        character in 'a'..'z' ||
+            character in 'A'..'Z' ||
+            character in '0'..'9' ||
+            character in "!#$%&'*+-.^_`|~"
+
+    private fun isForbiddenHeaderValueCharacter(character: Char): Boolean =
+        character == '\r' || character == '\n' || character.code == 0x7F || character.code in 0x00..0x08 ||
+            character.code in 0x0B..0x0C || character.code in 0x0E..0x1F
 }
