@@ -63,8 +63,12 @@ class KtorNetworkTransport(
         throw error
     } catch (_: HttpRequestTimeoutException) {
         NetworkResult.Failure(NetworkFailure.Timeout)
-    } catch (_: Throwable) {
-        NetworkResult.Failure(NetworkFailure.Transport())
+    } catch (error: Throwable) {
+        NetworkResult.Failure(
+            NetworkFailure.Transport(
+                reason = error.message ?: error::class.simpleName,
+            ),
+        )
     }
 
     fun close() {
