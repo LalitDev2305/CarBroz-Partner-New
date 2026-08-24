@@ -7,13 +7,16 @@ import com.carbroz.data.sync.SyncReport
 import com.carbroz.data.sync.SyncTrigger
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleState
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SyncActivationCoordinatorTest {
     @Test
     fun foregroundAndConnectivityTransitionsTriggerSyncWithoutDuplicateOnlineEmission() = runTest {
@@ -22,6 +25,7 @@ class SyncActivationCoordinatorTest {
         val sync = RecordingSyncCoordinator()
         val coordinator = SyncActivationCoordinator(lifecycle, connectivity, sync)
         val job = coordinator.start(backgroundScope)
+        runCurrent()
 
         lifecycle.mutable.value = AppLifecycleState.Foreground
         advanceUntilIdle()
@@ -44,6 +48,7 @@ class SyncActivationCoordinatorTest {
         val sync = RecordingSyncCoordinator(failFirst = true)
         val coordinator = SyncActivationCoordinator(lifecycle, connectivity, sync)
         val job = coordinator.start(backgroundScope)
+        runCurrent()
 
         lifecycle.mutable.value = AppLifecycleState.Foreground
         advanceUntilIdle()
