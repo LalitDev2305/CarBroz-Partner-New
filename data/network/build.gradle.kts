@@ -21,6 +21,7 @@ kotlin {
             implementation(project(":foundation:configuration"))
             implementation(project(":foundation:session"))
             implementation(project(":foundation:security"))
+            implementation(project(":foundation:time"))
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.ktor.client.core)
