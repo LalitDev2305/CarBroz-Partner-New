@@ -3,9 +3,10 @@ package com.carbroz.partner.composition
 import android.content.Context
 import com.carbroz.data.database.AndroidCarBrozDatabaseBuilderProvider
 import com.carbroz.data.database.CarBrozDatabaseFactory
+import com.carbroz.data.preferences.AndroidPreferenceStoreProvider
 import com.carbroz.data.securestorage.AndroidKeystoreSecureStorage
 
-/** Android host bridge that supplies platform-backed secure storage and database adapters. */
+/** Android host bridge that supplies platform-backed storage adapters. */
 fun initializeCarBrozAndroidApplication(
     context: Context,
     environment: String,
@@ -30,5 +31,6 @@ fun initializeCarBrozAndroidApplication(
         databaseProvider = CarBrozDatabaseFactory(
             builderProvider = AndroidCarBrozDatabaseBuilderProvider(context),
         ),
+        preferenceStoreProvider = AndroidPreferenceStoreProvider(context),
     )
 }
