@@ -20,6 +20,7 @@ import com.carbroz.data.preferences.PreferenceStore
 import com.carbroz.data.preferences.PreferenceStoreProvider
 import com.carbroz.data.realtime.KtorRealtimeTransport
 import com.carbroz.data.realtime.RealtimeDeliveryGate
+import com.carbroz.data.realtime.RealtimeStream
 import com.carbroz.data.realtime.RealtimeTransport
 import com.carbroz.data.realtime.createKtorRealtimeTransport
 import com.carbroz.foundation.configuration.AppConfiguration
@@ -98,6 +99,7 @@ fun carBrozApplicationModule(
 
     single { createKtorRealtimeTransport() }
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
+    single { RealtimeStream(transport = get()) }
     single { RealtimeDeliveryGate() }
 
     single { NavigationStore(NavigationState(listOf(AppShellDestination))) }
