@@ -13,13 +13,9 @@ value class NetworkEndpoint(val value: String) {
     }
 }
 
-enum class NetworkMethod {
-    GET,
-    POST,
-    PUT,
-    PATCH,
-    DELETE,
-}
+enum class NetworkMethod { GET, POST, PUT, PATCH, DELETE }
+
+enum class NetworkAuthentication { NONE, SESSION }
 
 data class NetworkRequest(
     val method: NetworkMethod,
@@ -28,6 +24,7 @@ data class NetworkRequest(
     val headers: Map<String, String> = emptyMap(),
     val executionPolicy: NetworkExecutionPolicy = NetworkExecutionPolicy(),
     val idempotencyKey: String? = null,
+    val authentication: NetworkAuthentication = NetworkAuthentication.NONE,
 ) {
     init {
         idempotencyKey?.let { key ->
