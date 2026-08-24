@@ -42,7 +42,12 @@ class DataStorePreferenceStore(
     }
 
     override suspend fun clear() {
-        dataStore.edit { preferences -> preferences.asMap().keys.forEach(preferences::remove) }
+        dataStore.edit { preferences ->
+            preferences.asMap().keys.toList().forEach { key ->
+                @Suppress("UNCHECKED_CAST")
+                preferences.remove(key as Preferences.Key<Any>)
+            }
+        }
     }
 
     @Suppress("UNCHECKED_CAST")
