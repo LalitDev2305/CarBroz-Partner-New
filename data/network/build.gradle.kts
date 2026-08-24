@@ -18,6 +18,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":foundation:configuration"))
             implementation(project(":foundation:session"))
             implementation(project(":foundation:security"))
             implementation(libs.kotlinx.coroutines.core)
