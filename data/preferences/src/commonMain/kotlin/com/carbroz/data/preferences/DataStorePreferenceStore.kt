@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.Storage
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.clear
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -43,7 +42,7 @@ class DataStorePreferenceStore(
     }
 
     override suspend fun clear() {
-        dataStore.edit { preferences -> preferences.clear() }
+        dataStore.edit { preferences -> preferences.asMap().keys.forEach(preferences::remove) }
     }
 
     @Suppress("UNCHECKED_CAST")
