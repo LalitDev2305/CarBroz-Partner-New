@@ -38,15 +38,18 @@ class SduiPipelineTest {
     }
 
     @Test
-    fun structurallyInvalidPayloadStopsBeforeCompatibility() {
+    fun structurallyInvalidPayloadStopsAtValidation() {
         val result = pipeline(registry()).process(
             validPayload().replace(
-                "\"components\":[{",
-                "\"components\":[],\"unused\":[{",
+                "\"components\":[{\n                \"id\":\"form\"",
+                "\"components\":[]",
+            ).replace(
+                ",\n                \"type\":\"FORM\",\n                \"elements\":[{\n                  \"id\":\"continue\",\n                  \"type\":\"BUTTON\",\n                  \"command\":{\n                    \"kind\":\"REQUEST\",\n                    \"method\":\"POST\",\n                    \"endpoint\":\"/auth/send-otp\",\n                    \"screenId\":\"otp\",\n                    \"templateId\":\"auth_otp\",\n                    \"templateType\":\"FORM_TEMPLATE\",\n                    \"payload\":{}\n                  }\n                }]\n              }]",
+                "",
             ),
         )
 
-        assertIs<SduiPipelineResult.DecodeFailure>(result)
+        assertIs<SduiPipelineResult.ValidationFailure>(result)
     }
 
     @Test
