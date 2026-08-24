@@ -12,6 +12,8 @@ import com.carbroz.data.network.NetworkExecutor
 import com.carbroz.data.network.NetworkTransport
 import com.carbroz.data.network.SessionNetworkAuthorizationProvider
 import com.carbroz.data.network.createKtorNetworkTransport
+import com.carbroz.data.preferences.PreferenceStore
+import com.carbroz.data.preferences.PreferenceStoreProvider
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
@@ -42,6 +44,7 @@ fun carBrozApplicationModule(
     configuration: AppConfiguration,
     secureStorage: SecureStorage,
     databaseProvider: CarBrozDatabaseProvider,
+    preferenceStoreProvider: PreferenceStoreProvider,
 ) = module {
     single { configuration }
     single<ConfigurationProvider> { ConfigurationProvider { get<AppConfiguration>() } }
@@ -63,6 +66,9 @@ fun carBrozApplicationModule(
     single<CarBrozDatabaseProvider> { databaseProvider }
     single<CarBrozDatabase> { get<CarBrozDatabaseProvider>().get() }
     single<DatabaseHealthCheck> { RoomDatabaseHealthCheck(database = get()) }
+
+    single<PreferenceStoreProvider> { preferenceStoreProvider }
+    single<PreferenceStore> { get<PreferenceStoreProvider>().get() }
 
     single { NetworkEnvironmentProvider(configurationProvider = get()) }
     single<NetworkEnvironment> { get<NetworkEnvironmentProvider>().get() }
@@ -91,11 +97,12 @@ internal fun initializeCarBrozDependencyInjection(
     configuration: AppConfiguration,
     secureStorage: SecureStorage,
     databaseProvider: CarBrozDatabaseProvider,
+    preferenceStoreProvider: PreferenceStoreProvider,
 ) {
     if (KoinPlatform.getKoinOrNull() != null) return
 
     startKoin {
         allowOverride(false)
-        modules(carBrozApplicationModule(configuration, secureStorage, databaseProvider))
+        modules(carBrozApplicationModule(configuration, secureStorage, databaseProvider, preferenceStoreProvider))
     }
 }
