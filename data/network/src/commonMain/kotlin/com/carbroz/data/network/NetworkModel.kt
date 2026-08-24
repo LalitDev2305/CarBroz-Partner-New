@@ -1,8 +1,6 @@
 package com.carbroz.data.network
 
 import com.carbroz.runtime.action.PreparedAction
-import com.carbroz.runtime.sdui.model.RequestMethod
-import com.carbroz.runtime.sdui.model.ScreenDestination
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
@@ -16,11 +14,18 @@ value class NetworkEndpoint(val value: String) {
     }
 }
 
+enum class NetworkMethod {
+    GET,
+    POST,
+    PUT,
+    PATCH,
+    DELETE,
+}
+
 data class NetworkRequest(
-    val method: RequestMethod,
+    val method: NetworkMethod,
     val endpoint: NetworkEndpoint,
     val payload: JsonObject,
-    val destination: ScreenDestination,
     val headers: Map<String, String> = emptyMap(),
 )
 
@@ -47,9 +52,8 @@ sealed interface NetworkResult {
 fun PreparedAction.Request.toNetworkRequest(
     headers: Map<String, String> = emptyMap(),
 ): NetworkRequest = NetworkRequest(
-    method = method,
+    method = NetworkMethod.valueOf(method.name),
     endpoint = NetworkEndpoint(endpoint),
     payload = payload,
-    destination = destination,
     headers = headers,
 )
