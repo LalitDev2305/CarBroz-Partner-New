@@ -4,6 +4,7 @@ import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.network.KtorNetworkTransport
 import com.carbroz.data.network.NetworkAuthorizationProvider
+import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.NetworkEnvironment
 import com.carbroz.data.network.NetworkEnvironmentProvider
 import com.carbroz.data.network.NetworkExecutor
@@ -88,6 +89,8 @@ class DependencyInjectionTest {
             assertSame(authorizationProvider, koin.get<NetworkAuthorizationProvider>())
             koin.get<NetworkResponseCache>()
             koin.get<NetworkExecutor>()
+            koin.get<NetworkDataSource>()
+            koin.get<NetworkActionExecutor>()
 
             koin.get<StartupCoordinator>()
             koin.get<ApplicationRuntime>()
