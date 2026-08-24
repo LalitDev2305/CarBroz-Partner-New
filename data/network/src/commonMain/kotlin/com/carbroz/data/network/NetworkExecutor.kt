@@ -1,5 +1,7 @@
 package com.carbroz.data.network
 
+import com.carbroz.foundation.time.Clock
+import com.carbroz.foundation.time.SystemClock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 
@@ -26,6 +28,8 @@ class NetworkExecutor(
     private val connectivityProvider: NetworkConnectivityProvider = UnknownNetworkConnectivityProvider,
     private val requestIdProvider: NetworkRequestIdProvider = EmptyNetworkRequestIdProvider,
     private val observer: NetworkObserver = NoNetworkObserver,
+    private val responseCache: NetworkResponseCache = NoNetworkResponseCache,
+    private val clock: Clock = SystemClock,
     private val json: Json = Json,
 ) {
     suspend fun execute(request: NetworkRequest): NetworkResult {
@@ -39,7 +43,7 @@ class NetworkExecutor(
         val validationFailure = validateExecution(request)
         if (validationFailure != null) return finish(context, validationFailure)
 
-        val firstResult = executeWithPolicy(request, context)
+        val firstResult = executeWithCachePolicy(request, context)
         if (!request.shouldAttemptAuthenticationRecovery(firstResult)) return finish(context, firstResult)
 
         observer.observe(NetworkObservation.AuthenticationRecoveryStarted(context))
@@ -47,7 +51,53 @@ class NetworkExecutor(
         observer.observe(NetworkObservation.AuthenticationRecoveryFinished(context, recovered))
         if (!recovered) return finish(context, firstResult)
 
-        return finish(context, executeWithPolicy(request, context))
+        return finish(context, executeWithCachePolicy(request, context))
+    }
+
+    private suspend fun executeWithCachePolicy(
+        request: NetworkRequest,
+        context: NetworkRequestContext,
+    ): NetworkResult {
+        val key = request.cacheKey()
+        return when (val policy = request.cachePolicy) {
+            NetworkCachePolicy.NetworkOnly -> executeWithPolicy(request, context)
+            is NetworkCachePolicy.CacheFirst -> {
+                responseCache.freshResult(key, policy.maxAgeMillis) ?: executeAndCache(request, context, key)
+            }
+            is NetworkCachePolicy.NetworkFirst -> {
+                val networkResult = executeAndCache(request, context, key)
+                if (networkResult is NetworkResult.Success) networkResult
+                else responseCache.freshResult(key, policy.fallbackMaxAgeMillis) ?: networkResult
+            }
+        }
+    }
+
+    private suspend fun executeAndCache(
+        request: NetworkRequest,
+        context: NetworkRequestContext,
+        key: NetworkCacheKey,
+    ): NetworkResult {
+        val result = executeWithPolicy(request, context)
+        val success = result as? NetworkResult.Success ?: return result
+        if (!success.response.disallowsStorage()) {
+            responseCache.put(
+                key = key,
+                entry = NetworkCacheEntry(
+                    response = success.response,
+                    storedAtEpochMillis = clock.nowEpochMilliseconds(),
+                ),
+            )
+        }
+        return result
+    }
+
+    private suspend fun NetworkResponseCache.freshResult(
+        key: NetworkCacheKey,
+        maxAgeMillis: Long,
+    ): NetworkResult.Success? {
+        val entry = get(key) ?: return null
+        val age = (clock.nowEpochMilliseconds() - entry.storedAtEpochMillis).coerceAtLeast(0L)
+        return if (age <= maxAgeMillis) NetworkResult.Success(entry.response) else null
     }
 
     private suspend fun executeWithPolicy(
@@ -107,7 +157,27 @@ class NetworkExecutor(
                 NetworkFailure.InvalidRequest("${request.method} retries require an idempotency key"),
             )
         }
+        if (request.cachePolicy != NetworkCachePolicy.NetworkOnly) {
+            if (request.method != NetworkMethod.GET) {
+                return NetworkResult.Failure(NetworkFailure.InvalidRequest("Only GET requests may use response caching"))
+            }
+            if (request.authentication != NetworkAuthentication.NONE) {
+                return NetworkResult.Failure(
+                    NetworkFailure.InvalidRequest("Authenticated responses require repository-owned scoped caching"),
+                )
+            }
+        }
         return null
+    }
+
+    private fun NetworkRequest.cacheKey(): NetworkCacheKey = NetworkCacheKey(
+        endpoint = endpoint,
+        headers = headers,
+    )
+
+    private fun NetworkResponse.disallowsStorage(): Boolean = headers.entries.any { (name, value) ->
+        name.equals(CACHE_CONTROL_HEADER, ignoreCase = true) &&
+            value.split(',').any { directive -> directive.trim().equals("no-store", ignoreCase = true) }
     }
 
     private fun NetworkRequest.shouldAttemptAuthenticationRecovery(result: NetworkResult): Boolean {
@@ -125,5 +195,6 @@ class NetworkExecutor(
     private companion object {
         const val AUTHORIZATION_HEADER = "Authorization"
         const val IDEMPOTENCY_HEADER = "Idempotency-Key"
+        const val CACHE_CONTROL_HEADER = "Cache-Control"
     }
 }
