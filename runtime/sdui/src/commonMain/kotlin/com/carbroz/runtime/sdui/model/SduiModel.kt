@@ -9,9 +9,9 @@ enum class NodeKind {
     ELEMENT,
 }
 
-value class NodeType(val value: String)
+data class NodeType(val value: String)
 
-value class NodeId(val value: String)
+data class NodeId(val value: String)
 
 /** Canonical identity of a normalized node inside one screen tree. */
 class NodePath private constructor(val segments: List<NodeId>) {
