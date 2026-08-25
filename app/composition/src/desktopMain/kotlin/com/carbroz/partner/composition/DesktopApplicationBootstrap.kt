@@ -23,15 +23,30 @@ fun initializeCarBrozDesktopApplication(
     applicationId: String,
 ) {
     val appDirectory = File(System.getProperty("user.home"), ".carbroz/$applicationId")
+    val configuration = createCarBrozAppConfiguration(
+        environment = environment,
+        apiBaseUrl = apiBaseUrl,
+        versionName = versionName,
+        versionCode = versionCode,
+        applicationId = applicationId,
+    )
     val diagnosticSink = DesktopPlatformDiagnosticSink()
-    initializeCarBrozDependencyInjection(
-        configuration = createCarBrozAppConfiguration(
-            environment = environment,
-            apiBaseUrl = apiBaseUrl,
-            versionName = versionName,
-            versionCode = versionCode,
-            applicationId = applicationId,
+    val localDiagnostics = localOperationalDiagnostics(
+        environment = configuration.environment,
+        platformSinks = ObservabilitySinks(
+            log = diagnosticSink,
+            crash = diagnosticSink,
+            performance = diagnosticSink,
+            trace = diagnosticSink,
+            responsiveness = diagnosticSink,
+            resource = diagnosticSink,
         ),
+        resourceDiagnostics = DesktopResourceDiagnostics(),
+        mainThreadDispatcher = DesktopMainThreadDispatcher(),
+    )
+
+    initializeCarBrozDependencyInjection(
+        configuration = configuration,
         secureStorage = EphemeralDesktopSecureStorage(),
         databaseProvider = CarBrozDatabaseFactory(
             builderProvider = DesktopCarBrozDatabaseBuilderProvider(
@@ -46,15 +61,8 @@ fun initializeCarBrozDesktopApplication(
             runnerProvider = { KoinPlatform.getKoin().get<BackgroundTaskRunner>() },
         ),
         continuousExecutionController = DesktopContinuousExecutionController(),
-        observabilitySinks = ObservabilitySinks(
-            log = diagnosticSink,
-            crash = diagnosticSink,
-            performance = diagnosticSink,
-            trace = diagnosticSink,
-            responsiveness = diagnosticSink,
-            resource = diagnosticSink,
-        ),
-        resourceDiagnostics = DesktopResourceDiagnostics(),
-        mainThreadDispatcher = DesktopMainThreadDispatcher(),
+        observabilitySinks = localDiagnostics.sinks,
+        resourceDiagnostics = localDiagnostics.resourceDiagnostics,
+        mainThreadDispatcher = localDiagnostics.mainThreadDispatcher,
     )
 }
