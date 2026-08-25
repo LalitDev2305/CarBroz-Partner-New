@@ -9,7 +9,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.carbroz.data.network.NetworkDataSource
-import com.carbroz.feature.splash.ReferenceDestination
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.feature.splash.SplashIntent
 import com.carbroz.feature.splash.SplashScreen
