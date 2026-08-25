@@ -3,7 +3,7 @@ package com.carbroz.foundation.observability
 import kotlin.random.Random
 
 /** Stable opaque correlation identifier used to connect logs, traces and metrics for one logical operation. */
-@JvmInline
+@kotlin.jvm.JvmInline
 value class CorrelationId(val value: String) {
     init {
         require(value.isNotBlank()) { "CorrelationId must not be blank." }
