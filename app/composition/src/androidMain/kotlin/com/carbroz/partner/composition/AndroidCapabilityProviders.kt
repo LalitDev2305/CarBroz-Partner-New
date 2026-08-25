@@ -11,6 +11,7 @@ import com.carbroz.foundation.capabilities.CapabilityResult
 import com.carbroz.foundation.capabilities.StaticCapabilityProvider
 import com.carbroz.foundation.security.TrustedUriDecision
 import com.carbroz.foundation.security.TrustedUriPolicy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.contentOrNull
@@ -117,6 +118,8 @@ private fun launch(context: Context, intent: Intent): CapabilityResult = try {
         context.startActivity(intent)
         CapabilityResult.Success()
     }
+} catch (error: CancellationException) {
+    throw error
 } catch (error: Throwable) {
     CapabilityResult.Failure(
         code = "android_capability_failure",
