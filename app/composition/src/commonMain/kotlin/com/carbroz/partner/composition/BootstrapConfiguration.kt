@@ -14,6 +14,7 @@ import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupTask
 import com.carbroz.runtime.application.startup.StartupTaskResult
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 /** Semantic result of the application bootstrap/config response. */
