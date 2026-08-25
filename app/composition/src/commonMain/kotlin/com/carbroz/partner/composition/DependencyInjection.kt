@@ -14,6 +14,8 @@ import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.NetworkEnvironment
 import com.carbroz.data.network.NetworkEnvironmentProvider
 import com.carbroz.data.network.NetworkExecutor
+import com.carbroz.data.network.NetworkRequestId
+import com.carbroz.data.network.NetworkRequestIdProvider
 import com.carbroz.data.network.NetworkResponseCache
 import com.carbroz.data.network.NetworkTransport
 import com.carbroz.data.network.SessionNetworkAuthorizationProvider
@@ -43,9 +45,17 @@ import com.carbroz.foundation.lifecycle.AppLifecycleController
 import com.carbroz.foundation.lifecycle.DefaultAppLifecycle
 import com.carbroz.foundation.navigation.NavigationState
 import com.carbroz.foundation.navigation.NavigationStore
+import com.carbroz.foundation.observability.CorrelationIdProvider
 import com.carbroz.foundation.observability.LogLevel
+import com.carbroz.foundation.observability.MainThreadDispatcher
+import com.carbroz.foundation.observability.MainThreadResponsivenessMonitor
 import com.carbroz.foundation.observability.Observability
 import com.carbroz.foundation.observability.ObservabilityPolicy
+import com.carbroz.foundation.observability.ObservabilitySinks
+import com.carbroz.foundation.observability.RandomCorrelationIdProvider
+import com.carbroz.foundation.observability.ResourceDiagnosticResult
+import com.carbroz.foundation.observability.ResourceDiagnostics
+import com.carbroz.foundation.observability.ResourceDiagnosticsReporter
 import com.carbroz.foundation.security.SecureStorage
 import com.carbroz.foundation.session.JsonSessionSnapshotCodec
 import com.carbroz.foundation.session.SecureSessionPersistence
@@ -69,6 +79,10 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
+private val UnsupportedResourceDiagnostics = ResourceDiagnostics {
+    ResourceDiagnosticResult.Unsupported("No platform resource diagnostics adapter supplied")
+}
+
 /** Canonical application composition module for validated configuration and platform infrastructure. */
 fun carBrozApplicationModule(
     configuration: AppConfiguration,
@@ -79,10 +93,14 @@ fun carBrozApplicationModule(
     backgroundScheduler: BackgroundScheduler? = null,
     continuousExecutionController: ContinuousExecutionController? = null,
     backgroundTaskHandlers: List<BackgroundTaskHandler> = emptyList(),
+    observabilitySinks: ObservabilitySinks = ObservabilitySinks(),
+    resourceDiagnostics: ResourceDiagnostics = UnsupportedResourceDiagnostics,
+    mainThreadDispatcher: MainThreadDispatcher? = null,
 ) = module {
     single { configuration }
     single<ConfigurationProvider> { ConfigurationProvider { get<AppConfiguration>() } }
 
+    single<CorrelationIdProvider> { RandomCorrelationIdProvider() }
     single {
         Observability(
             policy = ObservabilityPolicy(
@@ -93,8 +111,23 @@ fun carBrozApplicationModule(
                 },
                 crashReportingEnabled = true,
                 performanceMetricsEnabled = true,
+                tracingEnabled = true,
+                responsivenessReportingEnabled = true,
+                resourceDiagnosticsEnabled = true,
+                includeThrowableDetails = false,
             ),
+            logSink = observabilitySinks.log,
+            crashSink = observabilitySinks.crash,
+            performanceSink = observabilitySinks.performance,
+            traceSink = observabilitySinks.trace,
+            responsivenessSink = observabilitySinks.responsiveness,
+            resourceSink = observabilitySinks.resource,
         )
+    }
+    single<ResourceDiagnostics> { resourceDiagnostics }
+    single { ResourceDiagnosticsReporter(diagnostics = get(), observability = get()) }
+    if (mainThreadDispatcher != null) {
+        single { MainThreadResponsivenessMonitor(dispatcher = mainThreadDispatcher, observability = get()) }
     }
     single {
         AnalyticsTracker(
@@ -136,6 +169,7 @@ fun carBrozApplicationModule(
             registry = get(),
             observability = get(),
             clock = get(),
+            correlationIdProvider = get(),
         )
     }
     if (backgroundScheduler != null) single<BackgroundScheduler> { backgroundScheduler }
@@ -150,12 +184,17 @@ fun carBrozApplicationModule(
     single<NetworkTransport> { get<KtorNetworkTransport>() }
     single<NetworkAuthorizationProvider> { SessionNetworkAuthorizationProvider(sessionProvider = get()) }
     single<NetworkResponseCache> { InMemoryNetworkResponseCache() }
+    single<NetworkRequestIdProvider> {
+        val correlationIds = get<CorrelationIdProvider>()
+        NetworkRequestIdProvider { NetworkRequestId(correlationIds.next("network").value) }
+    }
     single {
         NetworkExecutor(
             environment = get(),
             transport = get(),
             authorizationProvider = get(),
             connectivityProvider = get(),
+            requestIdProvider = get(),
             responseCache = get(),
             clock = get(),
             observability = get(),
@@ -191,6 +230,7 @@ fun carBrozApplicationModule(
             tasks = listOf(get<SessionRestoreStartupTask>()),
             observability = get(),
             clock = get(),
+            correlationIdProvider = get(),
         )
     }
     single<ApplicationRuntime> { DefaultApplicationRuntime(startupCoordinator = get()) }
@@ -206,10 +246,13 @@ internal fun initializeCarBrozDependencyInjection(
     backgroundScheduler: BackgroundScheduler? = null,
     continuousExecutionController: ContinuousExecutionController? = null,
     backgroundTaskHandlers: List<BackgroundTaskHandler> = emptyList(),
+    observabilitySinks: ObservabilitySinks = ObservabilitySinks(),
+    resourceDiagnostics: ResourceDiagnostics = UnsupportedResourceDiagnostics,
+    mainThreadDispatcher: MainThreadDispatcher? = null,
 ) {
     if (KoinPlatform.getKoinOrNull() != null) return
 
-    startKoin {
+    val application = startKoin {
         allowOverride(false)
         modules(
             carBrozApplicationModule(
@@ -221,7 +264,15 @@ internal fun initializeCarBrozDependencyInjection(
                 backgroundScheduler = backgroundScheduler,
                 continuousExecutionController = continuousExecutionController,
                 backgroundTaskHandlers = backgroundTaskHandlers,
+                observabilitySinks = observabilitySinks,
+                resourceDiagnostics = resourceDiagnostics,
+                mainThreadDispatcher = mainThreadDispatcher,
             ),
         )
+    }
+
+    application.koin.get<ResourceDiagnosticsReporter>().sample()
+    if (mainThreadDispatcher != null) {
+        application.koin.get<MainThreadResponsivenessMonitor>().start()
     }
 }
