@@ -20,6 +20,7 @@ class StartupObservabilityTest {
         val metrics = mutableListOf<PerformanceMetric>()
         val traces = mutableListOf<TraceSpan>()
         val clock = SequenceClock(listOf(100L, 110L, 130L, 160L))
+        val correlationId = CorrelationId("startup-42")
         val observability = Observability(
             policy = ObservabilityPolicy(),
             performanceSink = PerformanceSink(metrics::add),
@@ -29,18 +30,18 @@ class StartupObservabilityTest {
             tasks = listOf(successTask("session")),
             observability = observability,
             clock = clock,
-            correlationIdProvider = CorrelationIdProvider { CorrelationId("startup-42") },
+            correlationIdProvider = CorrelationIdProvider { correlationId },
         )
 
         assertEquals(StartupResult.Ready, coordinator.run())
         assertEquals(listOf("startup.task", "startup.total"), metrics.map { it.name })
         assertEquals(20L, metrics[0].durationMillis)
         assertEquals(60L, metrics[1].durationMillis)
-        assertEquals("startup-42", metrics[0].correlationId)
+        assertEquals(correlationId, metrics[0].correlationId)
         assertEquals("session", metrics[0].attributes.getValue("task_id").value)
         assertEquals("success", metrics[0].attributes.getValue("outcome").value)
         assertEquals(listOf("startup.task", "startup.total"), traces.map { it.name })
-        assertEquals(setOf("startup-42"), traces.map { it.correlationId.value }.toSet())
+        assertEquals(setOf(correlationId), traces.map { it.correlationId }.toSet())
         assertEquals(listOf(TraceOutcome.SUCCESS, TraceOutcome.SUCCESS), traces.map { it.outcome })
     }
 
