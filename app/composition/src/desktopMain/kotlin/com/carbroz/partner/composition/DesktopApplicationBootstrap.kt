@@ -30,19 +30,21 @@ fun initializeCarBrozDesktopApplication(
         versionCode = versionCode,
         applicationId = applicationId,
     )
-    val diagnosticSink = DesktopPlatformDiagnosticSink()
     val localDiagnostics = localOperationalDiagnostics(
         environment = configuration.environment,
-        platformSinks = ObservabilitySinks(
-            log = diagnosticSink,
-            crash = diagnosticSink,
-            performance = diagnosticSink,
-            trace = diagnosticSink,
-            responsiveness = diagnosticSink,
-            resource = diagnosticSink,
-        ),
-        resourceDiagnostics = DesktopResourceDiagnostics(),
-        mainThreadDispatcher = DesktopMainThreadDispatcher(),
+        platformSinks = {
+            val diagnosticSink = DesktopPlatformDiagnosticSink()
+            ObservabilitySinks(
+                log = diagnosticSink,
+                crash = diagnosticSink,
+                performance = diagnosticSink,
+                trace = diagnosticSink,
+                responsiveness = diagnosticSink,
+                resource = diagnosticSink,
+            )
+        },
+        resourceDiagnostics = { DesktopResourceDiagnostics() },
+        mainThreadDispatcher = { DesktopMainThreadDispatcher() },
     )
 
     initializeCarBrozDependencyInjection(
