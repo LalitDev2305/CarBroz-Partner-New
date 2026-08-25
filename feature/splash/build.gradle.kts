@@ -20,7 +20,9 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":foundation:architecture"))
+            // SplashStore publicly implements Store, so consumers compiling
+            // against SplashStore must also see the Store supertype.
+            api(project(":foundation:architecture"))
             implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:design-system"))
