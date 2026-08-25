@@ -25,7 +25,8 @@ class SplashStore(
     private val runtime: ApplicationRuntime,
     parentScope: CoroutineScope,
 ) : Store<SplashIntent, SplashState> {
-    private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob())
+    private val parentJob = parentScope.coroutineContext[Job]
+    private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentJob))
     private val mutableState = MutableStateFlow(SplashState(runtimeState = runtime.state.value))
     override val state: StateFlow<SplashState> = mutableState.asStateFlow()
 
