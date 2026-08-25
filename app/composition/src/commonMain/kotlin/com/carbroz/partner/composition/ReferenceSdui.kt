@@ -90,7 +90,7 @@ class ReferenceSduiStore(
         when (intent) {
             ReferenceSduiIntent.Load -> load()
             is ReferenceSduiIntent.Execute -> execute(intent.command)
-            is ReferenceSduiIntent.RenderFailed -> onRenderFailure(intent.failure)
+            is ReferenceSduiIntent.RenderFailed -> deferRenderFailure(intent.failure)
         }
     }
 
@@ -140,13 +140,15 @@ class ReferenceSduiStore(
         }
     }
 
-    private fun onRenderFailure(failure: SduiRenderFailure) {
-        mutableState.value = mutableState.value.copy(
-            screen = null,
-            loading = false,
-            actionInFlight = false,
-            failure = ReferenceSduiFailure.Render(failure),
-        )
+    private fun deferRenderFailure(failure: SduiRenderFailure) {
+        scope.launch {
+            mutableState.value = mutableState.value.copy(
+                screen = null,
+                loading = false,
+                actionInFlight = false,
+                failure = ReferenceSduiFailure.Render(failure),
+            )
+        }
     }
 
     private suspend fun executePrepared(action: PreparedAction) {
