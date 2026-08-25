@@ -5,7 +5,7 @@ import com.carbroz.data.database.IosCarBrozDatabaseBuilderProvider
 import com.carbroz.data.preferences.IosPreferenceStoreProvider
 import com.carbroz.data.securestorage.KeychainSecureStorage
 
-/** Thin Swift-to-common bootstrap bridge with platform-backed storage adapters. */
+/** Thin Swift-to-common bootstrap bridge with platform-backed storage and capability adapters. */
 fun initializeCarBrozIosApplication(
     environment: String,
     apiBaseUrl: String,
@@ -26,5 +26,6 @@ fun initializeCarBrozIosApplication(
             builderProvider = IosCarBrozDatabaseBuilderProvider(),
         ),
         preferenceStoreProvider = IosPreferenceStoreProvider(),
+        capabilityProviders = iosCapabilityProviders(),
     )
 }
