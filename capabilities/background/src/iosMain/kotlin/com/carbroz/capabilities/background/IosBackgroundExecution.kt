@@ -87,8 +87,9 @@ class IosBackgroundScheduler(
             }
         }
         if (request.earliestStartDelayMillis > 0) {
+            val delaySeconds = request.earliestStartDelayMillis.toDouble() / 1_000.0
             nativeRequest.earliestBeginDate = NSDate(
-                timeIntervalSinceNow = request.earliestStartDelayMillis.toDouble() / 1_000.0,
+                timeIntervalSinceReferenceDate = NSDate().timeIntervalSinceReferenceDate + delaySeconds,
             )
         }
         return try {
