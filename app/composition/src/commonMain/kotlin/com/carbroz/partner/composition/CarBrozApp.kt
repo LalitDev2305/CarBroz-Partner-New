@@ -15,7 +15,6 @@ import com.carbroz.feature.splash.SplashIntent
 import com.carbroz.feature.splash.SplashScreen
 import com.carbroz.feature.splash.SplashStore
 import com.carbroz.foundation.adaptive.AdaptiveLayoutProvider
-import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.designsystem.CarBrozTheme
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.navigation.Navigation3Host
@@ -38,10 +37,10 @@ fun CarBrozApp() {
     val runtime = koinInject<ApplicationRuntime>()
     val lifecycle = koinInject<AppLifecycle>()
     val bootstrapRoutes = koinInject<BootstrapRouteStore>()
-    val configuration = koinInject<AppConfiguration>()
     val network = koinInject<NetworkDataSource>()
     val networkActions = koinInject<NetworkActionExecutor>()
     val capabilityActions = koinInject<CapabilityActionExecutor>()
+    val referenceRuntime = koinInject<ReferenceSduiRuntime>()
 
     val navigationState by navigationStore.state.collectAsStateWithLifecycle()
     val lifecycleState by lifecycle.state.collectAsStateWithLifecycle()
@@ -50,7 +49,6 @@ fun CarBrozApp() {
     val splashStore = remember(runtime, applicationScope) { SplashStore(runtime, applicationScope) }
     val splashState by splashStore.state.collectAsStateWithLifecycle()
 
-    val referenceRuntime = remember(configuration) { createReferenceSduiRuntime(configuration) }
     val referenceStore = remember(
         network,
         referenceRuntime,
@@ -80,9 +78,9 @@ fun CarBrozApp() {
             ReferenceDestination -> ReferenceSduiScreen(
                 state = referenceState,
                 dispatcher = referenceRuntime.renderer,
-                onRetry = referenceStore::load,
-                onCommand = referenceStore::execute,
-                onRenderFailure = referenceStore::reportRenderFailure,
+                onRetry = { referenceStore.dispatch(ReferenceSduiIntent.Load) },
+                onCommand = { referenceStore.dispatch(ReferenceSduiIntent.Execute(it)) },
+                onRenderFailure = { referenceStore.dispatch(ReferenceSduiIntent.RenderFailed(it)) },
             )
 
             else -> error("No composition content registered for ${destination.navigationId}.")
@@ -119,7 +117,7 @@ fun CarBrozApp() {
 
     LaunchedEffect(navigationState.current) {
         if (navigationState.current == ReferenceDestination && referenceStore.state.value.screen == null) {
-            referenceStore.load()
+            referenceStore.dispatch(ReferenceSduiIntent.Load)
         }
     }
 
