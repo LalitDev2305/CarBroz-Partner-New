@@ -15,7 +15,7 @@ class IosMainThreadDispatcher : MainThreadDispatcher {
 
 /**
  * iOS resource sampling exposes only portable process information available without private APIs.
- * Current heap usage is intentionally left unknown rather than inferred from system-wide memory.
+ * Current heap usage/limit are intentionally left unknown rather than inferred from system-wide memory.
  */
 class IosResourceDiagnostics : ResourceDiagnostics {
     override fun sample(): ResourceDiagnosticResult = runCatching {
@@ -23,7 +23,8 @@ class IosResourceDiagnostics : ResourceDiagnostics {
         ResourceDiagnosticResult.Available(
             ResourceSnapshot(
                 heapUsedBytes = null,
-                heapLimitBytes = processInfo.physicalMemory.toLong().coerceAtLeast(0L),
+                heapLimitBytes = null,
+                physicalMemoryBytes = processInfo.physicalMemory.toLong().coerceAtLeast(0L),
                 processorCount = processInfo.processorCount.toInt().coerceAtLeast(1),
             ),
         )
@@ -55,7 +56,7 @@ class IosPlatformDiagnosticSink : LogSink, CrashSink, PerformanceSink, TraceSink
     }
 
     override fun record(snapshot: ResourceSnapshot) {
-        println("resources heap_used=${snapshot.heapUsedBytes ?: -1} heap_limit=${snapshot.heapLimitBytes ?: -1} processors=${snapshot.processorCount ?: -1}")
+        println("resources heap_used=${snapshot.heapUsedBytes ?: -1} heap_limit=${snapshot.heapLimitBytes ?: -1} physical_memory=${snapshot.physicalMemoryBytes ?: -1} processors=${snapshot.processorCount ?: -1}")
     }
 
     private fun render(
