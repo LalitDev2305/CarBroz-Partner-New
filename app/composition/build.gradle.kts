@@ -40,6 +40,7 @@ kotlin {
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
+            implementation(project(":foundation:capabilities"))
             implementation(project(":runtime:application"))
             implementation(project(":runtime:action"))
             implementation(project(":runtime:sdui"))
