@@ -9,7 +9,7 @@ class AndroidMainThreadDispatcher : MainThreadDispatcher {
     private val handler = Handler(Looper.getMainLooper())
 
     override fun dispatch(block: () -> Unit) {
-        handler.post(block)
+        handler.post { block() }
     }
 }
 
