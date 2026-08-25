@@ -1,4 +1,4 @@
-package com.carbroz.capabilities.background
+package com.carbroz.platform.background
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -115,7 +115,7 @@ class CarBrozContinuousExecutionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        internal const val ACTION_START = "com.carbroz.background.START"
+        internal const val ACTION_START = "com.carbroz.platform.background.START"
         internal const val EXTRA_ID = "id"
         internal const val EXTRA_TITLE = "title"
         internal const val EXTRA_DESCRIPTION = "description"
