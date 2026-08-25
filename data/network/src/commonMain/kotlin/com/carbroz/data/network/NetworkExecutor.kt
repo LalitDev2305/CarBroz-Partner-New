@@ -1,13 +1,17 @@
 package com.carbroz.data.network
 
+import com.carbroz.foundation.observability.CorrelationId
 import com.carbroz.foundation.observability.DiagnosticAttribute
 import com.carbroz.foundation.observability.LogEvent
 import com.carbroz.foundation.observability.LogLevel
 import com.carbroz.foundation.observability.NoOpObservability
 import com.carbroz.foundation.observability.Observability
 import com.carbroz.foundation.observability.PerformanceMetric
+import com.carbroz.foundation.observability.TraceOutcome
+import com.carbroz.foundation.observability.TraceSpan
 import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 
@@ -48,18 +52,32 @@ class NetworkExecutor(
         )
         observer.observe(NetworkObservation.Started(context))
 
-        val validationFailure = validateExecution(request)
-        if (validationFailure != null) return finish(context, validationFailure, startedAt)
+        return try {
+            val validationFailure = validateExecution(request)
+            if (validationFailure != null) return finish(context, validationFailure, startedAt)
 
-        val firstResult = executeWithCachePolicy(request, context)
-        if (!request.shouldAttemptAuthenticationRecovery(firstResult)) return finish(context, firstResult, startedAt)
+            val firstResult = executeWithCachePolicy(request, context)
+            if (!request.shouldAttemptAuthenticationRecovery(firstResult)) return finish(context, firstResult, startedAt)
 
-        observer.observe(NetworkObservation.AuthenticationRecoveryStarted(context))
-        val recovered = authenticationRecovery.recover()
-        observer.observe(NetworkObservation.AuthenticationRecoveryFinished(context, recovered))
-        if (!recovered) return finish(context, firstResult, startedAt)
+            observer.observe(NetworkObservation.AuthenticationRecoveryStarted(context))
+            val recovered = authenticationRecovery.recover()
+            observer.observe(NetworkObservation.AuthenticationRecoveryFinished(context, recovered))
+            if (!recovered) return finish(context, firstResult, startedAt)
 
-        return finish(context, executeWithCachePolicy(request, context), startedAt)
+            finish(context, executeWithCachePolicy(request, context), startedAt)
+        } catch (cancellation: CancellationException) {
+            val duration = elapsedSince(startedAt)
+            observability.trace(
+                TraceSpan(
+                    name = "network.request",
+                    correlationId = CorrelationId(context.requestId.value),
+                    durationMillis = duration,
+                    outcome = TraceOutcome.CANCELLED,
+                    attributes = mapOf("method" to DiagnosticAttribute(context.method.name)),
+                ),
+            )
+            throw cancellation
+        }
     }
 
     private suspend fun executeWithCachePolicy(
@@ -201,16 +219,27 @@ class NetworkExecutor(
         startedAt: Long,
     ): NetworkResult {
         val outcome = result.toNetworkOutcome()
+        val duration = elapsedSince(startedAt)
+        val attributes = mapOf(
+            "method" to DiagnosticAttribute(context.method.name),
+            "outcome" to DiagnosticAttribute(outcome.metricName()),
+        )
         observer.observe(NetworkObservation.Finished(context, outcome))
         observability.performance(
             PerformanceMetric(
                 name = "network.request",
-                durationMillis = (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L),
+                durationMillis = duration,
                 correlationId = context.requestId.value,
-                attributes = mapOf(
-                    "method" to DiagnosticAttribute(context.method.name),
-                    "outcome" to DiagnosticAttribute(outcome.metricName()),
-                ),
+                attributes = attributes,
+            ),
+        )
+        observability.trace(
+            TraceSpan(
+                name = "network.request",
+                correlationId = CorrelationId(context.requestId.value),
+                durationMillis = duration,
+                outcome = if (outcome is NetworkOutcome.Success) TraceOutcome.SUCCESS else TraceOutcome.FAILURE,
+                attributes = attributes,
             ),
         )
         if (outcome !is NetworkOutcome.Success) {
@@ -220,15 +249,15 @@ class NetworkExecutor(
                     category = "network",
                     message = "network_request_failed",
                     correlationId = context.requestId.value,
-                    attributes = mapOf(
-                        "method" to DiagnosticAttribute(context.method.name),
-                        "outcome" to DiagnosticAttribute(outcome.metricName()),
-                    ),
+                    attributes = attributes,
                 ),
             )
         }
         return result
     }
+
+    private fun elapsedSince(startedAt: Long): Long =
+        (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L)
 
     private fun NetworkOutcome.metricName(): String = when (this) {
         is NetworkOutcome.Success -> "success"
