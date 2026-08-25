@@ -1,5 +1,7 @@
 package com.carbroz.platform.background
 
+import com.carbroz.foundation.observability.CorrelationId
+import com.carbroz.foundation.observability.CorrelationIdProvider
 import com.carbroz.foundation.observability.CrashEvent
 import com.carbroz.foundation.observability.DiagnosticAttribute
 import com.carbroz.foundation.observability.LogEvent
@@ -7,6 +9,8 @@ import com.carbroz.foundation.observability.LogLevel
 import com.carbroz.foundation.observability.NoOpObservability
 import com.carbroz.foundation.observability.Observability
 import com.carbroz.foundation.observability.PerformanceMetric
+import com.carbroz.foundation.observability.TraceOutcome
+import com.carbroz.foundation.observability.TraceSpan
 import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
 import kotlinx.coroutines.CancellationException
@@ -104,19 +108,25 @@ class BackgroundTaskRunner(
     private val registry: BackgroundTaskHandlerRegistry,
     private val observability: Observability = NoOpObservability,
     private val clock: Clock = SystemClock,
+    private val correlationIdProvider: CorrelationIdProvider = CorrelationIdProvider {
+        CorrelationId("background-untracked")
+    },
 ) {
     suspend fun run(id: BackgroundTaskId, input: Map<String, String>): BackgroundExecutionResult {
         val startedAt = clock.nowEpochMilliseconds()
+        val correlationId = correlationIdProvider.next("background")
         val result = try {
             registry.handler(id)?.execute(input)
                 ?: BackgroundExecutionResult.Failure("No handler registered for ${id.value}")
         } catch (cancellation: CancellationException) {
+            recordCompletion(id, startedAt, correlationId, "cancelled", TraceOutcome.CANCELLED)
             throw cancellation
         } catch (failure: Throwable) {
             observability.crash(
                 event = CrashEvent(
                     category = "background",
                     message = "background_task_unexpected_failure",
+                    correlationId = correlationId.value,
                     attributes = mapOf("task_id" to DiagnosticAttribute(id.value)),
                 ),
                 throwable = failure,
@@ -129,15 +139,12 @@ class BackgroundTaskRunner(
             BackgroundExecutionResult.Retry -> "retry"
             is BackgroundExecutionResult.Failure -> "failure"
         }
-        observability.performance(
-            PerformanceMetric(
-                name = "background.task",
-                durationMillis = (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L),
-                attributes = mapOf(
-                    "task_id" to DiagnosticAttribute(id.value),
-                    "outcome" to DiagnosticAttribute(outcome),
-                ),
-            ),
+        recordCompletion(
+            id = id,
+            startedAt = startedAt,
+            correlationId = correlationId,
+            outcome = outcome,
+            traceOutcome = if (result is BackgroundExecutionResult.Success) TraceOutcome.SUCCESS else TraceOutcome.FAILURE,
         )
         if (result is BackgroundExecutionResult.Failure) {
             observability.log(
@@ -145,11 +152,43 @@ class BackgroundTaskRunner(
                     level = LogLevel.WARN,
                     category = "background",
                     message = "background_task_failed",
+                    correlationId = correlationId.value,
                     attributes = mapOf("task_id" to DiagnosticAttribute(id.value)),
                 ),
             )
         }
         return result
+    }
+
+    private fun recordCompletion(
+        id: BackgroundTaskId,
+        startedAt: Long,
+        correlationId: CorrelationId,
+        outcome: String,
+        traceOutcome: TraceOutcome,
+    ) {
+        val duration = (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L)
+        val attributes = mapOf(
+            "task_id" to DiagnosticAttribute(id.value),
+            "outcome" to DiagnosticAttribute(outcome),
+        )
+        observability.performance(
+            PerformanceMetric(
+                name = "background.task",
+                durationMillis = duration,
+                correlationId = correlationId.value,
+                attributes = attributes,
+            ),
+        )
+        observability.trace(
+            TraceSpan(
+                name = "background.task",
+                correlationId = correlationId,
+                durationMillis = duration,
+                outcome = traceOutcome,
+                attributes = attributes,
+            ),
+        )
     }
 }
 
