@@ -1,8 +1,8 @@
 package com.carbroz.partner.composition
 
 import android.content.Context
-import com.carbroz.capabilities.background.AndroidBackgroundScheduler
-import com.carbroz.capabilities.background.AndroidContinuousExecutionController
+import com.carbroz.platform.background.AndroidBackgroundScheduler
+import com.carbroz.platform.background.AndroidContinuousExecutionController
 import com.carbroz.data.database.AndroidCarBrozDatabaseBuilderProvider
 import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.preferences.AndroidPreferenceStoreProvider
