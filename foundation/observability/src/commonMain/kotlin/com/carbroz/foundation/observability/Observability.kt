@@ -17,7 +17,7 @@ data class LogEvent(
     val level: LogLevel,
     val category: String,
     val message: String,
-    val correlationId: String? = null,
+    val correlationId: CorrelationId? = null,
     val attributes: Map<String, DiagnosticAttribute> = emptyMap(),
 )
 
@@ -25,7 +25,7 @@ data class LogEvent(
 data class CrashEvent(
     val category: String,
     val message: String,
-    val correlationId: String? = null,
+    val correlationId: CorrelationId? = null,
     val attributes: Map<String, DiagnosticAttribute> = emptyMap(),
 )
 
@@ -33,7 +33,7 @@ data class CrashEvent(
 data class PerformanceMetric(
     val name: String,
     val durationMillis: Long,
-    val correlationId: String? = null,
+    val correlationId: CorrelationId? = null,
     val attributes: Map<String, DiagnosticAttribute> = emptyMap(),
 ) {
     init {
@@ -41,9 +41,16 @@ data class PerformanceMetric(
     }
 }
 
+/** Receives sanitized operational logs. Implementations must not be called directly by product code. */
 fun interface LogSink { fun emit(event: LogEvent) }
+
+/** Receives sanitized crash reports. Throwable forwarding is disabled unless explicitly allowed by policy. */
 fun interface CrashSink { fun record(event: CrashEvent, throwable: Throwable?) }
+
+/** Receives sanitized performance measurements. */
 fun interface PerformanceSink { fun record(metric: PerformanceMetric) }
+
+/** Receives bounded platform resource snapshots. */
 fun interface ResourceSink { fun record(snapshot: ResourceSnapshot) }
 
 /** Runtime policy controlling operational diagnostics without leaking environment branching into callers. */
@@ -60,7 +67,12 @@ data class ObservabilityPolicy(
     init { require(maxAttributes in 0..128) }
 }
 
-/** Canonical product-neutral operational diagnostics facade. */
+/**
+ * Canonical product-neutral operational diagnostics facade.
+ *
+ * Every sink invocation is fail-isolated so diagnostics can never change application control flow.
+ * Data is bounded and sensitive attributes are redacted before crossing a sink boundary.
+ */
 class Observability(
     private val policy: ObservabilityPolicy,
     private val logSink: LogSink = LogSink {},
@@ -72,35 +84,37 @@ class Observability(
 ) {
     fun log(event: LogEvent) {
         if (event.level.ordinal < policy.minimumLogLevel.ordinal) return
-        logSink.emit(event.sanitized(policy.maxAttributes))
+        runCatching { logSink.emit(event.sanitized(policy.maxAttributes)) }
     }
 
     fun crash(event: CrashEvent, throwable: Throwable? = null) {
         if (!policy.crashReportingEnabled) return
-        crashSink.record(
-            event = event.sanitized(policy.maxAttributes),
-            throwable = throwable.takeIf { policy.includeThrowableDetails },
-        )
+        runCatching {
+            crashSink.record(
+                event = event.sanitized(policy.maxAttributes),
+                throwable = throwable.takeIf { policy.includeThrowableDetails },
+            )
+        }
     }
 
     fun performance(metric: PerformanceMetric) {
         if (!policy.performanceMetricsEnabled) return
-        performanceSink.record(metric.sanitized(policy.maxAttributes))
+        runCatching { performanceSink.record(metric.sanitized(policy.maxAttributes)) }
     }
 
     fun trace(span: TraceSpan) {
         if (!policy.tracingEnabled) return
-        traceSink.record(span.sanitized(policy.maxAttributes))
+        runCatching { traceSink.record(span.sanitized(policy.maxAttributes)) }
     }
 
     fun responsiveness(incident: ResponsivenessIncident) {
         if (!policy.responsivenessReportingEnabled) return
-        responsivenessSink.record(incident)
+        runCatching { responsivenessSink.record(incident) }
     }
 
     fun resource(snapshot: ResourceSnapshot) {
         if (!policy.resourceDiagnosticsEnabled) return
-        resourceSink.record(snapshot)
+        runCatching { resourceSink.record(snapshot) }
     }
 }
 
@@ -118,17 +132,36 @@ val NoOpObservability: Observability = Observability(
 )
 
 private const val REDACTED = "[REDACTED]"
+private const val MAX_CATEGORY_LENGTH = 80
+private const val MAX_MESSAGE_LENGTH = 160
+private const val MAX_METRIC_NAME_LENGTH = 120
+private const val MAX_ATTRIBUTE_KEY_LENGTH = 80
+private const val MAX_ATTRIBUTE_VALUE_LENGTH = 512
 
 private fun Map<String, DiagnosticAttribute>.sanitized(maxAttributes: Int): Map<String, DiagnosticAttribute> =
     entries.take(maxAttributes).associate { (key, attribute) ->
-        key to if (attribute.sensitivity == DiagnosticSensitivity.SENSITIVE) {
+        key.take(MAX_ATTRIBUTE_KEY_LENGTH) to if (attribute.sensitivity == DiagnosticSensitivity.SENSITIVE) {
             DiagnosticAttribute(REDACTED)
         } else {
-            attribute
+            attribute.copy(value = attribute.value.take(MAX_ATTRIBUTE_VALUE_LENGTH))
         }
     }
 
-private fun LogEvent.sanitized(maxAttributes: Int) = copy(attributes = attributes.sanitized(maxAttributes))
-private fun CrashEvent.sanitized(maxAttributes: Int) = copy(attributes = attributes.sanitized(maxAttributes))
-private fun PerformanceMetric.sanitized(maxAttributes: Int) = copy(attributes = attributes.sanitized(maxAttributes))
+private fun LogEvent.sanitized(maxAttributes: Int) = copy(
+    category = category.take(MAX_CATEGORY_LENGTH),
+    message = message.take(MAX_MESSAGE_LENGTH),
+    attributes = attributes.sanitized(maxAttributes),
+)
+
+private fun CrashEvent.sanitized(maxAttributes: Int) = copy(
+    category = category.take(MAX_CATEGORY_LENGTH),
+    message = message.take(MAX_MESSAGE_LENGTH),
+    attributes = attributes.sanitized(maxAttributes),
+)
+
+private fun PerformanceMetric.sanitized(maxAttributes: Int) = copy(
+    name = name.take(MAX_METRIC_NAME_LENGTH),
+    attributes = attributes.sanitized(maxAttributes),
+)
+
 private fun TraceSpan.sanitized(maxAttributes: Int) = copy(attributes = attributes.sanitized(maxAttributes))
