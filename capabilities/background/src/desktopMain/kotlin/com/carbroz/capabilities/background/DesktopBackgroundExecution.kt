@@ -1,5 +1,6 @@
 package com.carbroz.capabilities.background
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -8,24 +9,33 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 
-/** Desktop policy: reliable while this process is alive; explicitly not persistent across process exit. */
+/**
+ * Desktop policy: scheduled work is reliable only while this process is alive. OS-level network,
+ * charging and idle constraints are rejected rather than silently ignored.
+ */
 class DesktopBackgroundScheduler(
     private val runnerProvider: () -> BackgroundTaskRunner,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : BackgroundScheduler {
     private val mutex = Mutex()
-    private val jobs = mutableMapOf<BackgroundTaskId, Job>()
-    private val states = mutableMapOf<BackgroundTaskId, BackgroundTaskState>()
+    private val jobs = ConcurrentHashMap<BackgroundTaskId, Job>()
+    private val states = ConcurrentHashMap<BackgroundTaskId, BackgroundTaskState>()
 
     override suspend fun schedule(request: BackgroundTaskRequest): BackgroundScheduleResult = mutex.withLock {
+        if (request.constraints != BackgroundConstraints()) {
+            return BackgroundScheduleResult.Unsupported(
+                "Desktop process scheduler cannot guarantee network, charging or device-idle constraints",
+            )
+        }
         val existing = jobs[request.id]
         if (existing?.isActive == true && request.existingTaskPolicy == ExistingTaskPolicy.KEEP) {
             return BackgroundScheduleResult.AlreadyScheduled
         }
         existing?.cancel()
         states[request.id] = BackgroundTaskState.ENQUEUED
-        jobs[request.id] = scope.launch {
+        val job = scope.launch {
             delay(request.earliestStartDelayMillis)
             states[request.id] = BackgroundTaskState.RUNNING
             states[request.id] = when (runnerProvider().run(request.id, request.input)) {
@@ -33,10 +43,11 @@ class DesktopBackgroundScheduler(
                 BackgroundExecutionResult.Retry -> BackgroundTaskState.FAILED
                 is BackgroundExecutionResult.Failure -> BackgroundTaskState.FAILED
             }
-        }.also { job ->
-            job.invokeOnCompletion { cause ->
-                if (cause is kotlinx.coroutines.CancellationException) states[request.id] = BackgroundTaskState.CANCELLED
-            }
+        }
+        jobs[request.id] = job
+        job.invokeOnCompletion { cause ->
+            if (cause is CancellationException) states[request.id] = BackgroundTaskState.CANCELLED
+            jobs.remove(request.id, job)
         }
         BackgroundScheduleResult.Scheduled
     }
@@ -46,9 +57,8 @@ class DesktopBackgroundScheduler(
         states[id] = BackgroundTaskState.CANCELLED
     }
 
-    override suspend fun state(id: BackgroundTaskId): BackgroundTaskState = mutex.withLock {
+    override suspend fun state(id: BackgroundTaskId): BackgroundTaskState =
         states[id] ?: BackgroundTaskState.UNKNOWN
-    }
 }
 
 /** Desktop continuous execution is process-scoped and has no OS persistent-service guarantee. */
