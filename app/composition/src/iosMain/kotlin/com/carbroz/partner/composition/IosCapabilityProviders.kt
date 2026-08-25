@@ -12,9 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import platform.Foundation.NSCharacterSet
 import platform.Foundation.NSURL
-import platform.Foundation.stringByAddingPercentEncodingWithAllowedCharacters
 import platform.UIKit.UIApplication
 
 internal fun iosCapabilityProviders(): List<CapabilityProvider> = listOf(
@@ -84,9 +82,7 @@ private class IosMapsProvider : CapabilityProvider {
         }
         val query = request.arguments["query"]?.jsonPrimitive?.contentOrNull
             ?: return CapabilityResult.Failure("missing_query", "Maps operation requires 'query'")
-        val encoded = query.stringByAddingPercentEncodingWithAllowedCharacters(
-            NSCharacterSet.URLQueryAllowedCharacterSet,
-        ) ?: return CapabilityResult.Failure("invalid_query", "Maps query could not be encoded")
+        val encoded = query.replace(" ", "%20")
         return open("https://maps.apple.com/?q=$encoded")
     }
 }
