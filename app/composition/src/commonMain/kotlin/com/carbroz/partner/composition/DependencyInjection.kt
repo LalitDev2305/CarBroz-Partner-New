@@ -1,10 +1,5 @@
 package com.carbroz.partner.composition
 
-import com.carbroz.platform.background.BackgroundScheduler
-import com.carbroz.platform.background.BackgroundTaskHandler
-import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
-import com.carbroz.platform.background.BackgroundTaskRunner
-import com.carbroz.platform.background.ContinuousExecutionController
 import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.database.DatabaseHealthCheck
@@ -36,15 +31,21 @@ import com.carbroz.data.sync.OutboxStore
 import com.carbroz.data.sync.RoomOutboxStore
 import com.carbroz.data.sync.SyncConflictResolver
 import com.carbroz.data.sync.SyncCoordinator
+import com.carbroz.foundation.analytics.AnalyticsPolicy
+import com.carbroz.foundation.analytics.AnalyticsTracker
 import com.carbroz.foundation.capabilities.CapabilityProvider
 import com.carbroz.foundation.capabilities.CapabilityRegistry
 import com.carbroz.foundation.configuration.AppConfiguration
+import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleController
 import com.carbroz.foundation.lifecycle.DefaultAppLifecycle
 import com.carbroz.foundation.navigation.NavigationState
 import com.carbroz.foundation.navigation.NavigationStore
+import com.carbroz.foundation.observability.LogLevel
+import com.carbroz.foundation.observability.Observability
+import com.carbroz.foundation.observability.ObservabilityPolicy
 import com.carbroz.foundation.security.SecureStorage
 import com.carbroz.foundation.session.JsonSessionSnapshotCodec
 import com.carbroz.foundation.session.SecureSessionPersistence
@@ -55,6 +56,11 @@ import com.carbroz.foundation.session.SessionStore
 import com.carbroz.foundation.session.TokenExpiryPolicy
 import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
+import com.carbroz.platform.background.BackgroundScheduler
+import com.carbroz.platform.background.BackgroundTaskHandler
+import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
+import com.carbroz.platform.background.BackgroundTaskRunner
+import com.carbroz.platform.background.ContinuousExecutionController
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.DefaultApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
@@ -76,6 +82,28 @@ fun carBrozApplicationModule(
 ) = module {
     single { configuration }
     single<ConfigurationProvider> { ConfigurationProvider { get<AppConfiguration>() } }
+
+    single {
+        Observability(
+            policy = ObservabilityPolicy(
+                minimumLogLevel = when (configuration.environment) {
+                    AppEnvironment.Development -> LogLevel.DEBUG
+                    AppEnvironment.Staging -> LogLevel.INFO
+                    AppEnvironment.Production -> LogLevel.WARN
+                },
+                crashReportingEnabled = true,
+                performanceMetricsEnabled = true,
+            ),
+        )
+    }
+    single {
+        AnalyticsTracker(
+            policy = AnalyticsPolicy(
+                enabled = false,
+                allowedEventNames = emptySet(),
+            ),
+        )
+    }
 
     single<Clock> { SystemClock }
     single<SecureStorage> { secureStorage }
