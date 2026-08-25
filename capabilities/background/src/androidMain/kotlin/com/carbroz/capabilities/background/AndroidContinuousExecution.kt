@@ -11,22 +11,28 @@ import android.os.Build
 import android.os.IBinder
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 
 /** Android foreground-service controller for genuinely user-visible continuous work. */
 class AndroidContinuousExecutionController(private val context: Context) : ContinuousExecutionController {
+    private val appContext = context.applicationContext
     private val mutex = Mutex()
 
     override suspend fun start(request: ContinuousExecutionRequest): ContinuousExecutionStartResult = mutex.withLock {
         if (CarBrozContinuousExecutionService.isRunning(request.id)) {
             return ContinuousExecutionStartResult.AlreadyRunning
         }
-        val intent = Intent(context, CarBrozContinuousExecutionService::class.java)
+        val intent = Intent(appContext, CarBrozContinuousExecutionService::class.java)
             .setAction(CarBrozContinuousExecutionService.ACTION_START)
             .putExtra(CarBrozContinuousExecutionService.EXTRA_ID, request.id.value)
             .putExtra(CarBrozContinuousExecutionService.EXTRA_TITLE, request.title)
             .putExtra(CarBrozContinuousExecutionService.EXTRA_DESCRIPTION, request.description)
         return try {
-            context.startForegroundService(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                appContext.startForegroundService(intent)
+            } else {
+                appContext.startService(intent)
+            }
             ContinuousExecutionStartResult.Started
         } catch (failure: RuntimeException) {
             ContinuousExecutionStartResult.Rejected(failure.message ?: "Android rejected foreground execution")
@@ -34,8 +40,9 @@ class AndroidContinuousExecutionController(private val context: Context) : Conti
     }
 
     override suspend fun stop(id: BackgroundTaskId) = mutex.withLock {
-        context.startService(
-            Intent(context, CarBrozContinuousExecutionService::class.java)
+        if (!CarBrozContinuousExecutionService.isRunning(id)) return@withLock
+        appContext.startService(
+            Intent(appContext, CarBrozContinuousExecutionService::class.java)
                 .setAction(CarBrozContinuousExecutionService.ACTION_STOP)
                 .putExtra(CarBrozContinuousExecutionService.EXTRA_ID, id.value),
         )
@@ -50,10 +57,12 @@ class AndroidContinuousExecutionController(private val context: Context) : Conti
 class CarBrozContinuousExecutionService : Service() {
     override fun onCreate() {
         super.onCreate()
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Ongoing operations", NotificationManager.IMPORTANCE_LOW),
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Ongoing operations", NotificationManager.IMPORTANCE_LOW),
+            )
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -72,7 +81,12 @@ class CarBrozContinuousExecutionService : Service() {
         val description = intent.getStringExtra(EXTRA_DESCRIPTION).orEmpty()
         if (title.isBlank() || description.isBlank()) return stopSelf()
         running += id
-        val notification = Notification.Builder(this, CHANNEL_ID)
+        val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle(title)
             .setContentText(description)
@@ -108,7 +122,7 @@ class CarBrozContinuousExecutionService : Service() {
         internal const val EXTRA_TITLE = "title"
         internal const val EXTRA_DESCRIPTION = "description"
         private const val CHANNEL_ID = "carbroz_continuous_execution"
-        private val running = linkedSetOf<BackgroundTaskId>()
+        private val running = ConcurrentHashMap.newKeySet<BackgroundTaskId>()
 
         internal fun isRunning(id: BackgroundTaskId): Boolean = id in running
         private fun notificationId(id: BackgroundTaskId): Int = id.value.hashCode().and(0x7fffffff).coerceAtLeast(1)
