@@ -39,8 +39,8 @@ jobs:
           :data:network:allTests
           :data:sync:allTests
           :data:realtime:allTests
-          :capabilities:background:desktopTest
-          :capabilities:background:testAndroidHostTest
+          :platform:background:desktopTest
+          :platform:background:testAndroidHostTest
           :app:composition:desktopTest
           :app:composition:testAndroidHostTest
           :desktopApp:compileKotlinDesktop
@@ -80,8 +80,8 @@ jobs:
           :data:sync:compileKotlinIosSimulatorArm64
           :data:realtime:compileKotlinIosArm64
           :data:realtime:compileKotlinIosSimulatorArm64
-          :capabilities:background:compileKotlinIosArm64
-          :capabilities:background:compileKotlinIosSimulatorArm64
+          :platform:background:compileKotlinIosArm64
+          :platform:background:compileKotlinIosSimulatorArm64
           :app:composition:compileKotlinIosArm64
           :app:composition:compileKotlinIosSimulatorArm64
           :app:composition:linkDebugFrameworkIosSimulatorArm64
