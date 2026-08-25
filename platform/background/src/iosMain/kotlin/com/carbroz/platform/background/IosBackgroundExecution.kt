@@ -72,8 +72,14 @@ class IosBackgroundScheduler(
         if (request.constraints.requiresDeviceIdle) {
             return BackgroundScheduleResult.Unsupported("iOS BGTaskScheduler owns idle execution policy")
         }
-        if (request.existingTaskPolicy == ExistingTaskPolicy.KEEP && state(request.id) == BackgroundTaskState.ENQUEUED) {
-            return BackgroundScheduleResult.AlreadyScheduled
+        if (request.existingTaskPolicy == ExistingTaskPolicy.KEEP) {
+            when (state(request.id)) {
+                BackgroundTaskState.ENQUEUED,
+                BackgroundTaskState.RUNNING,
+                -> return BackgroundScheduleResult.AlreadyScheduled
+
+                else -> Unit
+            }
         }
         if (request.existingTaskPolicy == ExistingTaskPolicy.REPLACE) {
             BGTaskScheduler.sharedScheduler.cancelTaskRequestWithIdentifier(request.id.value)
