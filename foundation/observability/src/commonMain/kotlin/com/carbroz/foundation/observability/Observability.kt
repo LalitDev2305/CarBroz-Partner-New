@@ -44,6 +44,7 @@ data class PerformanceMetric(
 fun interface LogSink { fun emit(event: LogEvent) }
 fun interface CrashSink { fun record(event: CrashEvent, throwable: Throwable?) }
 fun interface PerformanceSink { fun record(metric: PerformanceMetric) }
+fun interface ResourceSink { fun record(snapshot: ResourceSnapshot) }
 
 /** Runtime policy controlling operational diagnostics without leaking environment branching into callers. */
 data class ObservabilityPolicy(
@@ -52,6 +53,7 @@ data class ObservabilityPolicy(
     val performanceMetricsEnabled: Boolean = true,
     val tracingEnabled: Boolean = true,
     val responsivenessReportingEnabled: Boolean = true,
+    val resourceDiagnosticsEnabled: Boolean = true,
     val includeThrowableDetails: Boolean = false,
     val maxAttributes: Int = 32,
 ) {
@@ -66,6 +68,7 @@ class Observability(
     private val performanceSink: PerformanceSink = PerformanceSink {},
     private val traceSink: TraceSink = TraceSink {},
     private val responsivenessSink: ResponsivenessSink = ResponsivenessSink {},
+    private val resourceSink: ResourceSink = ResourceSink {},
 ) {
     fun log(event: LogEvent) {
         if (event.level.ordinal < policy.minimumLogLevel.ordinal) return
@@ -94,6 +97,11 @@ class Observability(
         if (!policy.responsivenessReportingEnabled) return
         responsivenessSink.record(incident)
     }
+
+    fun resource(snapshot: ResourceSnapshot) {
+        if (!policy.resourceDiagnosticsEnabled) return
+        resourceSink.record(snapshot)
+    }
 }
 
 /** Shared no-op instance used as a source-compatible default by instrumented subsystems. */
@@ -104,6 +112,7 @@ val NoOpObservability: Observability = Observability(
         performanceMetricsEnabled = false,
         tracingEnabled = false,
         responsivenessReportingEnabled = false,
+        resourceDiagnosticsEnabled = false,
         maxAttributes = 0,
     ),
 )
