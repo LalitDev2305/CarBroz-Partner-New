@@ -25,6 +25,7 @@ class StaticCapabilityProvider(
                 code = "provider_not_implemented",
                 message = "Available capability $kind requires a concrete provider implementation",
             )
+            is CapabilityAvailability.PermissionRequired -> CapabilityResult.PermissionRequired(current.reason)
             is CapabilityAvailability.Restricted -> CapabilityResult.Restricted(current.reason)
             is CapabilityAvailability.Unavailable -> CapabilityResult.Unavailable(current.reason)
             is CapabilityAvailability.Unsupported -> CapabilityResult.Unsupported(current.reason)
@@ -48,6 +49,7 @@ class CapabilityRegistry internal constructor(
             ?: return CapabilityResult.Unsupported("No provider registered for ${request.kind}")
         return when (val state = provider.availability.value) {
             CapabilityAvailability.Available -> provider.execute(request)
+            is CapabilityAvailability.PermissionRequired -> CapabilityResult.PermissionRequired(state.reason)
             is CapabilityAvailability.Restricted -> CapabilityResult.Restricted(state.reason)
             is CapabilityAvailability.Unavailable -> CapabilityResult.Unavailable(state.reason)
             is CapabilityAvailability.Unsupported -> CapabilityResult.Unsupported(state.reason)
