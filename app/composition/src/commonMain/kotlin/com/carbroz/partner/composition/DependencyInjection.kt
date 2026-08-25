@@ -31,6 +31,8 @@ import com.carbroz.data.sync.OutboxStore
 import com.carbroz.data.sync.RoomOutboxStore
 import com.carbroz.data.sync.SyncConflictResolver
 import com.carbroz.data.sync.SyncCoordinator
+import com.carbroz.foundation.capabilities.CapabilityProvider
+import com.carbroz.foundation.capabilities.CapabilityRegistry
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
@@ -62,6 +64,7 @@ fun carBrozApplicationModule(
     secureStorage: SecureStorage,
     databaseProvider: CarBrozDatabaseProvider,
     preferenceStoreProvider: PreferenceStoreProvider,
+    capabilityProviders: List<CapabilityProvider> = emptyList(),
 ) = module {
     single { configuration }
     single<ConfigurationProvider> { ConfigurationProvider { get<AppConfiguration>() } }
@@ -86,6 +89,9 @@ fun carBrozApplicationModule(
 
     single<PreferenceStoreProvider> { preferenceStoreProvider }
     single<PreferenceStore> { get<PreferenceStoreProvider>().get() }
+
+    single<CapabilityRegistry> { createCapabilityRegistry(capabilityProviders) }
+    single { CapabilityActionExecutor(registry = get()) }
 
     single { ApplicationConnectivity() }
     single<NetworkConnectivityObserver> { get<ApplicationConnectivity>() }
@@ -147,11 +153,20 @@ internal fun initializeCarBrozDependencyInjection(
     secureStorage: SecureStorage,
     databaseProvider: CarBrozDatabaseProvider,
     preferenceStoreProvider: PreferenceStoreProvider,
+    capabilityProviders: List<CapabilityProvider>,
 ) {
     if (KoinPlatform.getKoinOrNull() != null) return
 
     startKoin {
         allowOverride(false)
-        modules(carBrozApplicationModule(configuration, secureStorage, databaseProvider, preferenceStoreProvider))
+        modules(
+            carBrozApplicationModule(
+                configuration = configuration,
+                secureStorage = secureStorage,
+                databaseProvider = databaseProvider,
+                preferenceStoreProvider = preferenceStoreProvider,
+                capabilityProviders = capabilityProviders,
+            ),
+        )
     }
 }
