@@ -34,6 +34,7 @@ kotlin {
             // AppConfiguration is part of composition's public host-facing API.
             api(project(":foundation:configuration"))
             implementation(project(":feature:splash"))
+            implementation(project(":foundation:architecture"))
             implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:time"))
             implementation(project(":foundation:security"))
@@ -47,7 +48,6 @@ kotlin {
             implementation(project(":platform:background"))
             implementation(project(":runtime:application"))
             implementation(project(":runtime:action"))
-            implementation(project(":runtime:binding"))
             implementation(project(":runtime:sdui"))
             implementation(project(":data:network"))
             implementation(project(":data:realtime"))
