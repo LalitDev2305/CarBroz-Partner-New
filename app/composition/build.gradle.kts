@@ -33,6 +33,7 @@ kotlin {
         commonMain.dependencies {
             // AppConfiguration is part of composition's public host-facing API.
             api(project(":foundation:configuration"))
+            implementation(project(":feature:splash"))
             implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:time"))
             implementation(project(":foundation:security"))
