@@ -31,3 +31,12 @@ data class RequestCommandDto(
     val templateType: String,
     val payload: JsonObject = JsonObject(emptyMap()),
 ) : CommandDto
+
+/** Semantic platform capability request. Platform APIs and provider selection stay client-owned. */
+@Serializable
+@SerialName("CAPABILITY")
+data class CapabilityCommandDto(
+    val capability: String,
+    val operation: String,
+    val arguments: JsonObject = JsonObject(emptyMap()),
+) : CommandDto
