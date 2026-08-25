@@ -31,6 +31,8 @@ jobs:
           :foundation:security:allTests
           :foundation:session:allTests
           :foundation:capabilities:allTests
+          :foundation:observability:allTests
+          :foundation:analytics:allTests
           :runtime:application:allTests
           :runtime:sdui:allTests
           :runtime:binding:allTests
@@ -68,6 +70,10 @@ jobs:
           :foundation:session:compileKotlinIosSimulatorArm64
           :foundation:capabilities:compileKotlinIosArm64
           :foundation:capabilities:compileKotlinIosSimulatorArm64
+          :foundation:observability:compileKotlinIosArm64
+          :foundation:observability:compileKotlinIosSimulatorArm64
+          :foundation:analytics:compileKotlinIosArm64
+          :foundation:analytics:compileKotlinIosSimulatorArm64
           :runtime:application:compileKotlinIosArm64
           :runtime:application:compileKotlinIosSimulatorArm64
           :runtime:sdui:compileKotlinIosArm64
