@@ -45,8 +45,8 @@ class RandomCorrelationIdProvider(
     }
 }
 
-/** Final outcome for one traced operation span. */
-enum class TraceOutcome { SUCCESS, FAILURE, CANCELLED }
+/** Final outcome for one traced operation span. Retry is distinct from terminal failure. */
+enum class TraceOutcome { SUCCESS, FAILURE, RETRY, CANCELLED }
 
 /** Completed trace span. Parent correlation is optional for nested operations. */
 data class TraceSpan(
@@ -105,10 +105,12 @@ fun interface ResourceDiagnostics {
     fun sample(): ResourceDiagnosticResult
 }
 
+/** Receives sanitized completed trace spans. */
 fun interface TraceSink {
     fun record(span: TraceSpan)
 }
 
+/** Receives typed main/UI responsiveness incidents. */
 fun interface ResponsivenessSink {
     fun record(incident: ResponsivenessIncident)
 }
