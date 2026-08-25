@@ -9,6 +9,8 @@ import com.carbroz.foundation.capabilities.CapabilityProvider
 import com.carbroz.foundation.capabilities.CapabilityRequest
 import com.carbroz.foundation.capabilities.CapabilityResult
 import com.carbroz.foundation.capabilities.StaticCapabilityProvider
+import com.carbroz.foundation.security.TrustedUriDecision
+import com.carbroz.foundation.security.TrustedUriPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.contentOrNull
@@ -46,6 +48,7 @@ internal fun androidCapabilityProviders(context: Context): List<CapabilityProvid
 
 private class AndroidExternalUriProvider(
     private val context: Context,
+    private val uriPolicy: TrustedUriPolicy = TrustedUriPolicy(),
 ) : CapabilityProvider {
     override val kind: CapabilityKind = CapabilityKind.EXTERNAL_URI
     override val availability: StateFlow<CapabilityAvailability> =
@@ -58,6 +61,10 @@ private class AndroidExternalUriProvider(
         }
         val uri = request.arguments["uri"]?.jsonPrimitive?.contentOrNull
             ?: return CapabilityResult.Failure("missing_uri", "External URI operation requires 'uri'")
+        when (val decision = uriPolicy.evaluate(uri)) {
+            TrustedUriDecision.Trusted -> Unit
+            is TrustedUriDecision.Rejected -> return CapabilityResult.Restricted(decision.reason)
+        }
         return launch(context, Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
     }
 }
