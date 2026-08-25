@@ -18,4 +18,6 @@ fun interface Clock {
  * Test clocks intentionally live outside production source sets so the runtime
  * API does not expose mutable time controls.
  */
-expect object SystemClock : Clock
+expect object SystemClock : Clock {
+    override fun nowEpochMilliseconds(): Long
+}
