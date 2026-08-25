@@ -6,7 +6,6 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
-import platform.Foundation.URLByAppendingPathComponent
 
 /** iOS Room builder rooted in Application Support. */
 class IosCarBrozDatabaseBuilderProvider : CarBrozDatabaseBuilderProvider {
