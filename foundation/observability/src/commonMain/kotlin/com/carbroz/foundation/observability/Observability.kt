@@ -78,6 +78,16 @@ class Observability(
     }
 }
 
+/** Shared no-op instance used as a source-compatible default by instrumented subsystems. */
+val NoOpObservability: Observability = Observability(
+    policy = ObservabilityPolicy(
+        minimumLogLevel = LogLevel.ERROR,
+        crashReportingEnabled = false,
+        performanceMetricsEnabled = false,
+        maxAttributes = 0,
+    ),
+)
+
 private const val REDACTED = "[REDACTED]"
 
 private fun Map<String, DiagnosticAttribute>.sanitized(maxAttributes: Int): Map<String, DiagnosticAttribute> =
