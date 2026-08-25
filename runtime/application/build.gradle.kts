@@ -19,6 +19,8 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(project(":foundation:lifecycle"))
+            implementation(project(":foundation:observability"))
+            implementation(project(":foundation:time"))
             implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
