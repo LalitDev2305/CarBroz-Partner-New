@@ -1,5 +1,10 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.capabilities.background.BackgroundScheduler
+import com.carbroz.capabilities.background.BackgroundTaskHandler
+import com.carbroz.capabilities.background.BackgroundTaskHandlerRegistry
+import com.carbroz.capabilities.background.BackgroundTaskRunner
+import com.carbroz.capabilities.background.ContinuousExecutionController
 import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.database.DatabaseHealthCheck
@@ -65,6 +70,9 @@ fun carBrozApplicationModule(
     databaseProvider: CarBrozDatabaseProvider,
     preferenceStoreProvider: PreferenceStoreProvider,
     capabilityProviders: List<CapabilityProvider> = emptyList(),
+    backgroundScheduler: BackgroundScheduler? = null,
+    continuousExecutionController: ContinuousExecutionController? = null,
+    backgroundTaskHandlers: List<BackgroundTaskHandler> = emptyList(),
 ) = module {
     single { configuration }
     single<ConfigurationProvider> { ConfigurationProvider { get<AppConfiguration>() } }
@@ -72,12 +80,7 @@ fun carBrozApplicationModule(
     single<Clock> { SystemClock }
     single<SecureStorage> { secureStorage }
     single<SessionSnapshotCodec> { JsonSessionSnapshotCodec() }
-    single<SessionPersistence> {
-        SecureSessionPersistence(
-            secureStorage = get(),
-            codec = get(),
-        )
-    }
+    single<SessionPersistence> { SecureSessionPersistence(secureStorage = get(), codec = get()) }
     single { SessionStore(persistence = get()) }
     single<SessionProvider> { get<SessionStore>() }
     single { TokenExpiryPolicy(clock = get()) }
@@ -92,6 +95,11 @@ fun carBrozApplicationModule(
 
     single<CapabilityRegistry> { createCapabilityRegistry(capabilityProviders) }
     single { CapabilityActionExecutor(registry = get()) }
+
+    single { BackgroundTaskHandlerRegistry(backgroundTaskHandlers) }
+    single { BackgroundTaskRunner(registry = get()) }
+    if (backgroundScheduler != null) single<BackgroundScheduler> { backgroundScheduler }
+    if (continuousExecutionController != null) single<ContinuousExecutionController> { continuousExecutionController }
 
     single { ApplicationConnectivity() }
     single<NetworkConnectivityObserver> { get<ApplicationConnectivity>() }
@@ -135,13 +143,7 @@ fun carBrozApplicationModule(
 
     single { DefaultAppLifecycle() } bind AppLifecycleController::class
     single<AppLifecycle> { get<AppLifecycleController>() }
-    single {
-        SyncActivationCoordinator(
-            lifecycle = get(),
-            connectivity = get(),
-            syncCoordinator = get(),
-        )
-    }
+    single { SyncActivationCoordinator(lifecycle = get(), connectivity = get(), syncCoordinator = get()) }
 
     single { StartupCoordinator(tasks = listOf(get<SessionRestoreStartupTask>())) }
     single<ApplicationRuntime> { DefaultApplicationRuntime(startupCoordinator = get()) }
@@ -154,6 +156,9 @@ internal fun initializeCarBrozDependencyInjection(
     databaseProvider: CarBrozDatabaseProvider,
     preferenceStoreProvider: PreferenceStoreProvider,
     capabilityProviders: List<CapabilityProvider>,
+    backgroundScheduler: BackgroundScheduler? = null,
+    continuousExecutionController: ContinuousExecutionController? = null,
+    backgroundTaskHandlers: List<BackgroundTaskHandler> = emptyList(),
 ) {
     if (KoinPlatform.getKoinOrNull() != null) return
 
@@ -166,6 +171,9 @@ internal fun initializeCarBrozDependencyInjection(
                 databaseProvider = databaseProvider,
                 preferenceStoreProvider = preferenceStoreProvider,
                 capabilityProviders = capabilityProviders,
+                backgroundScheduler = backgroundScheduler,
+                continuousExecutionController = continuousExecutionController,
+                backgroundTaskHandlers = backgroundTaskHandlers,
             ),
         )
     }
