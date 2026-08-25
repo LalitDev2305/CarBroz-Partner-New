@@ -5,7 +5,7 @@ import java.awt.EventQueue
 /** Desktop UI-thread heartbeat adapter for Compose Desktop's AWT event queue. */
 class DesktopMainThreadDispatcher : MainThreadDispatcher {
     override fun dispatch(block: () -> Unit) {
-        EventQueue.invokeLater { block() }
+        EventQueue.invokeLater(block)
     }
 }
 
@@ -37,7 +37,7 @@ class DesktopPlatformDiagnosticSink : LogSink, CrashSink, PerformanceSink, Trace
     }
 
     override fun record(metric: PerformanceMetric) {
-        println("metric=${metric.name} duration_ms=${metric.durationMillis} correlation=${metric.correlationId.orEmpty()} ${renderAttributes(metric.attributes)}")
+        println("metric=${metric.name} duration_ms=${metric.durationMillis} correlation=${metric.correlationId?.value.orEmpty()} ${renderAttributes(metric.attributes)}")
     }
 
     override fun record(span: TraceSpan) {
@@ -49,15 +49,17 @@ class DesktopPlatformDiagnosticSink : LogSink, CrashSink, PerformanceSink, Trace
     }
 
     override fun record(snapshot: ResourceSnapshot) {
-        println("resources heap_used=${snapshot.heapUsedBytes ?: -1} heap_limit=${snapshot.heapLimitBytes ?: -1} processors=${snapshot.processorCount ?: -1}")
+        println(
+            "resources heap_used=${snapshot.heapUsedBytes ?: -1} heap_limit=${snapshot.heapLimitBytes ?: -1} physical_memory=${snapshot.physicalMemoryBytes ?: -1} processors=${snapshot.processorCount ?: -1}",
+        )
     }
 
     private fun render(
         category: String,
         message: String,
-        correlationId: String?,
+        correlationId: CorrelationId?,
         attributes: Map<String, DiagnosticAttribute>,
-    ): String = "category=$category event=$message correlation=${correlationId.orEmpty()} ${renderAttributes(attributes)}"
+    ): String = "category=$category event=$message correlation=${correlationId?.value.orEmpty()} ${renderAttributes(attributes)}"
 
     private fun renderAttributes(attributes: Map<String, DiagnosticAttribute>): String =
         attributes.entries.joinToString(separator = " ") { (key, attribute) -> "$key=${attribute.value}" }
