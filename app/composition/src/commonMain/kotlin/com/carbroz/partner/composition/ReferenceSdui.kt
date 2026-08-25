@@ -19,6 +19,8 @@ import com.carbroz.data.network.NetworkEndpoint
 import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
 import com.carbroz.data.network.NetworkResult
+import com.carbroz.foundation.architecture.store.Store
+import com.carbroz.foundation.capabilities.CapabilityResult
 import com.carbroz.runtime.action.ActionPreparationContext
 import com.carbroz.runtime.action.ActionPreparationResult
 import com.carbroz.runtime.action.ActionPreparer
@@ -48,6 +50,12 @@ data class ReferenceSduiState(
     val failure: ReferenceSduiFailure? = null,
 )
 
+sealed interface ReferenceSduiIntent {
+    data object Load : ReferenceSduiIntent
+    data class Execute(val command: SduiCommandIntent) : ReferenceSduiIntent
+    data class RenderFailed(val failure: SduiRenderFailure) : ReferenceSduiIntent
+}
+
 sealed interface ReferenceSduiFailure {
     data class Network(val reason: String) : ReferenceSduiFailure
     data class Pipeline(val reason: String) : ReferenceSduiFailure
@@ -56,7 +64,7 @@ sealed interface ReferenceSduiFailure {
 }
 
 /**
- * MVI-style owner for the neutral reference screen.
+ * MVI owner for the neutral reference screen.
  *
  * Untrusted payloads always pass through [SduiPipeline]. Render events become semantic commands,
  * commands pass through [ActionPreparer] (including binding resolution), and only prepared actions
@@ -69,16 +77,31 @@ class ReferenceSduiStore(
     private val networkActions: NetworkActionExecutor,
     private val capabilityActions: CapabilityActionExecutor,
     parentScope: CoroutineScope,
-) {
-    private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob())
+) : Store<ReferenceSduiIntent, ReferenceSduiState> {
+    private val parentJob = parentScope.coroutineContext[Job]
+    private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentJob))
     private val mutableState = MutableStateFlow(ReferenceSduiState())
-    val state: StateFlow<ReferenceSduiState> = mutableState.asStateFlow()
+    override val state: StateFlow<ReferenceSduiState> = mutableState.asStateFlow()
 
     private var loadJob: Job? = null
     private var actionJob: Job? = null
 
-    fun load() {
-        if (loadJob?.isActive == true) return
+    override fun dispatch(intent: ReferenceSduiIntent) {
+        when (intent) {
+            ReferenceSduiIntent.Load -> load()
+            is ReferenceSduiIntent.Execute -> execute(intent.command)
+            is ReferenceSduiIntent.RenderFailed -> onRenderFailure(intent.failure)
+        }
+    }
+
+    fun close() {
+        loadJob?.cancel()
+        actionJob?.cancel()
+        scope.cancel()
+    }
+
+    private fun load() {
+        if (loadJob?.isActive == true || actionJob?.isActive == true) return
         loadJob = scope.launch {
             mutableState.value = mutableState.value.copy(loading = true, failure = null)
             val result = network.execute(
@@ -98,8 +121,8 @@ class ReferenceSduiStore(
         }
     }
 
-    fun execute(intent: SduiCommandIntent) {
-        if (actionJob?.isActive == true) return
+    private fun execute(intent: SduiCommandIntent) {
+        if (actionJob?.isActive == true || loadJob?.isActive == true) return
         actionJob = scope.launch {
             mutableState.value = mutableState.value.copy(actionInFlight = true, failure = null)
             when (
@@ -117,16 +140,13 @@ class ReferenceSduiStore(
         }
     }
 
-    fun reportRenderFailure(failure: SduiRenderFailure) {
+    private fun onRenderFailure(failure: SduiRenderFailure) {
         mutableState.value = mutableState.value.copy(
+            screen = null,
+            loading = false,
+            actionInFlight = false,
             failure = ReferenceSduiFailure.Render(failure),
         )
-    }
-
-    fun close() {
-        loadJob?.cancel()
-        actionJob?.cancel()
-        scope.cancel()
     }
 
     private suspend fun executePrepared(action: PreparedAction) {
@@ -143,8 +163,15 @@ class ReferenceSduiStore(
             }
 
             is PreparedAction.Capability -> {
-                capabilityActions.execute(action)
-                mutableState.value = mutableState.value.copy(actionInFlight = false)
+                mutableState.value = when (val result = capabilityActions.execute(action)) {
+                    is CapabilityResult.Success,
+                    CapabilityResult.Cancelled -> mutableState.value.copy(actionInFlight = false)
+
+                    else -> mutableState.value.copy(
+                        actionInFlight = false,
+                        failure = ReferenceSduiFailure.Action(result.toString()),
+                    )
+                }
             }
         }
     }
@@ -210,13 +237,6 @@ fun ReferenceSduiScreen(
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
-            state.loading && state.screen == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-            state.screen != null -> DynamicScreenHost(
-                screen = state.screen,
-                dispatcher = dispatcher,
-                onCommand = onCommand,
-                onRenderFailure = onRenderFailure,
-            )
             state.failure != null -> Column(
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -228,6 +248,14 @@ fun ReferenceSduiScreen(
                 )
                 Button(onClick = onRetry) { Text("Retry") }
             }
+
+            state.loading && state.screen == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+            state.screen != null -> DynamicScreenHost(
+                screen = state.screen,
+                dispatcher = dispatcher,
+                onCommand = onCommand,
+                onRenderFailure = onRenderFailure,
+            )
         }
 
         if (state.actionInFlight) {
