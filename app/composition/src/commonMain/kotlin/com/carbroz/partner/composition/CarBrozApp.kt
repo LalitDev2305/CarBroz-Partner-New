@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,6 +18,9 @@ import com.carbroz.foundation.navigation.Navigation3Host
 import com.carbroz.foundation.navigation.NavigationDestination
 import com.carbroz.foundation.navigation.NavigationDestinationContent
 import com.carbroz.foundation.navigation.NavigationStore
+import com.carbroz.foundation.observability.Observability
+import com.carbroz.foundation.observability.PerformanceMetric
+import com.carbroz.foundation.time.Clock
 import org.koin.compose.koinInject
 
 internal data object AppShellDestination : NavigationDestination {
@@ -47,8 +52,20 @@ private val appShellContent = NavigationDestinationContent { destination ->
 fun CarBrozApp() {
     val navigationStore = koinInject<NavigationStore>()
     val syncActivationCoordinator = koinInject<SyncActivationCoordinator>()
+    val observability = koinInject<Observability>()
+    val clock = koinInject<Clock>()
     val navigationState by navigationStore.state.collectAsStateWithLifecycle()
     val applicationScope = rememberCoroutineScope()
+    val firstRenderStartedAt = remember { clock.nowEpochMilliseconds() }
+
+    LaunchedEffect(Unit) {
+        observability.performance(
+            PerformanceMetric(
+                name = "app.first_render",
+                durationMillis = (clock.nowEpochMilliseconds() - firstRenderStartedAt).coerceAtLeast(0L),
+            ),
+        )
+    }
 
     DisposableEffect(syncActivationCoordinator, applicationScope) {
         val activationJob = syncActivationCoordinator.start(applicationScope)
