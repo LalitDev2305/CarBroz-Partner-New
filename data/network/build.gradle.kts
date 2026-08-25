@@ -19,6 +19,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(project(":foundation:configuration"))
+            implementation(project(":foundation:observability"))
             implementation(project(":foundation:session"))
             implementation(project(":foundation:security"))
             implementation(project(":foundation:time"))
