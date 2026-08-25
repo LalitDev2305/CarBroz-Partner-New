@@ -66,12 +66,11 @@ class NetworkExecutor(
 
             finish(context, executeWithCachePolicy(request, context), startedAt)
         } catch (cancellation: CancellationException) {
-            val duration = elapsedSince(startedAt)
             observability.trace(
                 TraceSpan(
                     name = "network.request",
-                    correlationId = CorrelationId(context.requestId.value),
-                    durationMillis = duration,
+                    correlationId = context.correlationId(),
+                    durationMillis = elapsedSince(startedAt),
                     outcome = TraceOutcome.CANCELLED,
                     attributes = mapOf("method" to DiagnosticAttribute(context.method.name)),
                 ),
@@ -220,6 +219,7 @@ class NetworkExecutor(
     ): NetworkResult {
         val outcome = result.toNetworkOutcome()
         val duration = elapsedSince(startedAt)
+        val correlationId = context.correlationId()
         val attributes = mapOf(
             "method" to DiagnosticAttribute(context.method.name),
             "outcome" to DiagnosticAttribute(outcome.metricName()),
@@ -229,14 +229,14 @@ class NetworkExecutor(
             PerformanceMetric(
                 name = "network.request",
                 durationMillis = duration,
-                correlationId = context.requestId.value,
+                correlationId = correlationId,
                 attributes = attributes,
             ),
         )
         observability.trace(
             TraceSpan(
                 name = "network.request",
-                correlationId = CorrelationId(context.requestId.value),
+                correlationId = correlationId,
                 durationMillis = duration,
                 outcome = if (outcome is NetworkOutcome.Success) TraceOutcome.SUCCESS else TraceOutcome.FAILURE,
                 attributes = attributes,
@@ -248,13 +248,15 @@ class NetworkExecutor(
                     level = LogLevel.WARN,
                     category = "network",
                     message = "network_request_failed",
-                    correlationId = context.requestId.value,
+                    correlationId = correlationId,
                     attributes = attributes,
                 ),
             )
         }
         return result
     }
+
+    private fun NetworkRequestContext.correlationId(): CorrelationId = CorrelationId(requestId.value)
 
     private fun elapsedSince(startedAt: Long): Long =
         (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L)
