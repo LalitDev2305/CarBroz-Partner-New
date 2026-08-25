@@ -3,11 +3,6 @@ package com.carbroz.foundation.capabilities
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
-@kotlin.jvm.JvmInline
-value class CapabilityId(val value: String) {
-    init { require(value.isNotBlank()) { "CapabilityId must not be blank" } }
-}
-
 enum class CapabilityKind {
     PERMISSION,
     LOCATION,
@@ -27,6 +22,7 @@ enum class CapabilityKind {
 
 sealed interface CapabilityAvailability {
     data object Available : CapabilityAvailability
+    data class PermissionRequired(val reason: String) : CapabilityAvailability
     data class Restricted(val reason: String) : CapabilityAvailability
     data class Unavailable(val reason: String) : CapabilityAvailability
     data class Unsupported(val reason: String) : CapabilityAvailability
@@ -35,6 +31,7 @@ sealed interface CapabilityAvailability {
 sealed interface CapabilityResult {
     data class Success(val payload: JsonObject = JsonObject(emptyMap())) : CapabilityResult
     data object Cancelled : CapabilityResult
+    data class PermissionRequired(val reason: String) : CapabilityResult
     data class Restricted(val reason: String) : CapabilityResult
     data class Unavailable(val reason: String) : CapabilityResult
     data class Unsupported(val reason: String) : CapabilityResult
