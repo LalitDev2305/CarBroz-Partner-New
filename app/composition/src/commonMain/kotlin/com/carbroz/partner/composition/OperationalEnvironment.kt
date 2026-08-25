@@ -14,21 +14,22 @@ internal data class LocalOperationalDiagnostics(
 
 /**
  * Development and staging may emit sanitized local platform diagnostics.
- * Production defaults to neutral/no-op sinks and no local watchdog/sampling; vendor adapters can be composed
- * through the same neutral sink contracts without changing runtime or data modules.
+ * Production defaults to neutral/no-op sinks and no local watchdog/sampling; factories are not invoked in
+ * production, avoiding diagnostic-only platform allocation. Vendor adapters can still be composed through
+ * the same neutral contracts without changing runtime or data modules.
  */
 internal fun localOperationalDiagnostics(
     environment: AppEnvironment,
-    platformSinks: ObservabilitySinks,
-    resourceDiagnostics: ResourceDiagnostics,
-    mainThreadDispatcher: MainThreadDispatcher,
+    platformSinks: () -> ObservabilitySinks,
+    resourceDiagnostics: () -> ResourceDiagnostics,
+    mainThreadDispatcher: () -> MainThreadDispatcher,
 ): LocalOperationalDiagnostics = when (environment) {
     AppEnvironment.Development,
     AppEnvironment.Staging,
     -> LocalOperationalDiagnostics(
-        sinks = platformSinks,
-        resourceDiagnostics = resourceDiagnostics,
-        mainThreadDispatcher = mainThreadDispatcher,
+        sinks = platformSinks(),
+        resourceDiagnostics = resourceDiagnostics(),
+        mainThreadDispatcher = mainThreadDispatcher(),
     )
 
     AppEnvironment.Production -> LocalOperationalDiagnostics(
