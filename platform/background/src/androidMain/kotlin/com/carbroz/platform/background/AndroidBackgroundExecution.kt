@@ -29,36 +29,42 @@ class AndroidBackgroundScheduler(context: Context) : BackgroundScheduler {
                 return@withLock BackgroundScheduleResult.AlreadyScheduled
             }
 
-            val data = Data.Builder().putString(KEY_TASK_ID, request.id.value).apply {
-                request.input.forEach { (key, value) -> putString(INPUT_PREFIX + key, value) }
-            }.build()
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(
-                    when (request.constraints.network) {
-                        NetworkRequirement.NOT_REQUIRED -> NetworkType.NOT_REQUIRED
-                        NetworkRequirement.CONNECTED -> NetworkType.CONNECTED
-                        NetworkRequirement.UNMETERED -> NetworkType.UNMETERED
+            try {
+                val data = Data.Builder().putString(KEY_TASK_ID, request.id.value).apply {
+                    request.input.forEach { (key, value) -> putString(INPUT_PREFIX + key, value) }
+                }.build()
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(
+                        when (request.constraints.network) {
+                            NetworkRequirement.NOT_REQUIRED -> NetworkType.NOT_REQUIRED
+                            NetworkRequirement.CONNECTED -> NetworkType.CONNECTED
+                            NetworkRequirement.UNMETERED -> NetworkType.UNMETERED
+                        },
+                    )
+                    .setRequiresCharging(request.constraints.requiresCharging)
+                    .setRequiresDeviceIdle(request.constraints.requiresDeviceIdle)
+                    .build()
+                val work = OneTimeWorkRequestBuilder<CarBrozBackgroundWorker>()
+                    .setInputData(data)
+                    .setConstraints(constraints)
+                    .setInitialDelay(request.earliestStartDelayMillis, TimeUnit.MILLISECONDS)
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                    .addTag(tag(request.id))
+                    .build()
+                workManager.enqueueUniqueWork(
+                    uniqueName(request.id),
+                    when (request.existingTaskPolicy) {
+                        ExistingTaskPolicy.KEEP -> ExistingWorkPolicy.KEEP
+                        ExistingTaskPolicy.REPLACE -> ExistingWorkPolicy.REPLACE
                     },
+                    work,
                 )
-                .setRequiresCharging(request.constraints.requiresCharging)
-                .setRequiresDeviceIdle(request.constraints.requiresDeviceIdle)
-                .build()
-            val work = OneTimeWorkRequestBuilder<CarBrozBackgroundWorker>()
-                .setInputData(data)
-                .setConstraints(constraints)
-                .setInitialDelay(request.earliestStartDelayMillis, TimeUnit.MILLISECONDS)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-                .addTag(tag(request.id))
-                .build()
-            workManager.enqueueUniqueWork(
-                uniqueName(request.id),
-                when (request.existingTaskPolicy) {
-                    ExistingTaskPolicy.KEEP -> ExistingWorkPolicy.KEEP
-                    ExistingTaskPolicy.REPLACE -> ExistingWorkPolicy.REPLACE
-                },
-                work,
-            )
-            BackgroundScheduleResult.Scheduled
+                BackgroundScheduleResult.Scheduled
+            } catch (failure: RuntimeException) {
+                BackgroundScheduleResult.Rejected(
+                    failure.message ?: "Android WorkManager rejected background task ${request.id.value}",
+                )
+            }
         }
     }
 
