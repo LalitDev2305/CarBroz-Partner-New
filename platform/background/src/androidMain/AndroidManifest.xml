@@ -5,7 +5,7 @@
 
     <application>
         <service
-            android:name="com.carbroz.capabilities.background.CarBrozContinuousExecutionService"
+            android:name="com.carbroz.platform.background.CarBrozContinuousExecutionService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
