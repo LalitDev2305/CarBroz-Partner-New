@@ -12,6 +12,8 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.koin.mp.KoinPlatform
 import java.util.concurrent.TimeUnit
@@ -19,47 +21,64 @@ import java.util.concurrent.TimeUnit
 /** Android reliable deferred-work adapter backed by WorkManager. */
 class AndroidBackgroundScheduler(context: Context) : BackgroundScheduler {
     private val workManager = WorkManager.getInstance(context.applicationContext)
+    private val mutex = Mutex()
 
-    override suspend fun schedule(request: BackgroundTaskRequest): BackgroundScheduleResult {
-        val data = Data.Builder().putString(KEY_TASK_ID, request.id.value).apply {
-            request.input.forEach { (key, value) -> putString(INPUT_PREFIX + key, value) }
-        }.build()
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(
-                when (request.constraints.network) {
-                    NetworkRequirement.NOT_REQUIRED -> NetworkType.NOT_REQUIRED
-                    NetworkRequirement.CONNECTED -> NetworkType.CONNECTED
-                    NetworkRequirement.UNMETERED -> NetworkType.UNMETERED
+    override suspend fun schedule(request: BackgroundTaskRequest): BackgroundScheduleResult = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            if (request.existingTaskPolicy == ExistingTaskPolicy.KEEP && activeState(request.id) != null) {
+                return@withLock BackgroundScheduleResult.AlreadyScheduled
+            }
+
+            val data = Data.Builder().putString(KEY_TASK_ID, request.id.value).apply {
+                request.input.forEach { (key, value) -> putString(INPUT_PREFIX + key, value) }
+            }.build()
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(
+                    when (request.constraints.network) {
+                        NetworkRequirement.NOT_REQUIRED -> NetworkType.NOT_REQUIRED
+                        NetworkRequirement.CONNECTED -> NetworkType.CONNECTED
+                        NetworkRequirement.UNMETERED -> NetworkType.UNMETERED
+                    },
+                )
+                .setRequiresCharging(request.constraints.requiresCharging)
+                .setRequiresDeviceIdle(request.constraints.requiresDeviceIdle)
+                .build()
+            val work = OneTimeWorkRequestBuilder<CarBrozBackgroundWorker>()
+                .setInputData(data)
+                .setConstraints(constraints)
+                .setInitialDelay(request.earliestStartDelayMillis, TimeUnit.MILLISECONDS)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .addTag(tag(request.id))
+                .build()
+            workManager.enqueueUniqueWork(
+                uniqueName(request.id),
+                when (request.existingTaskPolicy) {
+                    ExistingTaskPolicy.KEEP -> ExistingWorkPolicy.KEEP
+                    ExistingTaskPolicy.REPLACE -> ExistingWorkPolicy.REPLACE
                 },
+                work,
             )
-            .setRequiresCharging(request.constraints.requiresCharging)
-            .setRequiresDeviceIdle(request.constraints.requiresDeviceIdle)
-            .build()
-        val work = OneTimeWorkRequestBuilder<CarBrozBackgroundWorker>()
-            .setInputData(data)
-            .setConstraints(constraints)
-            .setInitialDelay(request.earliestStartDelayMillis, TimeUnit.MILLISECONDS)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .addTag(tag(request.id))
-            .build()
-        workManager.enqueueUniqueWork(
-            uniqueName(request.id),
-            when (request.existingTaskPolicy) {
-                ExistingTaskPolicy.KEEP -> ExistingWorkPolicy.KEEP
-                ExistingTaskPolicy.REPLACE -> ExistingWorkPolicy.REPLACE
-            },
-            work,
-        )
-        return BackgroundScheduleResult.Scheduled
+            BackgroundScheduleResult.Scheduled
+        }
     }
 
-    override suspend fun cancel(id: BackgroundTaskId) {
-        workManager.cancelUniqueWork(uniqueName(id))
+    override suspend fun cancel(id: BackgroundTaskId) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            workManager.cancelUniqueWork(uniqueName(id))
+            Unit
+        }
     }
 
     override suspend fun state(id: BackgroundTaskId): BackgroundTaskState = withContext(Dispatchers.IO) {
-        workManager.getWorkInfosForUniqueWork(uniqueName(id)).get().lastOrNull()?.state.toSemanticState()
+        mutex.withLock { currentState(id) }
     }
+
+    private fun activeState(id: BackgroundTaskId): WorkInfo.State? =
+        workManager.getWorkInfosForUniqueWork(uniqueName(id)).get().lastOrNull()?.state
+            ?.takeIf { it == WorkInfo.State.ENQUEUED || it == WorkInfo.State.BLOCKED || it == WorkInfo.State.RUNNING }
+
+    private fun currentState(id: BackgroundTaskId): BackgroundTaskState =
+        workManager.getWorkInfosForUniqueWork(uniqueName(id)).get().lastOrNull()?.state.toSemanticState()
 
     private fun WorkInfo.State?.toSemanticState(): BackgroundTaskState = when (this) {
         WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> BackgroundTaskState.ENQUEUED
