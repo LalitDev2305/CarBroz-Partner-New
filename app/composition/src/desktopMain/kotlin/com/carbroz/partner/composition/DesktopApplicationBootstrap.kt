@@ -32,5 +32,6 @@ fun initializeCarBrozDesktopApplication(
         preferenceStoreProvider = DesktopPreferenceStoreProvider(
             storageDirectory = File(appDirectory, "preferences"),
         ),
+        capabilityProviders = desktopCapabilityProviders(),
     )
 }
