@@ -8,6 +8,7 @@ import com.carbroz.foundation.observability.Observability
 import com.carbroz.foundation.observability.PerformanceMetric
 import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
+import kotlinx.coroutines.CancellationException
 
 sealed interface DatabaseHealth {
     data object Healthy : DatabaseHealth
@@ -25,12 +26,14 @@ class RoomDatabaseHealthCheck(
 ) : DatabaseHealthCheck {
     override suspend fun check(): DatabaseHealth {
         val startedAt = clock.nowEpochMilliseconds()
-        val result = runCatching {
+        val result = try {
             database.metadataDao().get(HEALTH_KEY)
-        }.fold(
-            onSuccess = { DatabaseHealth.Healthy },
-            onFailure = { DatabaseHealth.Unavailable },
-        )
+            DatabaseHealth.Healthy
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            DatabaseHealth.Unavailable
+        }
 
         val outcome = if (result == DatabaseHealth.Healthy) "healthy" else "unavailable"
         observability.performance(
