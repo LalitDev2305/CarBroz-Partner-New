@@ -3,8 +3,7 @@ package com.carbroz.capabilities.background
 import kotlinx.coroutines.CancellationException
 
 /** Stable semantic identifier for a registered background operation. */
-@JvmInline
-value class BackgroundTaskId(val value: String) {
+data class BackgroundTaskId(val value: String) {
     init {
         require(value.isNotBlank()) { "BackgroundTaskId must not be blank" }
         require(value.length <= MAX_LENGTH) { "BackgroundTaskId must be at most $MAX_LENGTH characters" }
@@ -111,8 +110,17 @@ data class ContinuousExecutionRequest(
     val description: String,
 ) {
     init {
-        require(title.isNotBlank()) { "Continuous execution title must not be blank" }
-        require(description.isNotBlank()) { "Continuous execution description must not be blank" }
+        require(title.isNotBlank() && title.length <= MAX_TITLE_LENGTH) {
+            "Continuous execution title must be non-blank and bounded"
+        }
+        require(description.isNotBlank() && description.length <= MAX_DESCRIPTION_LENGTH) {
+            "Continuous execution description must be non-blank and bounded"
+        }
+    }
+
+    companion object {
+        const val MAX_TITLE_LENGTH: Int = 120
+        const val MAX_DESCRIPTION_LENGTH: Int = 512
     }
 }
 
