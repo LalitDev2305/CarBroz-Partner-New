@@ -41,6 +41,8 @@ kotlin {
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":foundation:capabilities"))
+            implementation(project(":foundation:observability"))
+            implementation(project(":foundation:analytics"))
             implementation(project(":platform:background"))
             implementation(project(":runtime:application"))
             implementation(project(":runtime:action"))
