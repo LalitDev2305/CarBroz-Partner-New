@@ -82,11 +82,13 @@ data class ResponsivenessIncident(
 data class ResourceSnapshot(
     val heapUsedBytes: Long? = null,
     val heapLimitBytes: Long? = null,
+    val physicalMemoryBytes: Long? = null,
     val processorCount: Int? = null,
 ) {
     init {
         require(heapUsedBytes == null || heapUsedBytes >= 0)
         require(heapLimitBytes == null || heapLimitBytes >= 0)
+        require(physicalMemoryBytes == null || physicalMemoryBytes >= 0)
         require(processorCount == null || processorCount > 0)
     }
 }
