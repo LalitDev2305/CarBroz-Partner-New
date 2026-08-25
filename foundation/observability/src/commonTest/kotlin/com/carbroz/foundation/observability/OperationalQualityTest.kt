@@ -1,5 +1,7 @@
 package com.carbroz.foundation.observability
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -103,5 +105,21 @@ class OperationalQualityTest {
 
         assertFalse(traceCalled)
         assertFalse(responsivenessCalled)
+    }
+
+    @Test
+    fun closingMonitorDoesNotCancelExternallyOwnedScopeAndPreventsRestart() {
+        val externalJob = SupervisorJob()
+        val monitor = MainThreadResponsivenessMonitor(
+            dispatcher = MainThreadDispatcher { it() },
+            observability = NoOpObservability,
+            externalScope = CoroutineScope(externalJob),
+        )
+
+        monitor.close()
+
+        assertTrue(externalJob.isActive)
+        assertEquals(ResponsivenessMonitorStartResult.Closed, monitor.start())
+        externalJob.cancel()
     }
 }
