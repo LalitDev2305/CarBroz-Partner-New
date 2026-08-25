@@ -8,7 +8,6 @@ import okio.Path.Companion.toPath
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
-import platform.Foundation.URLByAppendingPathComponent
 
 /** iOS Preferences DataStore backed by the application's Application Support directory. */
 class IosPreferenceStoreProvider : PreferenceStoreProvider {
