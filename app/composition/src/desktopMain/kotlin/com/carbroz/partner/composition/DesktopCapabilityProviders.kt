@@ -5,7 +5,6 @@ import com.carbroz.foundation.capabilities.CapabilityKind
 import com.carbroz.foundation.capabilities.CapabilityProvider
 import com.carbroz.foundation.capabilities.CapabilityRequest
 import com.carbroz.foundation.capabilities.CapabilityResult
-import com.carbroz.foundation.capabilities.StaticCapabilityProvider
 import com.carbroz.foundation.security.TrustedUriDecision
 import com.carbroz.foundation.security.TrustedUriPolicy
 import java.awt.Desktop
@@ -16,17 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-internal fun desktopCapabilityProviders(): List<CapabilityProvider> {
-    val unsupported = CapabilityKind.entries
-        .filter { it != CapabilityKind.EXTERNAL_URI }
-        .map { kind ->
-            StaticCapabilityProvider(
-                kind = kind,
-                state = CapabilityAvailability.Unsupported("$kind is not supported by the Desktop host"),
-            )
-        }
-    return listOf(DesktopExternalUriProvider()) + unsupported
-}
+internal fun desktopCapabilityProviders(): List<CapabilityProvider> =
+    listOf(DesktopExternalUriProvider())
 
 private class DesktopExternalUriProvider(
     private val uriPolicy: TrustedUriPolicy = TrustedUriPolicy(),
