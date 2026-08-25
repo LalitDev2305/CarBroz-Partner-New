@@ -6,6 +6,8 @@ import com.carbroz.foundation.capabilities.CapabilityProvider
 import com.carbroz.foundation.capabilities.CapabilityRequest
 import com.carbroz.foundation.capabilities.CapabilityResult
 import com.carbroz.foundation.capabilities.StaticCapabilityProvider
+import com.carbroz.foundation.security.TrustedUriDecision
+import com.carbroz.foundation.security.TrustedUriPolicy
 import java.awt.Desktop
 import java.net.URI
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +27,9 @@ internal fun desktopCapabilityProviders(): List<CapabilityProvider> {
     return listOf(DesktopExternalUriProvider()) + unsupported
 }
 
-private class DesktopExternalUriProvider : CapabilityProvider {
+private class DesktopExternalUriProvider(
+    private val uriPolicy: TrustedUriPolicy = TrustedUriPolicy(),
+) : CapabilityProvider {
     override val kind: CapabilityKind = CapabilityKind.EXTERNAL_URI
     override val availability: StateFlow<CapabilityAvailability> = MutableStateFlow(
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
@@ -42,6 +46,10 @@ private class DesktopExternalUriProvider : CapabilityProvider {
         }
         val uri = request.arguments["uri"]?.jsonPrimitive?.contentOrNull
             ?: return CapabilityResult.Failure("missing_uri", "External URI operation requires 'uri'")
+        when (val decision = uriPolicy.evaluate(uri)) {
+            TrustedUriDecision.Trusted -> Unit
+            is TrustedUriDecision.Rejected -> return CapabilityResult.Restricted(decision.reason)
+        }
         return try {
             Desktop.getDesktop().browse(URI(uri))
             CapabilityResult.Success()
