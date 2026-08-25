@@ -25,6 +25,8 @@ fun SplashScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val failure = state.failure
+
     Box(
         modifier = modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
         contentAlignment = Alignment.Center,
@@ -48,14 +50,14 @@ fun SplashScreen(
 
             when {
                 state.isLoading -> CircularProgressIndicator()
-                state.failure != null -> {
+                failure != null -> {
                     Text(
                         text = "We couldn't finish starting the app.",
                         style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(16.dp))
-                    if (state.failure.failure.recoverable) {
+                    if (failure.failure.recoverable) {
                         Button(onClick = onRetry) {
                             Text("Retry")
                         }
