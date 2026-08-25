@@ -147,6 +147,7 @@ class SduiSchemaValidator(
         private fun command(value: CommandDto, path: String) {
             when (value) {
                 is RequestCommandDto -> requestCommand(value, path)
+                is CapabilityCommandDto -> capabilityCommand(value, path)
             }
         }
 
@@ -165,6 +166,14 @@ class SduiSchemaValidator(
             type(value.templateType, "$path.templateType")
             if (value.payload.size > limits.maxCommandPayloadFields) {
                 violation("$path.payload", SduiViolationCode.InvalidCommandPayload)
+            }
+        }
+
+        private fun capabilityCommand(value: CapabilityCommandDto, path: String) {
+            type(value.capability, "$path.capability")
+            type(value.operation, "$path.operation")
+            if (value.arguments.size > limits.maxCommandPayloadFields) {
+                violation("$path.arguments", SduiViolationCode.InvalidCommandPayload)
             }
         }
 
