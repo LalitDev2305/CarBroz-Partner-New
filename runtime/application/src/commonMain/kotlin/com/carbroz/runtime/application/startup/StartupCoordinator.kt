@@ -47,7 +47,7 @@ class StartupCoordinator(
                 level = LogLevel.INFO,
                 category = CATEGORY,
                 message = "startup_started",
-                correlationId = correlationId.value,
+                correlationId = correlationId,
             ),
         )
 
@@ -58,7 +58,7 @@ class StartupCoordinator(
                     level = LogLevel.DEBUG,
                     category = CATEGORY,
                     message = "startup_task_started",
-                    correlationId = correlationId.value,
+                    correlationId = correlationId,
                     attributes = mapOf("task_id" to DiagnosticAttribute(task.id)),
                 ),
             )
@@ -74,7 +74,7 @@ class StartupCoordinator(
                     event = CrashEvent(
                         category = CATEGORY,
                         message = "startup_task_unexpected_failure",
-                        correlationId = correlationId.value,
+                        correlationId = correlationId,
                         attributes = mapOf("task_id" to DiagnosticAttribute(task.id)),
                     ),
                     throwable = failure,
@@ -99,7 +99,7 @@ class StartupCoordinator(
                             level = LogLevel.WARN,
                             category = CATEGORY,
                             message = "startup_task_failed",
-                            correlationId = correlationId.value,
+                            correlationId = correlationId,
                             attributes = mapOf(
                                 "task_id" to DiagnosticAttribute(task.id),
                                 "recoverable" to DiagnosticAttribute(result.reason.recoverable.toString()),
@@ -117,7 +117,7 @@ class StartupCoordinator(
             PerformanceMetric(
                 name = "startup.total",
                 durationMillis = totalDuration,
-                correlationId = correlationId.value,
+                correlationId = correlationId,
             ),
         )
         observability.trace(
@@ -133,7 +133,7 @@ class StartupCoordinator(
                 level = LogLevel.INFO,
                 category = CATEGORY,
                 message = "startup_ready",
-                correlationId = correlationId.value,
+                correlationId = correlationId,
             ),
         )
         return StartupResult.Ready
@@ -155,7 +155,7 @@ class StartupCoordinator(
             PerformanceMetric(
                 name = "startup.task",
                 durationMillis = duration,
-                correlationId = correlationId.value,
+                correlationId = correlationId,
                 attributes = attributes,
             ),
         )
