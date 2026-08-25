@@ -203,6 +203,8 @@ fun carBrozApplicationModule(
     single { BootstrapRouteStore() }
     single { BootstrapConfigurationStartupTask(network = get(), routes = get()) }
 
+    single { createReferenceSduiRuntime(configuration = get()) }
+
     single { createKtorRealtimeTransport() }
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
     single { RealtimeStream(transport = get()) }
