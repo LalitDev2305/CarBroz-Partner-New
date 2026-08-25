@@ -19,6 +19,7 @@ rootProject.name = "CarBroz-Partner"
 include(":androidApp")
 include(":desktopApp")
 include(":app:composition")
+include(":feature:splash")
 include(":foundation:architecture")
 include(":foundation:lifecycle")
 include(":foundation:configuration")
