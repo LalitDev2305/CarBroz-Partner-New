@@ -72,7 +72,9 @@ class CapabilityRegistryBuilder {
     }
 
     fun registerIfAbsent(provider: CapabilityProvider): CapabilityRegistryBuilder = apply {
-        providers.putIfAbsent(provider.kind, provider)
+        if (provider.kind !in providers) {
+            providers[provider.kind] = provider
+        }
     }
 
     fun build(): CapabilityRegistry = CapabilityRegistry(providers.toMap())
