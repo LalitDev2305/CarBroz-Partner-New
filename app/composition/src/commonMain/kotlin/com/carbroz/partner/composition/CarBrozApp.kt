@@ -1,8 +1,5 @@
 package com.carbroz.partner.composition
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -10,15 +7,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.feature.splash.ReferenceDestination
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.feature.splash.SplashIntent
 import com.carbroz.feature.splash.SplashScreen
 import com.carbroz.feature.splash.SplashStore
 import com.carbroz.foundation.adaptive.AdaptiveLayoutProvider
+import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.designsystem.CarBrozTheme
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.navigation.Navigation3Host
@@ -41,11 +38,36 @@ fun CarBrozApp() {
     val runtime = koinInject<ApplicationRuntime>()
     val lifecycle = koinInject<AppLifecycle>()
     val bootstrapRoutes = koinInject<BootstrapRouteStore>()
+    val configuration = koinInject<AppConfiguration>()
+    val network = koinInject<NetworkDataSource>()
+    val networkActions = koinInject<NetworkActionExecutor>()
+    val capabilityActions = koinInject<CapabilityActionExecutor>()
+
     val navigationState by navigationStore.state.collectAsStateWithLifecycle()
     val lifecycleState by lifecycle.state.collectAsStateWithLifecycle()
     val applicationScope = rememberCoroutineScope()
+
     val splashStore = remember(runtime, applicationScope) { SplashStore(runtime, applicationScope) }
     val splashState by splashStore.state.collectAsStateWithLifecycle()
+
+    val referenceRuntime = remember(configuration) { createReferenceSduiRuntime(configuration) }
+    val referenceStore = remember(
+        network,
+        referenceRuntime,
+        networkActions,
+        capabilityActions,
+        applicationScope,
+    ) {
+        ReferenceSduiStore(
+            network = network,
+            pipeline = referenceRuntime.pipeline,
+            actionPreparer = referenceRuntime.actions,
+            networkActions = networkActions,
+            capabilityActions = capabilityActions,
+            parentScope = applicationScope,
+        )
+    }
+    val referenceState by referenceStore.state.collectAsStateWithLifecycle()
     val firstRenderStartedAt = remember { clock.nowEpochMilliseconds() }
 
     val destinationContent = NavigationDestinationContent { destination ->
@@ -55,12 +77,13 @@ fun CarBrozApp() {
                 onRetry = { splashStore.dispatch(SplashIntent.Retry) },
             )
 
-            ReferenceDestination -> Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("Reference SDUI slice")
-            }
+            ReferenceDestination -> ReferenceSduiScreen(
+                state = referenceState,
+                dispatcher = referenceRuntime.renderer,
+                onRetry = referenceStore::load,
+                onCommand = referenceStore::execute,
+                onRenderFailure = referenceStore::reportRenderFailure,
+            )
 
             else -> error("No composition content registered for ${destination.navigationId}.")
         }
@@ -94,6 +117,12 @@ fun CarBrozApp() {
         }
     }
 
+    LaunchedEffect(navigationState.current) {
+        if (navigationState.current == ReferenceDestination && referenceStore.state.value.screen == null) {
+            referenceStore.load()
+        }
+    }
+
     DisposableEffect(syncActivationCoordinator, applicationScope) {
         val activationJob = syncActivationCoordinator.start(applicationScope)
         onDispose { activationJob.cancel() }
@@ -101,6 +130,10 @@ fun CarBrozApp() {
 
     DisposableEffect(splashStore) {
         onDispose { splashStore.close() }
+    }
+
+    DisposableEffect(referenceStore) {
+        onDispose { referenceStore.close() }
     }
 
     CarBrozTheme {
