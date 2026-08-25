@@ -15,7 +15,7 @@ class IosMainThreadDispatcher : MainThreadDispatcher {
 
 /**
  * iOS resource sampling exposes only portable process information available without private APIs.
- * Current heap usage/limit are intentionally left unknown rather than inferred from system-wide memory.
+ * Current heap usage/limit are intentionally left unknown rather than inferred from physical memory.
  */
 class IosResourceDiagnostics : ResourceDiagnostics {
     override fun sample(): ResourceDiagnosticResult = runCatching {
@@ -44,7 +44,7 @@ class IosPlatformDiagnosticSink : LogSink, CrashSink, PerformanceSink, TraceSink
     }
 
     override fun record(metric: PerformanceMetric) {
-        println("metric=${metric.name} duration_ms=${metric.durationMillis} correlation=${metric.correlationId.orEmpty()} ${renderAttributes(metric.attributes)}")
+        println("metric=${metric.name} duration_ms=${metric.durationMillis} correlation=${metric.correlationId?.value.orEmpty()} ${renderAttributes(metric.attributes)}")
     }
 
     override fun record(span: TraceSpan) {
@@ -62,9 +62,9 @@ class IosPlatformDiagnosticSink : LogSink, CrashSink, PerformanceSink, TraceSink
     private fun render(
         category: String,
         message: String,
-        correlationId: String?,
+        correlationId: CorrelationId?,
         attributes: Map<String, DiagnosticAttribute>,
-    ): String = "category=$category event=$message correlation=${correlationId.orEmpty()} ${renderAttributes(attributes)}"
+    ): String = "category=$category event=$message correlation=${correlationId?.value.orEmpty()} ${renderAttributes(attributes)}"
 
     private fun renderAttributes(attributes: Map<String, DiagnosticAttribute>): String =
         attributes.entries.joinToString(separator = " ") { (key, attribute) -> "$key=${attribute.value}" }
