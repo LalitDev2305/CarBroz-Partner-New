@@ -11,6 +11,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.BackgroundTasks.BGAppRefreshTaskRequest
 import platform.BackgroundTasks.BGProcessingTaskRequest
 import platform.BackgroundTasks.BGTask
+import platform.BackgroundTasks.BGTaskRequest
 import platform.BackgroundTasks.BGTaskScheduler
 import platform.Foundation.NSBundle
 import platform.Foundation.NSDate
@@ -49,7 +50,7 @@ class IosBackgroundScheduler(
             val registered = BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
                 identifier = id.value,
                 usingQueue = null,
-            ) { task -> handle(id, task) }
+            ) { task -> task?.let { handle(id, it) } }
             if (registered) registeredIds += id
         }
     }
@@ -86,8 +87,8 @@ class IosBackgroundScheduler(
             }
         }
         if (request.earliestStartDelayMillis > 0) {
-            nativeRequest.earliestBeginDate = NSDate.dateWithTimeIntervalSinceNow(
-                request.earliestStartDelayMillis.toDouble() / 1_000.0,
+            nativeRequest.earliestBeginDate = NSDate(
+                timeIntervalSinceNow = request.earliestStartDelayMillis.toDouble() / 1_000.0,
             )
         }
         return try {
@@ -108,7 +109,9 @@ class IosBackgroundScheduler(
 
     override suspend fun state(id: BackgroundTaskId): BackgroundTaskState = suspendCancellableCoroutine { continuation ->
         BGTaskScheduler.sharedScheduler.getPendingTaskRequestsWithCompletionHandler { requests ->
-            val pending = requests.any { request -> request.identifier == id.value }
+            val pending = requests
+                ?.filterIsInstance<BGTaskRequest>()
+                ?.any { request -> request.identifier == id.value } == true
             if (continuation.isActive) {
                 continuation.resume(
                     when {
