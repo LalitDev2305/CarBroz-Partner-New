@@ -20,6 +20,20 @@ class CapabilityRegistryTest {
     }
 
     @Test
+    fun permissionRequiredProviderDoesNotExecute() = runTest {
+        val provider = FakeProvider(
+            kind = CapabilityKind.CAMERA,
+            initialAvailability = CapabilityAvailability.PermissionRequired("camera permission required"),
+        )
+        val registry = CapabilityRegistry.builder().register(provider).build()
+
+        val result = registry.execute(GenericCapabilityRequest(CapabilityKind.CAMERA, "capture"))
+
+        assertIs<CapabilityResult.PermissionRequired>(result)
+        assertEquals(0, provider.executionCount)
+    }
+
+    @Test
     fun restrictedProviderDoesNotExecute() = runTest {
         val provider = FakeProvider(
             kind = CapabilityKind.LOCATION,
