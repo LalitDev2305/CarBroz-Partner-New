@@ -1,8 +1,8 @@
 package com.carbroz.partner.composition
 
-import com.carbroz.capabilities.background.BackgroundTaskRunner
-import com.carbroz.capabilities.background.DesktopBackgroundScheduler
-import com.carbroz.capabilities.background.DesktopContinuousExecutionController
+import com.carbroz.platform.background.BackgroundTaskRunner
+import com.carbroz.platform.background.DesktopBackgroundScheduler
+import com.carbroz.platform.background.DesktopContinuousExecutionController
 import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.DesktopCarBrozDatabaseBuilderProvider
 import com.carbroz.data.preferences.DesktopPreferenceStoreProvider
