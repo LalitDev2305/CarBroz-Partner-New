@@ -9,11 +9,6 @@ data object SplashDestination : NavigationDestination {
     override val navigationId: String = "splash"
 }
 
-/** Neutral destination used by the Phase 15 reference vertical slice. */
-data object ReferenceDestination : NavigationDestination {
-    override val navigationId: String = "reference"
-}
-
 sealed interface SplashIntent {
     data object Start : SplashIntent
     data object Retry : SplashIntent
