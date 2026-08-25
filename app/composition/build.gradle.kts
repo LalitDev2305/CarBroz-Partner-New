@@ -41,6 +41,7 @@ kotlin {
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":foundation:capabilities"))
+            implementation(project(":capabilities:background"))
             implementation(project(":runtime:application"))
             implementation(project(":runtime:action"))
             implementation(project(":runtime:sdui"))
@@ -50,8 +51,6 @@ kotlin {
             implementation(project(":data:database"))
             implementation(project(":data:preferences"))
             implementation(project(":data:secure-storage"))
-            // PreparedAction.Request exposes JsonObject in its public payload type, so composition
-            // must have the serialization JSON API on its own compile classpath.
             implementation(libs.kotlinx.serialization.json)
             implementation(project.dependencies.platform(libs.koin.bom))
             implementation(libs.koin.core)
