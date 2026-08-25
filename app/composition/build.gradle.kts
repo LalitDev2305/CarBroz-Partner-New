@@ -41,7 +41,7 @@ kotlin {
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":foundation:capabilities"))
-            implementation(project(":capabilities:background"))
+            implementation(project(":platform:background"))
             implementation(project(":runtime:application"))
             implementation(project(":runtime:action"))
             implementation(project(":runtime:sdui"))
