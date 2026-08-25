@@ -11,7 +11,7 @@ import kotlinx.coroutines.sync.withLock
 
 /** Desktop policy: reliable while this process is alive; explicitly not persistent across process exit. */
 class DesktopBackgroundScheduler(
-    private val runner: BackgroundTaskRunner,
+    private val runnerProvider: () -> BackgroundTaskRunner,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : BackgroundScheduler {
     private val mutex = Mutex()
@@ -28,7 +28,7 @@ class DesktopBackgroundScheduler(
         jobs[request.id] = scope.launch {
             delay(request.earliestStartDelayMillis)
             states[request.id] = BackgroundTaskState.RUNNING
-            states[request.id] = when (runner.run(request.id, request.input)) {
+            states[request.id] = when (runnerProvider().run(request.id, request.input)) {
                 BackgroundExecutionResult.Success -> BackgroundTaskState.SUCCEEDED
                 BackgroundExecutionResult.Retry -> BackgroundTaskState.FAILED
                 is BackgroundExecutionResult.Failure -> BackgroundTaskState.FAILED
