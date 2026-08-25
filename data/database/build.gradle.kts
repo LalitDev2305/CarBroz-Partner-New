@@ -24,6 +24,8 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(project(":foundation:observability"))
+            implementation(project(":foundation:time"))
             implementation(libs.kotlinx.coroutines.core)
             api(libs.androidx.room3.runtime)
             api(libs.androidx.sqlite.bundled)
