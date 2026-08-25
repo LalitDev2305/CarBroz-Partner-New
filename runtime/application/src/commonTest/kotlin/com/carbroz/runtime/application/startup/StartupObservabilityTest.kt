@@ -1,9 +1,14 @@
 package com.carbroz.runtime.application.startup
 
+import com.carbroz.foundation.observability.CorrelationId
+import com.carbroz.foundation.observability.CorrelationIdProvider
 import com.carbroz.foundation.observability.Observability
 import com.carbroz.foundation.observability.ObservabilityPolicy
 import com.carbroz.foundation.observability.PerformanceMetric
 import com.carbroz.foundation.observability.PerformanceSink
+import com.carbroz.foundation.observability.TraceOutcome
+import com.carbroz.foundation.observability.TraceSink
+import com.carbroz.foundation.observability.TraceSpan
 import com.carbroz.foundation.time.Clock
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -11,25 +16,32 @@ import kotlin.test.assertEquals
 
 class StartupObservabilityTest {
     @Test
-    fun `successful startup records task and total duration`() = runTest {
+    fun `successful startup records correlated task and total duration traces`() = runTest {
         val metrics = mutableListOf<PerformanceMetric>()
+        val traces = mutableListOf<TraceSpan>()
         val clock = SequenceClock(listOf(100L, 110L, 130L, 160L))
         val observability = Observability(
             policy = ObservabilityPolicy(),
             performanceSink = PerformanceSink(metrics::add),
+            traceSink = TraceSink(traces::add),
         )
         val coordinator = StartupCoordinator(
             tasks = listOf(successTask("session")),
             observability = observability,
             clock = clock,
+            correlationIdProvider = CorrelationIdProvider { CorrelationId("startup-42") },
         )
 
         assertEquals(StartupResult.Ready, coordinator.run())
         assertEquals(listOf("startup.task", "startup.total"), metrics.map { it.name })
         assertEquals(20L, metrics[0].durationMillis)
         assertEquals(60L, metrics[1].durationMillis)
+        assertEquals("startup-42", metrics[0].correlationId)
         assertEquals("session", metrics[0].attributes.getValue("task_id").value)
         assertEquals("success", metrics[0].attributes.getValue("outcome").value)
+        assertEquals(listOf("startup.task", "startup.total"), traces.map { it.name })
+        assertEquals(setOf("startup-42"), traces.map { it.correlationId.value }.toSet())
+        assertEquals(listOf(TraceOutcome.SUCCESS, TraceOutcome.SUCCESS), traces.map { it.outcome })
     }
 
     private fun successTask(id: String): StartupTask = object : StartupTask {
