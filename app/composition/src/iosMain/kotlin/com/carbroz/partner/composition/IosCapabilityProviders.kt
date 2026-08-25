@@ -6,6 +6,8 @@ import com.carbroz.foundation.capabilities.CapabilityProvider
 import com.carbroz.foundation.capabilities.CapabilityRequest
 import com.carbroz.foundation.capabilities.CapabilityResult
 import com.carbroz.foundation.capabilities.StaticCapabilityProvider
+import com.carbroz.foundation.security.TrustedUriDecision
+import com.carbroz.foundation.security.TrustedUriPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.contentOrNull
@@ -48,7 +50,9 @@ internal fun iosCapabilityProviders(): List<CapabilityProvider> = listOf(
     ),
 )
 
-private class IosExternalUriProvider : CapabilityProvider {
+private class IosExternalUriProvider(
+    private val uriPolicy: TrustedUriPolicy = TrustedUriPolicy(),
+) : CapabilityProvider {
     override val kind: CapabilityKind = CapabilityKind.EXTERNAL_URI
     override val availability: StateFlow<CapabilityAvailability> =
         MutableStateFlow(CapabilityAvailability.Available)
@@ -60,6 +64,10 @@ private class IosExternalUriProvider : CapabilityProvider {
         }
         val uri = request.arguments["uri"]?.jsonPrimitive?.contentOrNull
             ?: return CapabilityResult.Failure("missing_uri", "External URI operation requires 'uri'")
+        when (val decision = uriPolicy.evaluate(uri)) {
+            TrustedUriDecision.Trusted -> Unit
+            is TrustedUriDecision.Rejected -> return CapabilityResult.Restricted(decision.reason)
+        }
         return open(uri)
     }
 }
