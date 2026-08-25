@@ -31,7 +31,7 @@ class OperationalCompositionTest {
                     configuration = AppConfiguration(
                         environment = AppEnvironment.Development,
                         apiBaseUrl = "https://development.invalid",
-                        buildInformation = BuildInformation("1", 1, "com.carbroz.test"),
+                        buildInformation = BuildInformation("1", 1L, "com.carbroz.test"),
                     ),
                     secureStorage = FakeSecureStorage(),
                     databaseProvider = FailingDatabaseProvider(),
