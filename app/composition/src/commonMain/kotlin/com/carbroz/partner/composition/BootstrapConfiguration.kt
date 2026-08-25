@@ -8,7 +8,6 @@ import com.carbroz.data.network.NetworkFailure
 import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
 import com.carbroz.data.network.NetworkResult
-import com.carbroz.feature.splash.ReferenceDestination
 import com.carbroz.foundation.navigation.NavigationDestination
 import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupTask
