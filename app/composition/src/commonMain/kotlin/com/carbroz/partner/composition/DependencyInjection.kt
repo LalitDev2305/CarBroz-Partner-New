@@ -200,6 +200,8 @@ fun carBrozApplicationModule(
     }
     single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
     single { NetworkActionExecutor(dataSource = get()) }
+    single { BootstrapRouteStore() }
+    single { BootstrapConfigurationStartupTask(network = get(), routes = get()) }
 
     single { createKtorRealtimeTransport() }
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
@@ -225,7 +227,10 @@ fun carBrozApplicationModule(
 
     single {
         StartupCoordinator(
-            tasks = listOf(get<SessionRestoreStartupTask>()),
+            tasks = listOf(
+                get<SessionRestoreStartupTask>(),
+                get<BootstrapConfigurationStartupTask>(),
+            ),
             observability = get(),
             clock = get(),
             correlationIdProvider = get(),
