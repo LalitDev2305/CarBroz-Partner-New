@@ -23,6 +23,23 @@ data class RequestCommand(
     }
 }
 
+data class CapabilityCommand(
+    val capability: String,
+    val operation: String,
+    val arguments: Map<String, JsonElement> = emptyMap(),
+) : Command {
+    init {
+        require(capability.isNotBlank()) { "Capability command capability must not be blank" }
+        require(operation.isNotBlank()) { "Capability command operation must not be blank" }
+    }
+
+    override val kind: CommandKind = KIND
+
+    companion object {
+        val KIND: CommandKind = CommandKind("CAPABILITY")
+    }
+}
+
 enum class RequestMethod {
     GET,
     POST,
