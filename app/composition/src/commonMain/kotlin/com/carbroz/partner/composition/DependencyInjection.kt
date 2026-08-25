@@ -53,7 +53,6 @@ import com.carbroz.foundation.observability.Observability
 import com.carbroz.foundation.observability.ObservabilityPolicy
 import com.carbroz.foundation.observability.ObservabilitySinks
 import com.carbroz.foundation.observability.RandomCorrelationIdProvider
-import com.carbroz.foundation.observability.ResourceDiagnosticResult
 import com.carbroz.foundation.observability.ResourceDiagnostics
 import com.carbroz.foundation.observability.ResourceDiagnosticsReporter
 import com.carbroz.foundation.security.SecureStorage
@@ -79,10 +78,6 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
-private val UnsupportedResourceDiagnostics = ResourceDiagnostics {
-    ResourceDiagnosticResult.Unsupported("No platform resource diagnostics adapter supplied")
-}
-
 /** Canonical application composition module for validated configuration and platform infrastructure. */
 fun carBrozApplicationModule(
     configuration: AppConfiguration,
@@ -94,7 +89,7 @@ fun carBrozApplicationModule(
     continuousExecutionController: ContinuousExecutionController? = null,
     backgroundTaskHandlers: List<BackgroundTaskHandler> = emptyList(),
     observabilitySinks: ObservabilitySinks = ObservabilitySinks(),
-    resourceDiagnostics: ResourceDiagnostics = UnsupportedResourceDiagnostics,
+    resourceDiagnostics: ResourceDiagnostics? = null,
     mainThreadDispatcher: MainThreadDispatcher? = null,
 ) = module {
     single { configuration }
@@ -124,8 +119,10 @@ fun carBrozApplicationModule(
             resourceSink = observabilitySinks.resource,
         )
     }
-    single<ResourceDiagnostics> { resourceDiagnostics }
-    single { ResourceDiagnosticsReporter(diagnostics = get(), observability = get()) }
+    if (resourceDiagnostics != null) {
+        single<ResourceDiagnostics> { resourceDiagnostics }
+        single { ResourceDiagnosticsReporter(diagnostics = get(), observability = get()) }
+    }
     if (mainThreadDispatcher != null) {
         single { MainThreadResponsivenessMonitor(dispatcher = mainThreadDispatcher, observability = get()) }
     }
@@ -247,7 +244,7 @@ internal fun initializeCarBrozDependencyInjection(
     continuousExecutionController: ContinuousExecutionController? = null,
     backgroundTaskHandlers: List<BackgroundTaskHandler> = emptyList(),
     observabilitySinks: ObservabilitySinks = ObservabilitySinks(),
-    resourceDiagnostics: ResourceDiagnostics = UnsupportedResourceDiagnostics,
+    resourceDiagnostics: ResourceDiagnostics? = null,
     mainThreadDispatcher: MainThreadDispatcher? = null,
 ) {
     if (KoinPlatform.getKoinOrNull() != null) return
@@ -271,7 +268,9 @@ internal fun initializeCarBrozDependencyInjection(
         )
     }
 
-    application.koin.get<ResourceDiagnosticsReporter>().sample()
+    if (resourceDiagnostics != null) {
+        application.koin.get<ResourceDiagnosticsReporter>().sample()
+    }
     if (mainThreadDispatcher != null) {
         application.koin.get<MainThreadResponsivenessMonitor>().start()
     }
