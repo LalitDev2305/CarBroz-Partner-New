@@ -12,7 +12,7 @@ concurrency:
 jobs:
   jvm-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -20,27 +20,38 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.5.0'
-      - name: Verify common foundation and runtime tests
+      - name: Verify JVM and Android architecture surface
         run: >-
-          gradle
+          ./gradlew
           :foundation:architecture:allTests
           :foundation:lifecycle:allTests
           :foundation:configuration:allTests
           :foundation:time:allTests
           :foundation:localization:allTests
-          :foundation:feature-control:allTests
+          :foundation:security:allTests
+          :foundation:session:allTests
+          :foundation:capabilities:allTests
           :runtime:application:allTests
+          :runtime:sdui:allTests
+          :runtime:binding:allTests
+          :runtime:form:allTests
+          :runtime:action:allTests
+          :data:network:allTests
+          :data:sync:allTests
+          :data:realtime:allTests
+          :capabilities:background:desktopTest
+          :capabilities:background:testAndroidHostTest
+          :app:composition:desktopTest
+          :app:composition:testAndroidHostTest
           :desktopApp:compileKotlinDesktop
+          :androidApp:assembleDebug
+          --warning-mode all
           --stacktrace
-      - name: Build Android host
-        run: gradle :androidApp:assembleDebug --stacktrace
 
   ios:
     needs: jvm-android
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -48,16 +59,31 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.5.0'
-      - name: Compile iOS foundation and runtime modules
+      - name: Compile iOS architecture surface
         run: >-
-          gradle
-          :foundation:lifecycle:compileKotlinIosSimulatorArm64
-          :foundation:configuration:compileKotlinIosSimulatorArm64
-          :foundation:time:compileKotlinIosSimulatorArm64
-          :foundation:localization:compileKotlinIosSimulatorArm64
-          :foundation:feature-control:compileKotlinIosSimulatorArm64
+          ./gradlew
+          :foundation:security:compileKotlinIosArm64
+          :foundation:security:compileKotlinIosSimulatorArm64
+          :foundation:session:compileKotlinIosArm64
+          :foundation:session:compileKotlinIosSimulatorArm64
+          :foundation:capabilities:compileKotlinIosArm64
+          :foundation:capabilities:compileKotlinIosSimulatorArm64
+          :runtime:application:compileKotlinIosArm64
           :runtime:application:compileKotlinIosSimulatorArm64
-          :app:shared:linkDebugFrameworkIosSimulatorArm64
+          :runtime:sdui:compileKotlinIosArm64
+          :runtime:sdui:compileKotlinIosSimulatorArm64
+          :runtime:action:compileKotlinIosArm64
+          :runtime:action:compileKotlinIosSimulatorArm64
+          :data:network:compileKotlinIosArm64
+          :data:network:compileKotlinIosSimulatorArm64
+          :data:sync:compileKotlinIosArm64
+          :data:sync:compileKotlinIosSimulatorArm64
+          :data:realtime:compileKotlinIosArm64
+          :data:realtime:compileKotlinIosSimulatorArm64
+          :capabilities:background:compileKotlinIosArm64
+          :capabilities:background:compileKotlinIosSimulatorArm64
+          :app:composition:compileKotlinIosArm64
+          :app:composition:compileKotlinIosSimulatorArm64
+          :app:composition:linkDebugFrameworkIosSimulatorArm64
+          --warning-mode all
           --stacktrace
