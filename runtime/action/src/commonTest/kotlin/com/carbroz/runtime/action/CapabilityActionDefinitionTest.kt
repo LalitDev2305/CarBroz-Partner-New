@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class CapabilityActionDefinitionTest {
-    private val context = ActionPreparationContext(bindings = BindingContext(emptyMap()))
+    private val context = ActionPreparationContext(bindings = BindingContext.of())
 
     @Test
     fun coreRegistryPreparesCapabilityCommand() {
