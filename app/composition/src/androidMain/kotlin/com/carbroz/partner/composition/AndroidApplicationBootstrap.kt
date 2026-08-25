@@ -6,7 +6,7 @@ import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.preferences.AndroidPreferenceStoreProvider
 import com.carbroz.data.securestorage.AndroidKeystoreSecureStorage
 
-/** Android host bridge that supplies platform-backed storage adapters. */
+/** Android host bridge that supplies platform-backed storage and capability adapters. */
 fun initializeCarBrozAndroidApplication(
     context: Context,
     environment: String,
@@ -32,5 +32,6 @@ fun initializeCarBrozAndroidApplication(
             builderProvider = AndroidCarBrozDatabaseBuilderProvider(context),
         ),
         preferenceStoreProvider = AndroidPreferenceStoreProvider(context),
+        capabilityProviders = androidCapabilityProviders(context),
     )
 }
