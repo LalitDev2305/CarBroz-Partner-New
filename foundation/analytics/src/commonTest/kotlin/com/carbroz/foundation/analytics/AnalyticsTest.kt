@@ -47,4 +47,34 @@ class AnalyticsTest {
 
         assertTrue(received.isEmpty())
     }
+
+    @Test
+    fun throwingAnalyticsSinkNeverEscapesIntoProductControlFlow() {
+        val tracker = AnalyticsTracker(
+            policy = AnalyticsPolicy(enabled = true, allowedEventNames = setOf("app_open")),
+            sink = AnalyticsSink { error("vendor unavailable") },
+        )
+
+        tracker.track(AnalyticsEvent("app_open"))
+    }
+
+    @Test
+    fun publicAnalyticsAttributesAreBoundedBeforeSink() {
+        var received: AnalyticsEvent? = null
+        val tracker = AnalyticsTracker(
+            policy = AnalyticsPolicy(enabled = true, allowedEventNames = setOf("screen")),
+            sink = AnalyticsSink { received = it },
+        )
+
+        tracker.track(
+            AnalyticsEvent(
+                name = "screen",
+                attributes = mapOf("k".repeat(200) to AnalyticsAttribute("v".repeat(1_000))),
+            ),
+        )
+
+        val event = requireNotNull(received)
+        assertTrue(event.attributes.keys.single().length <= 80)
+        assertTrue(event.attributes.values.single().value.length <= 512)
+    }
 }
