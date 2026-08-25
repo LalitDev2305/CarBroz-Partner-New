@@ -12,6 +12,8 @@ import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.BuildInformation
 import com.carbroz.foundation.observability.CorrelationIdProvider
 import com.carbroz.foundation.observability.Observability
+import com.carbroz.foundation.observability.ResourceDiagnosticResult
+import com.carbroz.foundation.observability.ResourceDiagnostics
 import com.carbroz.foundation.observability.ResourceDiagnosticsReporter
 import com.carbroz.foundation.security.SecureKey
 import com.carbroz.foundation.security.SecureStorage
@@ -25,6 +27,9 @@ import kotlin.test.assertSame
 class OperationalCompositionTest {
     @Test
     fun `composition owns one observability analytics and correlation graph`() {
+        val resourceDiagnostics = ResourceDiagnostics {
+            ResourceDiagnosticResult.Unsupported("test diagnostics")
+        }
         val application = koinApplication {
             modules(
                 carBrozApplicationModule(
@@ -36,6 +41,7 @@ class OperationalCompositionTest {
                     secureStorage = FakeSecureStorage(),
                     databaseProvider = FailingDatabaseProvider(),
                     preferenceStoreProvider = PreferenceStoreProvider { FakePreferenceStore() },
+                    resourceDiagnostics = resourceDiagnostics,
                 ),
             )
         }
@@ -45,6 +51,7 @@ class OperationalCompositionTest {
             assertSame(koin.get<Observability>(), koin.get<Observability>())
             assertSame(koin.get<AnalyticsTracker>(), koin.get<AnalyticsTracker>())
             assertSame(koin.get<CorrelationIdProvider>(), koin.get<CorrelationIdProvider>())
+            assertSame(resourceDiagnostics, koin.get<ResourceDiagnostics>())
             assertSame(koin.get<ResourceDiagnosticsReporter>(), koin.get<ResourceDiagnosticsReporter>())
 
             val requestIds = koin.get<NetworkRequestIdProvider>()
