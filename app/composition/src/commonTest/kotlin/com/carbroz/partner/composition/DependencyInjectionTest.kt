@@ -116,9 +116,9 @@ class DependencyInjectionTest {
         val preferenceProvider = PreferenceStoreProvider { FakePreferenceStore() }
 
         try {
-            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider, preferenceProvider)
+            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider, preferenceProvider, emptyList())
             val first = KoinPlatform.getKoinOrNull()
-            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider, preferenceProvider)
+            initializeCarBrozDependencyInjection(configuration, secureStorage, databaseProvider, preferenceProvider, emptyList())
             val second = KoinPlatform.getKoinOrNull()
 
             assertNotNull(first)
