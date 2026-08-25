@@ -10,6 +10,7 @@ import com.carbroz.foundation.security.TrustedUriDecision
 import com.carbroz.foundation.security.TrustedUriPolicy
 import java.awt.Desktop
 import java.net.URI
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.contentOrNull
@@ -53,6 +54,8 @@ private class DesktopExternalUriProvider(
         return try {
             Desktop.getDesktop().browse(URI(uri))
             CapabilityResult.Success()
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Throwable) {
             CapabilityResult.Failure(
                 code = "desktop_capability_failure",
