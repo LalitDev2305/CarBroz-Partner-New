@@ -1,5 +1,6 @@
 package com.carbroz.data.network
 
+import com.carbroz.foundation.observability.CorrelationId
 import com.carbroz.foundation.observability.Observability
 import com.carbroz.foundation.observability.ObservabilityPolicy
 import com.carbroz.foundation.observability.PerformanceMetric
@@ -42,7 +43,7 @@ class NetworkPerformanceTest {
         assertEquals(1, metrics.size)
         assertEquals("network.request", metrics.single().name)
         assertEquals(45L, metrics.single().durationMillis)
-        assertEquals("request-42", metrics.single().correlationId)
+        assertEquals(CorrelationId("request-42"), metrics.single().correlationId)
         assertEquals("GET", metrics.single().attributes.getValue("method").value)
         assertEquals("success", metrics.single().attributes.getValue("outcome").value)
         assertEquals(1, traces.size)
