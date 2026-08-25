@@ -47,23 +47,21 @@ fun CarBrozApp() {
     val splashState by splashStore.state.collectAsStateWithLifecycle()
     val firstRenderStartedAt = remember { clock.nowEpochMilliseconds() }
 
-    val destinationContent = remember(splashStore) {
-        NavigationDestinationContent { destination ->
-            when (destination) {
-                SplashDestination -> SplashScreen(
-                    state = splashState,
-                    onRetry = { splashStore.dispatch(SplashIntent.Retry) },
-                )
+    val destinationContent = NavigationDestinationContent { destination ->
+        when (destination) {
+            SplashDestination -> SplashScreen(
+                state = splashState,
+                onRetry = { splashStore.dispatch(SplashIntent.Retry) },
+            )
 
-                ReferenceDestination -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("Reference SDUI slice")
-                }
-
-                else -> error("No composition content registered for ${destination.navigationId}.")
+            ReferenceDestination -> Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Reference SDUI slice")
             }
+
+            else -> error("No composition content registered for ${destination.navigationId}.")
         }
     }
 
