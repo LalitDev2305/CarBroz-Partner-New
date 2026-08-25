@@ -17,7 +17,12 @@ enum class CapabilityKind {
     MEDIA,
     NOTIFICATIONS,
     SHARING,
-    EXTERNAL_URI,
+    EXTERNAL_URI;
+
+    companion object {
+        fun fromWireName(value: String): CapabilityKind? =
+            entries.firstOrNull { it.name.equals(value.trim(), ignoreCase = true) }
+    }
 }
 
 sealed interface CapabilityAvailability {
