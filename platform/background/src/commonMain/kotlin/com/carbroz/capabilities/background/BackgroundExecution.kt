@@ -1,4 +1,4 @@
-package com.carbroz.capabilities.background
+package com.carbroz.platform.background
 
 import kotlinx.coroutines.CancellationException
 
