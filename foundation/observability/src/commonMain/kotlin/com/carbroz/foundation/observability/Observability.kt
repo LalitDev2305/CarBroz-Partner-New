@@ -50,6 +50,9 @@ data class ObservabilityPolicy(
     val minimumLogLevel: LogLevel = LogLevel.INFO,
     val crashReportingEnabled: Boolean = true,
     val performanceMetricsEnabled: Boolean = true,
+    val tracingEnabled: Boolean = true,
+    val responsivenessReportingEnabled: Boolean = true,
+    val includeThrowableDetails: Boolean = false,
     val maxAttributes: Int = 32,
 ) {
     init { require(maxAttributes in 0..128) }
@@ -61,6 +64,8 @@ class Observability(
     private val logSink: LogSink = LogSink {},
     private val crashSink: CrashSink = CrashSink { _, _ -> },
     private val performanceSink: PerformanceSink = PerformanceSink {},
+    private val traceSink: TraceSink = TraceSink {},
+    private val responsivenessSink: ResponsivenessSink = ResponsivenessSink {},
 ) {
     fun log(event: LogEvent) {
         if (event.level.ordinal < policy.minimumLogLevel.ordinal) return
@@ -69,12 +74,25 @@ class Observability(
 
     fun crash(event: CrashEvent, throwable: Throwable? = null) {
         if (!policy.crashReportingEnabled) return
-        crashSink.record(event.sanitized(policy.maxAttributes), throwable)
+        crashSink.record(
+            event = event.sanitized(policy.maxAttributes),
+            throwable = throwable.takeIf { policy.includeThrowableDetails },
+        )
     }
 
     fun performance(metric: PerformanceMetric) {
         if (!policy.performanceMetricsEnabled) return
         performanceSink.record(metric.sanitized(policy.maxAttributes))
+    }
+
+    fun trace(span: TraceSpan) {
+        if (!policy.tracingEnabled) return
+        traceSink.record(span.sanitized(policy.maxAttributes))
+    }
+
+    fun responsiveness(incident: ResponsivenessIncident) {
+        if (!policy.responsivenessReportingEnabled) return
+        responsivenessSink.record(incident)
     }
 }
 
@@ -84,6 +102,8 @@ val NoOpObservability: Observability = Observability(
         minimumLogLevel = LogLevel.ERROR,
         crashReportingEnabled = false,
         performanceMetricsEnabled = false,
+        tracingEnabled = false,
+        responsivenessReportingEnabled = false,
         maxAttributes = 0,
     ),
 )
@@ -102,3 +122,4 @@ private fun Map<String, DiagnosticAttribute>.sanitized(maxAttributes: Int): Map<
 private fun LogEvent.sanitized(maxAttributes: Int) = copy(attributes = attributes.sanitized(maxAttributes))
 private fun CrashEvent.sanitized(maxAttributes: Int) = copy(attributes = attributes.sanitized(maxAttributes))
 private fun PerformanceMetric.sanitized(maxAttributes: Int) = copy(attributes = attributes.sanitized(maxAttributes))
+private fun TraceSpan.sanitized(maxAttributes: Int) = copy(attributes = attributes.sanitized(maxAttributes))
