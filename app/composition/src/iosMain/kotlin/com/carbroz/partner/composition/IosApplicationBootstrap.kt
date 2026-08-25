@@ -3,6 +3,7 @@ package com.carbroz.partner.composition
 import com.carbroz.capabilities.background.BackgroundTaskRunner
 import com.carbroz.capabilities.background.IosBackgroundScheduler
 import com.carbroz.capabilities.background.IosContinuousExecutionController
+import com.carbroz.capabilities.background.iosPermittedBackgroundTaskIds
 import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.IosCarBrozDatabaseBuilderProvider
 import com.carbroz.data.preferences.IosPreferenceStoreProvider
@@ -32,7 +33,7 @@ fun initializeCarBrozIosApplication(
         preferenceStoreProvider = IosPreferenceStoreProvider(),
         capabilityProviders = iosCapabilityProviders(),
         backgroundScheduler = IosBackgroundScheduler(
-            permittedTaskIds = emptySet(),
+            permittedTaskIds = iosPermittedBackgroundTaskIds(),
             runnerProvider = { KoinPlatform.getKoin().get<BackgroundTaskRunner>() },
         ),
         continuousExecutionController = IosContinuousExecutionController(),
