@@ -5,7 +5,7 @@ import java.awt.EventQueue
 /** Desktop UI-thread heartbeat adapter for Compose Desktop's AWT event queue. */
 class DesktopMainThreadDispatcher : MainThreadDispatcher {
     override fun dispatch(block: () -> Unit) {
-        EventQueue.invokeLater(block)
+        EventQueue.invokeLater { block() }
     }
 }
 
