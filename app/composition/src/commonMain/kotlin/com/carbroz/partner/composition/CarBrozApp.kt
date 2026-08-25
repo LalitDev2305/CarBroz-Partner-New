@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,6 +60,8 @@ fun CarBrozApp() {
     val firstRenderStartedAt = remember { clock.nowEpochMilliseconds() }
 
     LaunchedEffect(Unit) {
+        // Wait for an actual frame instead of reporting merely because composition completed.
+        withFrameNanos { }
         observability.performance(
             PerformanceMetric(
                 name = "app.first_render",
