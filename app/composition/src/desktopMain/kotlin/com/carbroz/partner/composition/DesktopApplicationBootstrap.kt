@@ -1,16 +1,20 @@
 package com.carbroz.partner.composition
 
-import com.carbroz.platform.background.BackgroundTaskRunner
-import com.carbroz.platform.background.DesktopBackgroundScheduler
-import com.carbroz.platform.background.DesktopContinuousExecutionController
 import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.DesktopCarBrozDatabaseBuilderProvider
 import com.carbroz.data.preferences.DesktopPreferenceStoreProvider
 import com.carbroz.data.securestorage.EphemeralDesktopSecureStorage
+import com.carbroz.foundation.observability.DesktopMainThreadDispatcher
+import com.carbroz.foundation.observability.DesktopPlatformDiagnosticSink
+import com.carbroz.foundation.observability.DesktopResourceDiagnostics
+import com.carbroz.foundation.observability.ObservabilitySinks
+import com.carbroz.platform.background.BackgroundTaskRunner
+import com.carbroz.platform.background.DesktopBackgroundScheduler
+import com.carbroz.platform.background.DesktopContinuousExecutionController
 import org.koin.mp.KoinPlatform
 import java.io.File
 
-/** Desktop host bridge using frozen credential policy and explicit process-scoped background policy. */
+/** Desktop host bridge using frozen credential policy and explicit process-scoped execution/diagnostic policy. */
 fun initializeCarBrozDesktopApplication(
     environment: String,
     apiBaseUrl: String,
@@ -19,6 +23,7 @@ fun initializeCarBrozDesktopApplication(
     applicationId: String,
 ) {
     val appDirectory = File(System.getProperty("user.home"), ".carbroz/$applicationId")
+    val diagnosticSink = DesktopPlatformDiagnosticSink()
     initializeCarBrozDependencyInjection(
         configuration = createCarBrozAppConfiguration(
             environment = environment,
@@ -41,5 +46,15 @@ fun initializeCarBrozDesktopApplication(
             runnerProvider = { KoinPlatform.getKoin().get<BackgroundTaskRunner>() },
         ),
         continuousExecutionController = DesktopContinuousExecutionController(),
+        observabilitySinks = ObservabilitySinks(
+            log = diagnosticSink,
+            crash = diagnosticSink,
+            performance = diagnosticSink,
+            trace = diagnosticSink,
+            responsiveness = diagnosticSink,
+            resource = diagnosticSink,
+        ),
+        resourceDiagnostics = DesktopResourceDiagnostics(),
+        mainThreadDispatcher = DesktopMainThreadDispatcher(),
     )
 }
