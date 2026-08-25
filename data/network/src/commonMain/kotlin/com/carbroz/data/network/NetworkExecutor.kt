@@ -1,5 +1,11 @@
 package com.carbroz.data.network
 
+import com.carbroz.foundation.observability.DiagnosticAttribute
+import com.carbroz.foundation.observability.LogEvent
+import com.carbroz.foundation.observability.LogLevel
+import com.carbroz.foundation.observability.NoOpObservability
+import com.carbroz.foundation.observability.Observability
+import com.carbroz.foundation.observability.PerformanceMetric
 import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -30,9 +36,11 @@ class NetworkExecutor(
     private val observer: NetworkObserver = NoNetworkObserver,
     private val responseCache: NetworkResponseCache = NoNetworkResponseCache,
     private val clock: Clock = SystemClock,
+    private val observability: Observability = NoOpObservability,
     private val json: Json = Json,
 ) {
     suspend fun execute(request: NetworkRequest): NetworkResult {
+        val startedAt = clock.nowEpochMilliseconds()
         val context = NetworkRequestContext(
             requestId = requestIdProvider.nextId(),
             method = request.method,
@@ -41,17 +49,17 @@ class NetworkExecutor(
         observer.observe(NetworkObservation.Started(context))
 
         val validationFailure = validateExecution(request)
-        if (validationFailure != null) return finish(context, validationFailure)
+        if (validationFailure != null) return finish(context, validationFailure, startedAt)
 
         val firstResult = executeWithCachePolicy(request, context)
-        if (!request.shouldAttemptAuthenticationRecovery(firstResult)) return finish(context, firstResult)
+        if (!request.shouldAttemptAuthenticationRecovery(firstResult)) return finish(context, firstResult, startedAt)
 
         observer.observe(NetworkObservation.AuthenticationRecoveryStarted(context))
         val recovered = authenticationRecovery.recover()
         observer.observe(NetworkObservation.AuthenticationRecoveryFinished(context, recovered))
-        if (!recovered) return finish(context, firstResult)
+        if (!recovered) return finish(context, firstResult, startedAt)
 
-        return finish(context, executeWithCachePolicy(request, context))
+        return finish(context, executeWithCachePolicy(request, context), startedAt)
     }
 
     private suspend fun executeWithCachePolicy(
@@ -187,9 +195,48 @@ class NetworkExecutor(
         return !method.requiresIdempotencyKeyForRetry() || idempotencyKey != null
     }
 
-    private fun finish(context: NetworkRequestContext, result: NetworkResult): NetworkResult {
-        observer.observe(NetworkObservation.Finished(context, result.toNetworkOutcome()))
+    private fun finish(
+        context: NetworkRequestContext,
+        result: NetworkResult,
+        startedAt: Long,
+    ): NetworkResult {
+        val outcome = result.toNetworkOutcome()
+        observer.observe(NetworkObservation.Finished(context, outcome))
+        observability.performance(
+            PerformanceMetric(
+                name = "network.request",
+                durationMillis = (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L),
+                correlationId = context.requestId.value,
+                attributes = mapOf(
+                    "method" to DiagnosticAttribute(context.method.name),
+                    "outcome" to DiagnosticAttribute(outcome.metricName()),
+                ),
+            ),
+        )
+        if (outcome !is NetworkOutcome.Success) {
+            observability.log(
+                LogEvent(
+                    level = LogLevel.WARN,
+                    category = "network",
+                    message = "network_request_failed",
+                    correlationId = context.requestId.value,
+                    attributes = mapOf(
+                        "method" to DiagnosticAttribute(context.method.name),
+                        "outcome" to DiagnosticAttribute(outcome.metricName()),
+                    ),
+                ),
+            )
+        }
         return result
+    }
+
+    private fun NetworkOutcome.metricName(): String = when (this) {
+        is NetworkOutcome.Success -> "success"
+        is NetworkOutcome.HttpFailure -> "http_failure"
+        NetworkOutcome.Offline -> "offline"
+        NetworkOutcome.Timeout -> "timeout"
+        NetworkOutcome.TransportFailure -> "transport_failure"
+        NetworkOutcome.InvalidRequest -> "invalid_request"
     }
 
     private companion object {
