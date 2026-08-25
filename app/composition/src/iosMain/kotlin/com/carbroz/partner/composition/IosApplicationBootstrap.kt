@@ -22,15 +22,30 @@ fun initializeCarBrozIosApplication(
     versionCode: Long,
     applicationId: String,
 ) {
+    val configuration = createCarBrozAppConfiguration(
+        environment = environment,
+        apiBaseUrl = apiBaseUrl,
+        versionName = versionName,
+        versionCode = versionCode,
+        applicationId = applicationId,
+    )
     val diagnosticSink = IosPlatformDiagnosticSink()
-    initializeCarBrozDependencyInjection(
-        configuration = createCarBrozAppConfiguration(
-            environment = environment,
-            apiBaseUrl = apiBaseUrl,
-            versionName = versionName,
-            versionCode = versionCode,
-            applicationId = applicationId,
+    val localDiagnostics = localOperationalDiagnostics(
+        environment = configuration.environment,
+        platformSinks = ObservabilitySinks(
+            log = diagnosticSink,
+            crash = diagnosticSink,
+            performance = diagnosticSink,
+            trace = diagnosticSink,
+            responsiveness = diagnosticSink,
+            resource = diagnosticSink,
         ),
+        resourceDiagnostics = IosResourceDiagnostics(),
+        mainThreadDispatcher = IosMainThreadDispatcher(),
+    )
+
+    initializeCarBrozDependencyInjection(
+        configuration = configuration,
         secureStorage = KeychainSecureStorage(service = applicationId),
         databaseProvider = CarBrozDatabaseFactory(
             builderProvider = IosCarBrozDatabaseBuilderProvider(),
@@ -42,15 +57,8 @@ fun initializeCarBrozIosApplication(
             runnerProvider = { KoinPlatform.getKoin().get<BackgroundTaskRunner>() },
         ),
         continuousExecutionController = IosContinuousExecutionController(),
-        observabilitySinks = ObservabilitySinks(
-            log = diagnosticSink,
-            crash = diagnosticSink,
-            performance = diagnosticSink,
-            trace = diagnosticSink,
-            responsiveness = diagnosticSink,
-            resource = diagnosticSink,
-        ),
-        resourceDiagnostics = IosResourceDiagnostics(),
-        mainThreadDispatcher = IosMainThreadDispatcher(),
+        observabilitySinks = localDiagnostics.sinks,
+        resourceDiagnostics = localDiagnostics.resourceDiagnostics,
+        mainThreadDispatcher = localDiagnostics.mainThreadDispatcher,
     )
 }
