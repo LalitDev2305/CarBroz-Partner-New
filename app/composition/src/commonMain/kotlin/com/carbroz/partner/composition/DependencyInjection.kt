@@ -33,6 +33,7 @@ import com.carbroz.data.sync.OutboxStore
 import com.carbroz.data.sync.RoomOutboxStore
 import com.carbroz.data.sync.SyncConflictResolver
 import com.carbroz.data.sync.SyncCoordinator
+import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.analytics.AnalyticsPolicy
 import com.carbroz.foundation.analytics.AnalyticsTracker
 import com.carbroz.foundation.capabilities.CapabilityProvider
@@ -216,7 +217,7 @@ fun carBrozApplicationModule(
         )
     }
 
-    single { NavigationStore(NavigationState(listOf(AppShellDestination))) }
+    single { NavigationStore(NavigationState(listOf(SplashDestination))) }
 
     single { DefaultAppLifecycle() } bind AppLifecycleController::class
     single<AppLifecycle> { get<AppLifecycleController>() }
