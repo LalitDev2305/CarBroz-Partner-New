@@ -6,5 +6,6 @@ import com.carbroz.runtime.action.request.RequestActionDefinition
 object CoreActionDefinitions {
     val all: List<ActionDefinition> = listOf(
         RequestActionDefinition(),
+        CapabilityActionDefinition(),
     )
 }
