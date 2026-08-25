@@ -1,5 +1,6 @@
 package com.carbroz.runtime.action
 
+import com.carbroz.foundation.capabilities.GenericCapabilityRequest
 import com.carbroz.runtime.binding.BindingContext
 import com.carbroz.runtime.binding.BindingResolutionError
 import com.carbroz.runtime.form.FormStore
@@ -20,6 +21,10 @@ sealed interface PreparedAction {
         val endpoint: String,
         val destination: ScreenDestination,
         val payload: JsonObject,
+    ) : PreparedAction
+
+    data class Capability(
+        val request: GenericCapabilityRequest,
     ) : PreparedAction
 }
 
