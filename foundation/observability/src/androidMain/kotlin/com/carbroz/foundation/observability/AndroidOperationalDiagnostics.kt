@@ -9,7 +9,7 @@ class AndroidMainThreadDispatcher : MainThreadDispatcher {
     private val handler = Handler(Looper.getMainLooper())
 
     override fun dispatch(block: () -> Unit) {
-        handler.post { block() }
+        handler.post(block)
     }
 }
 
@@ -51,7 +51,7 @@ class AndroidPlatformDiagnosticSink(
     }
 
     override fun record(metric: PerformanceMetric) {
-        Log.d(tag, "metric=${metric.name} duration_ms=${metric.durationMillis} correlation=${metric.correlationId.orEmpty()} ${renderAttributes(metric.attributes)}")
+        Log.d(tag, "metric=${metric.name} duration_ms=${metric.durationMillis} correlation=${metric.correlationId?.value.orEmpty()} ${renderAttributes(metric.attributes)}")
     }
 
     override fun record(span: TraceSpan) {
@@ -63,15 +63,18 @@ class AndroidPlatformDiagnosticSink(
     }
 
     override fun record(snapshot: ResourceSnapshot) {
-        Log.d(tag, "resources heap_used=${snapshot.heapUsedBytes ?: -1} heap_limit=${snapshot.heapLimitBytes ?: -1} processors=${snapshot.processorCount ?: -1}")
+        Log.d(
+            tag,
+            "resources heap_used=${snapshot.heapUsedBytes ?: -1} heap_limit=${snapshot.heapLimitBytes ?: -1} physical_memory=${snapshot.physicalMemoryBytes ?: -1} processors=${snapshot.processorCount ?: -1}",
+        )
     }
 
     private fun render(
         category: String,
         message: String,
-        correlationId: String?,
+        correlationId: CorrelationId?,
         attributes: Map<String, DiagnosticAttribute>,
-    ): String = "category=$category event=$message correlation=${correlationId.orEmpty()} ${renderAttributes(attributes)}"
+    ): String = "category=$category event=$message correlation=${correlationId?.value.orEmpty()} ${renderAttributes(attributes)}"
 
     private fun renderAttributes(attributes: Map<String, DiagnosticAttribute>): String =
         attributes.entries.joinToString(separator = " ") { (key, attribute) -> "$key=${attribute.value}" }
