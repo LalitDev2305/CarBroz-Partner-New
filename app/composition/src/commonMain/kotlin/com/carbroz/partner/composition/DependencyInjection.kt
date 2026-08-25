@@ -1,10 +1,10 @@
 package com.carbroz.partner.composition
 
-import com.carbroz.capabilities.background.BackgroundScheduler
-import com.carbroz.capabilities.background.BackgroundTaskHandler
-import com.carbroz.capabilities.background.BackgroundTaskHandlerRegistry
-import com.carbroz.capabilities.background.BackgroundTaskRunner
-import com.carbroz.capabilities.background.ContinuousExecutionController
+import com.carbroz.platform.background.BackgroundScheduler
+import com.carbroz.platform.background.BackgroundTaskHandler
+import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
+import com.carbroz.platform.background.BackgroundTaskRunner
+import com.carbroz.platform.background.ContinuousExecutionController
 import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.database.DatabaseHealthCheck
