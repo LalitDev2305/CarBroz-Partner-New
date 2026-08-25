@@ -1,12 +1,16 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.capabilities.background.BackgroundTaskRunner
+import com.carbroz.capabilities.background.DesktopBackgroundScheduler
+import com.carbroz.capabilities.background.DesktopContinuousExecutionController
 import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.DesktopCarBrozDatabaseBuilderProvider
 import com.carbroz.data.preferences.DesktopPreferenceStoreProvider
 import com.carbroz.data.securestorage.EphemeralDesktopSecureStorage
+import org.koin.mp.KoinPlatform
 import java.io.File
 
-/** Desktop host bridge using frozen credential policy and application-owned persistent storage. */
+/** Desktop host bridge using frozen credential policy and explicit process-scoped background policy. */
 fun initializeCarBrozDesktopApplication(
     environment: String,
     apiBaseUrl: String,
@@ -33,5 +37,9 @@ fun initializeCarBrozDesktopApplication(
             storageDirectory = File(appDirectory, "preferences"),
         ),
         capabilityProviders = desktopCapabilityProviders(),
+        backgroundScheduler = DesktopBackgroundScheduler(
+            runnerProvider = { KoinPlatform.getKoin().get<BackgroundTaskRunner>() },
+        ),
+        continuousExecutionController = DesktopContinuousExecutionController(),
     )
 }
