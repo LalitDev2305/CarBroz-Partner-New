@@ -11,4 +11,5 @@ data class ObservabilitySinks(
     val performance: PerformanceSink = PerformanceSink {},
     val trace: TraceSink = TraceSink {},
     val responsiveness: ResponsivenessSink = ResponsivenessSink {},
+    val resource: ResourceSink = ResourceSink {},
 )
