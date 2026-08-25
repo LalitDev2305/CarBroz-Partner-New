@@ -9,10 +9,8 @@ enum class NodeKind {
     ELEMENT,
 }
 
-@kotlin.jvm.JvmInline
 value class NodeType(val value: String)
 
-@kotlin.jvm.JvmInline
 value class NodeId(val value: String)
 
 /** Canonical identity of a normalized node inside one screen tree. */
