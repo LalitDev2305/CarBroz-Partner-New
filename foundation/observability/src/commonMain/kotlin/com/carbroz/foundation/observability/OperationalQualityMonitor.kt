@@ -17,20 +17,30 @@ fun interface MainThreadDispatcher {
     fun dispatch(block: () -> Unit)
 }
 
+/** Result of starting the process responsiveness watchdog. */
 sealed interface ResponsivenessMonitorStartResult {
     data object Started : ResponsivenessMonitorStartResult
     data object AlreadyStarted : ResponsivenessMonitorStartResult
+    data object Closed : ResponsivenessMonitorStartResult
 }
 
-/** Process-lifetime watchdog for main/UI thread stalls. */
+/**
+ * Process-lifetime watchdog for main/UI thread stalls.
+ *
+ * One incident is emitted per continuous stall. After a timeout the monitor waits for that heartbeat to
+ * eventually execute before beginning another interval, preventing repeated reports for the same freeze.
+ */
 class MainThreadResponsivenessMonitor(
     private val dispatcher: MainThreadDispatcher,
     private val observability: Observability,
     private val thresholdMillis: Long = 5_000,
     private val intervalMillis: Long = 1_000,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    externalScope: CoroutineScope? = null,
 ) {
+    private val ownsScope = externalScope == null
+    private val monitorScope = externalScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var monitoringJob: Job? = null
+    private var closed: Boolean = false
 
     init {
         require(thresholdMillis > 0) { "Responsiveness threshold must be positive." }
@@ -38,16 +48,34 @@ class MainThreadResponsivenessMonitor(
     }
 
     fun start(): ResponsivenessMonitorStartResult {
+        if (closed) return ResponsivenessMonitorStartResult.Closed
         if (monitoringJob?.isActive == true) return ResponsivenessMonitorStartResult.AlreadyStarted
-        monitoringJob = scope.launch {
+
+        monitoringJob = monitorScope.launch {
             while (isActive) {
                 val heartbeat = CompletableDeferred<Unit>()
                 val started = TimeSource.Monotonic.markNow()
-                dispatcher.dispatch { heartbeat.complete(Unit) }
+                val dispatched = runCatching {
+                    dispatcher.dispatch { heartbeat.complete(Unit) }
+                }.isSuccess
+
+                if (!dispatched) {
+                    observability.log(
+                        LogEvent(
+                            level = LogLevel.WARN,
+                            category = "responsiveness",
+                            message = "main_thread_heartbeat_dispatch_failed",
+                        ),
+                    )
+                    delay(intervalMillis)
+                    continue
+                }
+
                 val responsive = withTimeoutOrNull(thresholdMillis) {
                     heartbeat.await()
                     true
                 } ?: false
+
                 if (!responsive) {
                     observability.responsiveness(
                         ResponsivenessIncident(
@@ -56,7 +84,10 @@ class MainThreadResponsivenessMonitor(
                             thresholdMillis = thresholdMillis,
                         ),
                     )
+                    // Wait for recovery so one continuous UI freeze produces one incident.
+                    heartbeat.await()
                 }
+
                 delay(intervalMillis)
             }
         }
@@ -68,10 +99,14 @@ class MainThreadResponsivenessMonitor(
         monitoringJob = null
     }
 
-    /** Cancels the owned process scope; the monitor cannot be restarted after this call. */
+    /**
+     * Permanently closes this monitor. An externally supplied scope remains owned by its caller and is never cancelled.
+     */
     fun close() {
-        monitoringJob = null
-        scope.cancel()
+        if (closed) return
+        closed = true
+        stop()
+        if (ownsScope) monitorScope.cancel()
     }
 }
 
