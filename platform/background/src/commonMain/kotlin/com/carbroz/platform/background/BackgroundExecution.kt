@@ -126,7 +126,7 @@ class BackgroundTaskRunner(
                 event = CrashEvent(
                     category = "background",
                     message = "background_task_unexpected_failure",
-                    correlationId = correlationId.value,
+                    correlationId = correlationId,
                     attributes = mapOf("task_id" to DiagnosticAttribute(id.value)),
                 ),
                 throwable = failure,
@@ -139,12 +139,17 @@ class BackgroundTaskRunner(
             BackgroundExecutionResult.Retry -> "retry"
             is BackgroundExecutionResult.Failure -> "failure"
         }
+        val traceOutcome = when (result) {
+            BackgroundExecutionResult.Success -> TraceOutcome.SUCCESS
+            BackgroundExecutionResult.Retry -> TraceOutcome.RETRY
+            is BackgroundExecutionResult.Failure -> TraceOutcome.FAILURE
+        }
         recordCompletion(
             id = id,
             startedAt = startedAt,
             correlationId = correlationId,
             outcome = outcome,
-            traceOutcome = if (result is BackgroundExecutionResult.Success) TraceOutcome.SUCCESS else TraceOutcome.FAILURE,
+            traceOutcome = traceOutcome,
         )
         if (result is BackgroundExecutionResult.Failure) {
             observability.log(
@@ -152,7 +157,7 @@ class BackgroundTaskRunner(
                     level = LogLevel.WARN,
                     category = "background",
                     message = "background_task_failed",
-                    correlationId = correlationId.value,
+                    correlationId = correlationId,
                     attributes = mapOf("task_id" to DiagnosticAttribute(id.value)),
                 ),
             )
@@ -176,7 +181,7 @@ class BackgroundTaskRunner(
             PerformanceMetric(
                 name = "background.task",
                 durationMillis = duration,
-                correlationId = correlationId.value,
+                correlationId = correlationId,
                 attributes = attributes,
             ),
         )
