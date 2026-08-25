@@ -116,7 +116,13 @@ fun carBrozApplicationModule(
 
     single<CarBrozDatabaseProvider> { databaseProvider }
     single<CarBrozDatabase> { get<CarBrozDatabaseProvider>().get() }
-    single<DatabaseHealthCheck> { RoomDatabaseHealthCheck(database = get()) }
+    single<DatabaseHealthCheck> {
+        RoomDatabaseHealthCheck(
+            database = get(),
+            observability = get(),
+            clock = get(),
+        )
+    }
 
     single<PreferenceStoreProvider> { preferenceStoreProvider }
     single<PreferenceStore> { get<PreferenceStoreProvider>().get() }
@@ -125,7 +131,13 @@ fun carBrozApplicationModule(
     single { CapabilityActionExecutor(registry = get()) }
 
     single { BackgroundTaskHandlerRegistry(backgroundTaskHandlers) }
-    single { BackgroundTaskRunner(registry = get()) }
+    single {
+        BackgroundTaskRunner(
+            registry = get(),
+            observability = get(),
+            clock = get(),
+        )
+    }
     if (backgroundScheduler != null) single<BackgroundScheduler> { backgroundScheduler }
     if (continuousExecutionController != null) single<ContinuousExecutionController> { continuousExecutionController }
 
@@ -146,6 +158,7 @@ fun carBrozApplicationModule(
             connectivityProvider = get(),
             responseCache = get(),
             clock = get(),
+            observability = get(),
         )
     }
     single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
@@ -173,7 +186,13 @@ fun carBrozApplicationModule(
     single<AppLifecycle> { get<AppLifecycleController>() }
     single { SyncActivationCoordinator(lifecycle = get(), connectivity = get(), syncCoordinator = get()) }
 
-    single { StartupCoordinator(tasks = listOf(get<SessionRestoreStartupTask>())) }
+    single {
+        StartupCoordinator(
+            tasks = listOf(get<SessionRestoreStartupTask>()),
+            observability = get(),
+            clock = get(),
+        )
+    }
     single<ApplicationRuntime> { DefaultApplicationRuntime(startupCoordinator = get()) }
 }
 
