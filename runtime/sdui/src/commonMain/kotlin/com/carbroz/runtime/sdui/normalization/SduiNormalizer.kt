@@ -2,6 +2,7 @@ package com.carbroz.runtime.sdui.normalization
 
 import com.carbroz.runtime.sdui.extension.DefinitionKey
 import com.carbroz.runtime.sdui.extension.PropertyDecodeResult
+import com.carbroz.runtime.sdui.model.CapabilityCommand
 import com.carbroz.runtime.sdui.model.Command
 import com.carbroz.runtime.sdui.model.Component
 import com.carbroz.runtime.sdui.model.ComponentContent
@@ -19,6 +20,7 @@ import com.carbroz.runtime.sdui.model.ScreenDestination
 import com.carbroz.runtime.sdui.model.Section
 import com.carbroz.runtime.sdui.model.SectionContent
 import com.carbroz.runtime.sdui.model.Template
+import com.carbroz.runtime.sdui.protocol.CapabilityCommandDto
 import com.carbroz.runtime.sdui.protocol.CommandDto
 import com.carbroz.runtime.sdui.protocol.ComponentDto
 import com.carbroz.runtime.sdui.protocol.ElementDto
@@ -167,6 +169,15 @@ class SduiNormalizer(
                     templateType = NodeType(dto.templateType),
                 ),
                 payload = dto.payload.toMap(),
+            )
+        }
+        is CapabilityCommandDto -> {
+            if (dto.capability.isBlank()) fail(SduiNormalizationError.InvalidCommand("$path/capability"))
+            if (dto.operation.isBlank()) fail(SduiNormalizationError.InvalidCommand("$path/operation"))
+            CapabilityCommand(
+                capability = dto.capability,
+                operation = dto.operation,
+                arguments = dto.arguments.toMap(),
             )
         }
     }
