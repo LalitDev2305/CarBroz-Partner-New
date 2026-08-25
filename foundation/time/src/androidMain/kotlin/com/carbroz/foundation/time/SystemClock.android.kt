@@ -1,5 +1,5 @@
 package com.carbroz.foundation.time
 
 actual object SystemClock : Clock {
-    override fun nowEpochMilliseconds(): Long = System.currentTimeMillis()
+    actual override fun nowEpochMilliseconds(): Long = System.currentTimeMillis()
 }
