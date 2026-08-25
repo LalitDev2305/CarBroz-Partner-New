@@ -35,6 +35,28 @@ class BackgroundExecutionTest {
     }
 
     @Test
+    fun continuousRequestRejectsBlankAndOversizedUserVisibleText() {
+        val id = BackgroundTaskId("tracking")
+        assertFailsWith<IllegalArgumentException> {
+            ContinuousExecutionRequest(id, "", "active")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ContinuousExecutionRequest(
+                id,
+                "x".repeat(ContinuousExecutionRequest.MAX_TITLE_LENGTH + 1),
+                "active",
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            ContinuousExecutionRequest(
+                id,
+                "Tracking",
+                "x".repeat(ContinuousExecutionRequest.MAX_DESCRIPTION_LENGTH + 1),
+            )
+        }
+    }
+
+    @Test
     fun registryRejectsDuplicateHandlers() {
         val first = handler("sync") { BackgroundExecutionResult.Success }
         val second = handler("sync") { BackgroundExecutionResult.Retry }
