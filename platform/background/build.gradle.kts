@@ -6,7 +6,7 @@ plugins {
 
 kotlin {
     android {
-        namespace = "com.carbroz.capabilities.background"
+        namespace = "com.carbroz.platform.background"
         compileSdk = 36
         minSdk = 24
         withHostTest {}
