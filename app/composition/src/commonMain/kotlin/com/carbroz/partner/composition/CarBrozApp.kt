@@ -40,6 +40,7 @@ fun CarBrozApp() {
     val clock = koinInject<Clock>()
     val runtime = koinInject<ApplicationRuntime>()
     val lifecycle = koinInject<AppLifecycle>()
+    val bootstrapRoutes = koinInject<BootstrapRouteStore>()
     val navigationState by navigationStore.state.collectAsStateWithLifecycle()
     val lifecycleState by lifecycle.state.collectAsStateWithLifecycle()
     val applicationScope = rememberCoroutineScope()
@@ -85,7 +86,11 @@ fun CarBrozApp() {
 
     LaunchedEffect(splashState.isReady) {
         if (splashState.isReady && navigationStore.state.value.current == SplashDestination) {
-            navigationStore.dispatch(NavigationCommand.ResetTo(ReferenceDestination))
+            val resolvedRoute = bootstrapRoutes.current()
+                ?: error("Application runtime became ready without a resolved bootstrap route.")
+            navigationStore.dispatch(
+                NavigationCommand.ResetTo(resolvedRoute.toNavigationDestination()),
+            )
         }
     }
 
