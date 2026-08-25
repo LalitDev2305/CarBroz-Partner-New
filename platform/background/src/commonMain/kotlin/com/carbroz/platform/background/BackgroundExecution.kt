@@ -1,5 +1,14 @@
 package com.carbroz.platform.background
 
+import com.carbroz.foundation.observability.CrashEvent
+import com.carbroz.foundation.observability.DiagnosticAttribute
+import com.carbroz.foundation.observability.LogEvent
+import com.carbroz.foundation.observability.LogLevel
+import com.carbroz.foundation.observability.NoOpObservability
+import com.carbroz.foundation.observability.Observability
+import com.carbroz.foundation.observability.PerformanceMetric
+import com.carbroz.foundation.time.Clock
+import com.carbroz.foundation.time.SystemClock
 import kotlinx.coroutines.CancellationException
 
 /** Stable semantic identifier for a registered background operation. */
@@ -91,16 +100,57 @@ class BackgroundTaskHandlerRegistry(handlers: List<BackgroundTaskHandler>) {
 }
 
 /** Shared execution policy used by native worker callbacks. */
-class BackgroundTaskRunner(private val registry: BackgroundTaskHandlerRegistry) {
-    suspend fun run(id: BackgroundTaskId, input: Map<String, String>): BackgroundExecutionResult =
-        try {
+class BackgroundTaskRunner(
+    private val registry: BackgroundTaskHandlerRegistry,
+    private val observability: Observability = NoOpObservability,
+    private val clock: Clock = SystemClock,
+) {
+    suspend fun run(id: BackgroundTaskId, input: Map<String, String>): BackgroundExecutionResult {
+        val startedAt = clock.nowEpochMilliseconds()
+        val result = try {
             registry.handler(id)?.execute(input)
                 ?: BackgroundExecutionResult.Failure("No handler registered for ${id.value}")
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (failure: Throwable) {
-            BackgroundExecutionResult.Failure(failure.message ?: failure::class.simpleName ?: "background task failed")
+            observability.crash(
+                event = CrashEvent(
+                    category = "background",
+                    message = "background_task_unexpected_failure",
+                    attributes = mapOf("task_id" to DiagnosticAttribute(id.value)),
+                ),
+                throwable = failure,
+            )
+            BackgroundExecutionResult.Failure("background task failed")
         }
+
+        val outcome = when (result) {
+            BackgroundExecutionResult.Success -> "success"
+            BackgroundExecutionResult.Retry -> "retry"
+            is BackgroundExecutionResult.Failure -> "failure"
+        }
+        observability.performance(
+            PerformanceMetric(
+                name = "background.task",
+                durationMillis = (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L),
+                attributes = mapOf(
+                    "task_id" to DiagnosticAttribute(id.value),
+                    "outcome" to DiagnosticAttribute(outcome),
+                ),
+            ),
+        )
+        if (result is BackgroundExecutionResult.Failure) {
+            observability.log(
+                LogEvent(
+                    level = LogLevel.WARN,
+                    category = "background",
+                    message = "background_task_failed",
+                    attributes = mapOf("task_id" to DiagnosticAttribute(id.value)),
+                ),
+            )
+        }
+        return result
+    }
 }
 
 /** Semantic request for genuine user-visible continuous execution, separate from deferred work. */
