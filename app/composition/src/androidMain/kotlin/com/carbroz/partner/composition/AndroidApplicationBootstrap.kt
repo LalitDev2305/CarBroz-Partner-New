@@ -29,19 +29,21 @@ fun initializeCarBrozAndroidApplication(
         versionCode = versionCode,
         applicationId = applicationId,
     )
-    val diagnosticSink = AndroidPlatformDiagnosticSink()
     val localDiagnostics = localOperationalDiagnostics(
         environment = configuration.environment,
-        platformSinks = ObservabilitySinks(
-            log = diagnosticSink,
-            crash = diagnosticSink,
-            performance = diagnosticSink,
-            trace = diagnosticSink,
-            responsiveness = diagnosticSink,
-            resource = diagnosticSink,
-        ),
-        resourceDiagnostics = AndroidResourceDiagnostics(),
-        mainThreadDispatcher = AndroidMainThreadDispatcher(),
+        platformSinks = {
+            val diagnosticSink = AndroidPlatformDiagnosticSink()
+            ObservabilitySinks(
+                log = diagnosticSink,
+                crash = diagnosticSink,
+                performance = diagnosticSink,
+                trace = diagnosticSink,
+                responsiveness = diagnosticSink,
+                resource = diagnosticSink,
+            )
+        },
+        resourceDiagnostics = { AndroidResourceDiagnostics() },
+        mainThreadDispatcher = { AndroidMainThreadDispatcher() },
     )
 
     initializeCarBrozDependencyInjection(
