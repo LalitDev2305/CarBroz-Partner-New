@@ -91,7 +91,7 @@ class ActionPreparerTest {
 
     @Test
     fun registryRejectsDuplicateCommandKinds() {
-        val definition = CoreActionDefinitions.all.single()
+        val definition = CoreActionDefinitions.all.first()
         val builder = ActionRegistry.builder().register(definition)
 
         assertFailsWith<IllegalArgumentException> {
