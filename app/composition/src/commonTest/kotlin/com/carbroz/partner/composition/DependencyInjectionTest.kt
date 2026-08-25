@@ -1,5 +1,18 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.capabilities.background.BackgroundExecutionResult
+import com.carbroz.capabilities.background.BackgroundScheduleResult
+import com.carbroz.capabilities.background.BackgroundScheduler
+import com.carbroz.capabilities.background.BackgroundTaskHandler
+import com.carbroz.capabilities.background.BackgroundTaskHandlerRegistry
+import com.carbroz.capabilities.background.BackgroundTaskId
+import com.carbroz.capabilities.background.BackgroundTaskRequest
+import com.carbroz.capabilities.background.BackgroundTaskRunner
+import com.carbroz.capabilities.background.BackgroundTaskState
+import com.carbroz.capabilities.background.ContinuousExecutionController
+import com.carbroz.capabilities.background.ContinuousExecutionRequest
+import com.carbroz.capabilities.background.ContinuousExecutionStartResult
+import com.carbroz.capabilities.background.ContinuousExecutionState
 import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.network.KtorNetworkTransport
@@ -101,8 +114,46 @@ class DependencyInjectionTest {
             koin.get<RealtimeStream>()
             koin.get<RealtimeDeliveryGate>()
 
+            koin.get<BackgroundTaskHandlerRegistry>()
+            koin.get<BackgroundTaskRunner>()
+
             koin.get<StartupCoordinator>()
             koin.get<ApplicationRuntime>()
+        } finally {
+            application.close()
+        }
+    }
+
+    @Test
+    fun applicationModuleUsesSinglePlatformBackgroundSchedulerAndContinuousController() {
+        val scheduler = FakeBackgroundScheduler()
+        val controller = FakeContinuousExecutionController()
+        val handler = object : BackgroundTaskHandler {
+            override val id = BackgroundTaskId("test-handler")
+            override suspend fun execute(input: Map<String, String>): BackgroundExecutionResult =
+                BackgroundExecutionResult.Success
+        }
+        val application = koinApplication {
+            modules(
+                carBrozApplicationModule(
+                    configuration = configuration,
+                    secureStorage = FakeSecureStorage(),
+                    databaseProvider = FailingDatabaseProvider(),
+                    preferenceStoreProvider = PreferenceStoreProvider { FakePreferenceStore() },
+                    backgroundScheduler = scheduler,
+                    continuousExecutionController = controller,
+                    backgroundTaskHandlers = listOf(handler),
+                ),
+            )
+        }
+
+        try {
+            assertSame(scheduler, application.koin.get<BackgroundScheduler>())
+            assertSame(controller, application.koin.get<ContinuousExecutionController>())
+            assertSame(
+                handler,
+                application.koin.get<BackgroundTaskHandlerRegistry>().handler(handler.id),
+            )
         } finally {
             application.close()
         }
@@ -157,5 +208,23 @@ class DependencyInjectionTest {
         override suspend fun clear() {
             values.clear()
         }
+    }
+
+    private class FakeBackgroundScheduler : BackgroundScheduler {
+        override suspend fun schedule(request: BackgroundTaskRequest): BackgroundScheduleResult =
+            BackgroundScheduleResult.Scheduled
+
+        override suspend fun cancel(id: BackgroundTaskId) = Unit
+
+        override suspend fun state(id: BackgroundTaskId): BackgroundTaskState = BackgroundTaskState.UNKNOWN
+    }
+
+    private class FakeContinuousExecutionController : ContinuousExecutionController {
+        override suspend fun start(request: ContinuousExecutionRequest): ContinuousExecutionStartResult =
+            ContinuousExecutionStartResult.Started
+
+        override suspend fun stop(id: BackgroundTaskId) = Unit
+
+        override suspend fun state(id: BackgroundTaskId): ContinuousExecutionState = ContinuousExecutionState.STOPPED
     }
 }
