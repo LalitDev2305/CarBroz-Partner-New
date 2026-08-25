@@ -1,6 +1,7 @@
 package com.carbroz.capabilities.background
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -8,16 +9,30 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.BackgroundTasks.BGAppRefreshTaskRequest
-import platform.BackgroundTasks.BGProcessingTask
 import platform.BackgroundTasks.BGProcessingTaskRequest
 import platform.BackgroundTasks.BGTask
 import platform.BackgroundTasks.BGTaskScheduler
+import platform.Foundation.NSBundle
 import platform.Foundation.NSDate
+import platform.Foundation.NSLock
 import kotlin.coroutines.resume
 
 /**
- * iOS BGTaskScheduler adapter. Every schedulable identifier must be supplied by application
- * composition and declared in BGTaskSchedulerPermittedIdentifiers; unknown identifiers are rejected.
+ * Reads the host application's declared BGTaskScheduler identifiers without introducing a second
+ * Kotlin configuration source. The plist remains the platform source of truth required by iOS.
+ */
+@OptIn(ExperimentalForeignApi::class)
+fun iosPermittedBackgroundTaskIds(): Set<BackgroundTaskId> {
+    val raw = NSBundle.mainBundle.objectForInfoDictionaryKey("BGTaskSchedulerPermittedIdentifiers") as? List<*>
+        ?: return emptySet()
+    return raw.mapNotNull { value ->
+        (value as? String)?.let { runCatching { BackgroundTaskId(it) }.getOrNull() }
+    }.toSet()
+}
+
+/**
+ * iOS BGTaskScheduler adapter. Every schedulable identifier must be declared in
+ * BGTaskSchedulerPermittedIdentifiers; failed native registrations are rejected explicitly.
  */
 @OptIn(ExperimentalForeignApi::class)
 class IosBackgroundScheduler(
@@ -25,22 +40,24 @@ class IosBackgroundScheduler(
     private val runnerProvider: () -> BackgroundTaskRunner,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : BackgroundScheduler {
-    private val permittedIds = permittedTaskIds.toSet()
+    private val registeredIds = mutableSetOf<BackgroundTaskId>()
     private val runningJobs = mutableMapOf<BackgroundTaskId, Job>()
+    private val lock = NSLock()
 
     init {
-        permittedIds.forEach { id ->
-            BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
+        permittedTaskIds.distinct().forEach { id ->
+            val registered = BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
                 identifier = id.value,
                 usingQueue = null,
             ) { task -> handle(id, task) }
+            if (registered) registeredIds += id
         }
     }
 
     override suspend fun schedule(request: BackgroundTaskRequest): BackgroundScheduleResult {
-        if (request.id !in permittedIds) {
+        if (request.id !in registeredIds) {
             return BackgroundScheduleResult.Rejected(
-                "iOS background identifier ${request.id.value} is not registered/permitted",
+                "iOS background identifier ${request.id.value} is not declared or could not be registered",
             )
         }
         if (request.input.isNotEmpty()) {
@@ -74,15 +91,18 @@ class IosBackgroundScheduler(
             )
         }
         return try {
-            BGTaskScheduler.sharedScheduler.submitTaskRequest(nativeRequest, error = null)
-            BackgroundScheduleResult.Scheduled
+            if (BGTaskScheduler.sharedScheduler.submitTaskRequest(nativeRequest, error = null)) {
+                BackgroundScheduleResult.Scheduled
+            } else {
+                BackgroundScheduleResult.Rejected("iOS rejected background task ${request.id.value}")
+            }
         } catch (failure: Throwable) {
             BackgroundScheduleResult.Rejected(failure.message ?: "iOS rejected background task")
         }
     }
 
     override suspend fun cancel(id: BackgroundTaskId) {
-        runningJobs.remove(id)?.cancel()
+        locked { runningJobs.remove(id) }?.cancel()
         BGTaskScheduler.sharedScheduler.cancelTaskRequestWithIdentifier(id.value)
     }
 
@@ -92,7 +112,7 @@ class IosBackgroundScheduler(
             if (continuation.isActive) {
                 continuation.resume(
                     when {
-                        runningJobs[id]?.isActive == true -> BackgroundTaskState.RUNNING
+                        locked { runningJobs[id]?.isActive == true } -> BackgroundTaskState.RUNNING
                         pending -> BackgroundTaskState.ENQUEUED
                         else -> BackgroundTaskState.UNKNOWN
                     },
@@ -102,19 +122,51 @@ class IosBackgroundScheduler(
     }
 
     private fun handle(id: BackgroundTaskId, task: BGTask) {
-        val job = scope.launch {
-            val result = runnerProvider().run(id, emptyMap())
-            task.setTaskCompletedWithSuccess(result == BackgroundExecutionResult.Success)
+        val completionLock = NSLock()
+        var completed = false
+        fun complete(success: Boolean) {
+            completionLock.lock()
+            try {
+                if (!completed) {
+                    completed = true
+                    task.setTaskCompletedWithSuccess(success)
+                }
+            } finally {
+                completionLock.unlock()
+            }
         }
-        runningJobs[id] = job
-        task.expirationHandler = { job.cancel() }
-        job.invokeOnCompletion { runningJobs.remove(id) }
+
+        val job = scope.launch {
+            try {
+                val result = runnerProvider().run(id, emptyMap())
+                complete(result == BackgroundExecutionResult.Success)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                complete(false)
+            }
+        }
+        locked { runningJobs[id] = job }
+        task.expirationHandler = {
+            job.cancel()
+            complete(false)
+        }
+        job.invokeOnCompletion { locked { runningJobs.remove(id) } }
+    }
+
+    private fun <T> locked(block: () -> T): T {
+        lock.lock()
+        return try {
+            block()
+        } finally {
+            lock.unlock()
+        }
     }
 }
 
 /**
  * iOS does not expose a generic unlimited service equivalent. Operation-specific native modes or
- * BGContinuedProcessing must be selected only when their user-visible/product semantics apply.
+ * continued-processing APIs must be selected only when their user-visible/product semantics apply.
  */
 class IosContinuousExecutionController : ContinuousExecutionController {
     override suspend fun start(request: ContinuousExecutionRequest): ContinuousExecutionStartResult =
