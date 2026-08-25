@@ -68,6 +68,7 @@ class ReferenceSduiStoreTest {
                 path = screen.template.path,
             )
             store.dispatch(ReferenceSduiIntent.RenderFailed(failure))
+            advanceUntilIdle()
 
             assertNull(store.state.value.screen)
             assertEquals(
@@ -111,7 +112,7 @@ class ReferenceSduiStoreTest {
     }
 
     private class QueueNetworkDataSource(
-        private var result: NetworkResult,
+        private val result: NetworkResult,
     ) : NetworkDataSource {
         override suspend fun execute(request: NetworkRequest): NetworkResult = result
     }
