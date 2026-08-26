@@ -20,17 +20,20 @@ subprojects {
     }
 }
 
+val foundationCoordinateDrift = provider {
+    subprojects
+        .filter { project -> neutralFoundationPrefixes.any { prefix -> project.path.startsWith(prefix) } }
+        .filter { project ->
+            project.group.toString() != foundationGroup || project.version.toString() != foundationVersion
+        }
+        .map { project -> project.path }
+}
+
+if (foundationCoordinateDrift.get().isNotEmpty()) {
+    error("Neutral foundation coordinate drift: ${foundationCoordinateDrift.get().joinToString()}")
+}
+
 tasks.register("verifyFoundationCoordinates") {
     group = "verification"
     description = "Verifies canonical coordinates for neutral CarBroz foundation modules."
-
-    doLast {
-        val drift = subprojects.filter { project ->
-            neutralFoundationPrefixes.any { prefix -> project.path.startsWith(prefix) } &&
-                (project.group.toString() != foundationGroup || project.version.toString() != foundationVersion)
-        }
-        require(drift.isEmpty()) {
-            "Neutral foundation coordinate drift: " + drift.joinToString { it.path }
-        }
-    }
 }
