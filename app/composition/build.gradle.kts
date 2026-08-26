@@ -20,6 +20,13 @@ fun foundationDependency(module: String): Any =
         project(":foundation:$module")
     }
 
+fun neutralDependency(projectPath: String, artifact: String): Any =
+    if (consumePublishedFoundation.get()) {
+        "$foundationGroup:$artifact:$foundationVersion"
+    } else {
+        project(projectPath)
+    }
+
 kotlin {
     android {
         namespace = "com.carbroz.partner.composition"
@@ -50,20 +57,23 @@ kotlin {
             implementation(project(":feature:splash"))
             implementation(project(":foundation:architecture"))
 
-            // Phase 17.3: migrate one coherent leaf foundation cluster together.
+            // Phase 17.3: coherent leaf foundation cluster.
             implementation(foundationDependency("lifecycle"))
             implementation(foundationDependency("time"))
             implementation(foundationDependency("security"))
             implementation(foundationDependency("observability"))
 
-            implementation(project(":foundation:session"))
+            // Phase 17.4: first closed consumers whose CarBroz dependencies are
+            // entirely satisfied by the already-adopted Phase 17.3 leaf cluster.
+            implementation(foundationDependency("session"))
+            implementation(neutralDependency(":runtime:application", "application"))
+
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":foundation:capabilities"))
             implementation(project(":foundation:analytics"))
             implementation(project(":platform:background"))
-            implementation(project(":runtime:application"))
             implementation(project(":runtime:action"))
             implementation(project(":runtime:binding"))
             implementation(project(":runtime:sdui"))
