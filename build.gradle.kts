@@ -12,7 +12,6 @@ plugins {
 val foundationGroup = providers.gradleProperty("carbroz.foundation.group").get()
 val foundationVersion = providers.gradleProperty("carbroz.foundation.version").get()
 val neutralFoundationPrefixes = listOf(":foundation:", ":runtime:", ":data:", ":platform:")
-val localFoundationRepository = layout.buildDirectory.dir("foundation-repository")
 
 subprojects {
     if (neutralFoundationPrefixes.any { prefix -> path.startsWith(prefix) }) {
@@ -25,7 +24,7 @@ subprojects {
                 repositories {
                     maven {
                         name = "foundationLocal"
-                        url = rootProject.localFoundationRepository.get().asFile.toURI()
+                        url = rootProject.layout.buildDirectory.dir("foundation-repository").get().asFile.toURI()
                     }
                 }
             }
