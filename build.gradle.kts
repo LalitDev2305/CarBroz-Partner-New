@@ -12,6 +12,12 @@ plugins {
 val foundationGroup = providers.gradleProperty("carbroz.foundation.group").get()
 val foundationVersion = providers.gradleProperty("carbroz.foundation.version").get()
 val neutralFoundationPrefixes = listOf(":foundation:", ":runtime:", ":data:", ":platform:")
+val foundationLocalRepository = layout.buildDirectory.dir("foundation-repository")
+val cleanFoundationLocalRepository = tasks.register<Delete>("cleanFoundationLocalRepository") {
+    group = "publishing"
+    description = "Removes the build-local foundation repository before a verification publication."
+    delete(foundationLocalRepository)
+}
 
 subprojects {
     if (neutralFoundationPrefixes.any { prefix -> path.startsWith(prefix) }) {
@@ -26,6 +32,12 @@ subprojects {
                         name = "foundationLocal"
                         url = rootProject.layout.buildDirectory.dir("foundation-repository").get().asFile.toURI()
                     }
+                }
+            }
+
+            tasks.withType<org.gradle.api.publish.maven.tasks.PublishToMavenRepository>().configureEach {
+                if (repository.name == "foundationLocal") {
+                    dependsOn(rootProject.tasks.named("cleanFoundationLocalRepository"))
                 }
             }
         }
@@ -52,7 +64,7 @@ tasks.register("verifyFoundationCoordinates") {
 
 tasks.register("publishFoundationToLocalRepository") {
     group = "publishing"
-    description = "Publishes neutral foundation modules to the build-local Maven repository."
+    description = "Publishes neutral foundation modules to a freshly cleaned build-local Maven repository."
     dependsOn(
         subprojects
             .filter { project -> neutralFoundationPrefixes.any { prefix -> project.path.startsWith(prefix) } }
