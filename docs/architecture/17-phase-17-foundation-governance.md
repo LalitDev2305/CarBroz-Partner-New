@@ -56,9 +56,13 @@ Neutral modules publish through Gradle Maven publications to the build-local rep
 
 The first Partner artifact-consumption pilot is `:foundation:time` because it is a leaf KMP module with Android, Desktop, iOS Arm64 and iOS Simulator Arm64 targets and no production module dependencies. `:app:composition` is its direct product-side consumer.
 
-Artifact consumption is enabled only when `-Pcarbroz.foundation.consumePublished=true` is supplied. In that mode, `:app:composition` resolves `com.carbroz.foundation:time:1.0.0-alpha01` from the build-local Maven repository instead of the project dependency. In the default mode the existing project dependency remains active so clean clones and ordinary development builds do not depend on a pre-populated local artifact repository while the pilot is being proven.
+Artifact consumption is enabled only when `-Pcarbroz.foundation.consumePublished=true` is supplied. In that mode, `:app:composition` requests `com.carbroz.foundation:time:1.0.0-alpha01` from the build-local Maven repository instead of declaring the direct project dependency. In the default mode the existing project dependency remains active so clean clones and ordinary development builds do not depend on a pre-populated local artifact repository while the pilot is being proven.
 
-The two paths are mutually exclusive within a build; the same responsibility must never be consumed simultaneously as both a project dependency and a published artifact. After the pilot is proven across Android/Desktop/iOS and the repository-wide regression gate, the next adoption slice decides whether publication becomes the default consumption mechanism and removes the temporary pilot switch if so.
+The build-local Maven repository is configured only when published-consumption mode is enabled, and it is content-filtered to the canonical foundation group. Ordinary project-dependency builds therefore retain their pre-pilot repository-resolution behavior.
+
+Gradle dependency insight proved that selecting the published `foundation:time` component also resolves transitive requests for the same foundation coordinate to the published module across the consumer graph. This is compatible with the single-version foundation release train, but means the pilot toggle affects the resolved component globally rather than only one syntactic dependency edge. For that reason published consumption remains an explicit validation mode and is not yet the default Partner boundary.
+
+The two declaration paths are mutually exclusive at `:app:composition`; the same responsibility must never be directly declared simultaneously as both a project dependency and a published artifact. CI must publish the neutral release train first and then execute Partner Android/Desktop tests through the published mode so the artifact boundary cannot silently regress.
 
 ### Slice 17.2 pilot acceptance criteria
 
@@ -66,8 +70,14 @@ The two paths are mutually exclusive within a build; the same responsibility mus
 - `:foundation:time` resolves from Maven coordinates when published consumption is enabled.
 - `:app:composition` compiles/tests on Android and Desktop and compiles for both iOS targets using the artifact path.
 - The default project-dependency path remains green during the pilot.
-- No simultaneous project + artifact dependency exists for `foundation:time` in a single build.
+- No simultaneous direct project + artifact declaration exists for `foundation:time` in `:app:composition`.
+- The local repository is absent from normal dependency resolution and restricted to the canonical foundation group when enabled.
+- CI continuously proves publish -> Partner artifact consumption.
 - No external repository, credentials, or product assumptions are introduced.
+
+### Slice 17.2 audit decision
+
+Published consumption remains opt-in after the first pilot. It must not become the default until adoption is expanded as a controlled release-train boundary and the repository-wide regression gate proves that boundary without relying on stale local artifacts. Future adoption must migrate coherent dependency groups with dependency-insight evidence rather than toggling arbitrary modules independently.
 
 ## Slice 17.1 acceptance criteria
 
