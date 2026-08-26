@@ -14,6 +14,7 @@ import com.carbroz.runtime.sdui.SduiPipelineResult
 import com.carbroz.runtime.sdui.model.NodeKind
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.rendering.SduiRenderFailure
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -23,6 +24,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ReferenceSduiStoreTest {
     @Test
     fun `reference runtime processes neutral core screen through canonical pipeline`() {
