@@ -62,7 +62,13 @@ The build-local Maven repository is configured only when published-consumption m
 
 Gradle dependency insight proved that selecting the published `foundation:time` component also resolves transitive requests for the same foundation coordinate to the published module across the consumer graph. This is compatible with the single-version foundation release train, but means the pilot toggle affects the resolved component globally rather than only one syntactic dependency edge. For that reason published consumption remains an explicit validation mode and is not yet the default Partner boundary.
 
-The two declaration paths are mutually exclusive at `:app:composition`; the same responsibility must never be directly declared simultaneously as both a project dependency and a published artifact. CI must publish the neutral release train first and then execute Partner Android/Desktop tests through the published mode so the artifact boundary cannot silently regress.
+The two declaration paths are mutually exclusive at `:app:composition`; the same responsibility must never be directly declared simultaneously as both a project dependency and a published artifact. CI must publish the neutral release train first and then execute Partner Android/Desktop tests and both Partner iOS compilation targets through published mode so the artifact boundary cannot silently regress on any supported KMP target.
+
+### Upstream Compose 1.12 dependency-family observation
+
+During iOS metadata compilation, Kotlin may report duplicate KLIB `unique_name` warnings for paired upstream `androidx.*` and compatibility `org.jetbrains.androidx.*` artifacts in Lifecycle, SavedState, and Navigation Event. Dependency insight traced these pairs through the published Compose Multiplatform 1.12 / Navigation3 dependency topology rather than to duplicate CarBroz declarations. Both iOS Arm64 and iOS Simulator Arm64 compile successfully with this graph.
+
+These warnings are recorded as an upstream dependency-family transition observation. CarBroz must not add exclusions, forced versions, dependency substitutions, downgrades, or warning suppression solely to hide them. They become actionable only if a supported target fails, upstream guidance changes, or dependency provenance demonstrates a CarBroz-owned duplicate.
 
 ### Slice 17.2 pilot acceptance criteria
 
@@ -72,7 +78,7 @@ The two declaration paths are mutually exclusive at `:app:composition`; the same
 - The default project-dependency path remains green during the pilot.
 - No simultaneous direct project + artifact declaration exists for `foundation:time` in `:app:composition`.
 - The local repository is absent from normal dependency resolution and restricted to the canonical foundation group when enabled.
-- CI continuously proves publish -> Partner artifact consumption.
+- CI continuously proves publish -> Partner artifact consumption on Android, Desktop, iOS Arm64, and iOS Simulator Arm64.
 - No external repository, credentials, or product assumptions are introduced.
 
 ### Slice 17.2 audit decision
