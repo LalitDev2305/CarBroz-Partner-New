@@ -6,6 +6,13 @@ plugins {
     alias(libs.plugins.kover)
 }
 
+val consumePublishedFoundation = providers
+    .gradleProperty("carbroz.foundation.consumePublished")
+    .map(String::toBoolean)
+    .orElse(false)
+val foundationGroup = providers.gradleProperty("carbroz.foundation.group").get()
+val foundationVersion = providers.gradleProperty("carbroz.foundation.version").get()
+
 kotlin {
     android {
         namespace = "com.carbroz.partner.composition"
@@ -36,7 +43,11 @@ kotlin {
             implementation(project(":feature:splash"))
             implementation(project(":foundation:architecture"))
             implementation(project(":foundation:lifecycle"))
-            implementation(project(":foundation:time"))
+            if (consumePublishedFoundation.get()) {
+                implementation("$foundationGroup:time:$foundationVersion")
+            } else {
+                implementation(project(":foundation:time"))
+            }
             implementation(project(":foundation:security"))
             implementation(project(":foundation:session"))
             implementation(project(":foundation:navigation"))
