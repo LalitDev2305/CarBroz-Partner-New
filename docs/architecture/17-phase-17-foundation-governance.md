@@ -50,7 +50,24 @@ Pre-stable releases may remove or reshape APIs when required to complete Partner
 
 Partner is the first consumer used to prove the neutral foundation contract. Customer adoption must consume the same neutral contracts where semantics are truly shared; Partner-specific assumptions must never be moved into foundation merely to reduce duplication.
 
-Internal publication/consumption will be introduced only after this canonical coordinate identity passes repository verification. Until then, existing project dependencies remain the build mechanism and must not be duplicated by an additional publication path.
+## Slice 17.2 — Internal publication and first Partner consumer proof
+
+Neutral modules publish through Gradle Maven publications to the build-local repository at `build/foundation-repository`. This is an internal verification boundary only; no external artifact repository or credentials are introduced by this slice.
+
+The first Partner artifact-consumption pilot is `:foundation:time` because it is a leaf KMP module with Android, Desktop, iOS Arm64 and iOS Simulator Arm64 targets and no production module dependencies. `:app:composition` is its direct product-side consumer.
+
+Artifact consumption is enabled only when `-Pcarbroz.foundation.consumePublished=true` is supplied. In that mode, `:app:composition` resolves `com.carbroz.foundation:time:1.0.0-alpha01` from the build-local Maven repository instead of the project dependency. In the default mode the existing project dependency remains active so clean clones and ordinary development builds do not depend on a pre-populated local artifact repository while the pilot is being proven.
+
+The two paths are mutually exclusive within a build; the same responsibility must never be consumed simultaneously as both a project dependency and a published artifact. After the pilot is proven across Android/Desktop/iOS and the repository-wide regression gate, the next adoption slice decides whether publication becomes the default consumption mechanism and removes the temporary pilot switch if so.
+
+### Slice 17.2 pilot acceptance criteria
+
+- All neutral KMP publications succeed into the build-local repository.
+- `:foundation:time` resolves from Maven coordinates when published consumption is enabled.
+- `:app:composition` compiles/tests on Android and Desktop and compiles for both iOS targets using the artifact path.
+- The default project-dependency path remains green during the pilot.
+- No simultaneous project + artifact dependency exists for `foundation:time` in a single build.
+- No external repository, credentials, or product assumptions are introduced.
 
 ## Slice 17.1 acceptance criteria
 
@@ -60,4 +77,3 @@ Internal publication/consumption will be introduced only after this canonical co
 - A repository verification task fails on coordinate drift.
 - No module-local duplicate version owner exists.
 - Existing Android/iOS/Desktop build behavior remains unchanged.
-
