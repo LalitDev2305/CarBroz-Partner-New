@@ -8,3 +8,14 @@ plugins {
     alias(libs.plugins.detekt) apply false
     alias(libs.plugins.kover) apply false
 }
+
+val foundationGroup = providers.gradleProperty("carbroz.foundation.group").get()
+val foundationVersion = providers.gradleProperty("carbroz.foundation.version").get()
+val neutralFoundationPrefixes = listOf(":foundation:", ":runtime:", ":data:", ":platform:")
+
+subprojects {
+    if (neutralFoundationPrefixes.any(path::startsWith)) {
+        group = foundationGroup
+        version = foundationVersion
+    }
+}
