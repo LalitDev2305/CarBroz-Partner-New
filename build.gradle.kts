@@ -19,3 +19,18 @@ subprojects {
         version = foundationVersion
     }
 }
+
+tasks.register("verifyFoundationCoordinates") {
+    group = "verification"
+    description = "Verifies canonical coordinates for neutral CarBroz foundation modules."
+
+    doLast {
+        val drift = subprojects.filter { project ->
+            neutralFoundationPrefixes.any(project.path::startsWith) &&
+                (project.group.toString() != foundationGroup || project.version.toString() != foundationVersion)
+        }
+        require(drift.isEmpty()) {
+            "Neutral foundation coordinate drift: " + drift.joinToString { it.path }
+        }
+    }
+}
