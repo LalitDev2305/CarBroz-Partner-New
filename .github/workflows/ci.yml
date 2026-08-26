@@ -42,14 +42,14 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Publish neutral foundation to build-local repository
+      - name: Publish neutral foundation to clean build-local repository
         run: >-
           ./gradlew
           verifyFoundationCoordinates
           publishFoundationToLocalRepository
           --warning-mode all
           --stacktrace
-      - name: Verify Partner consumes published foundation time artifact
+      - name: Verify Partner consumes published leaf foundation cluster
         run: >-
           ./gradlew
           :app:composition:testAndroidHostTest
@@ -86,7 +86,7 @@ jobs:
           publishFoundationToLocalRepository
           --warning-mode all
           --stacktrace
-      - name: Verify Partner consumes published foundation time artifact on iOS
+      - name: Verify Partner consumes published leaf foundation cluster on iOS
         run: >-
           ./gradlew
           :app:composition:compileKotlinIosArm64
