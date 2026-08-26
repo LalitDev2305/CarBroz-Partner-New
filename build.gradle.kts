@@ -34,12 +34,6 @@ subprojects {
                     }
                 }
             }
-
-            tasks.withType<org.gradle.api.publish.maven.tasks.PublishToMavenRepository>().configureEach {
-                if (repository.name == "foundationLocal") {
-                    dependsOn(rootProject.tasks.named("cleanFoundationLocalRepository"))
-                }
-            }
         }
     }
 }
@@ -65,6 +59,7 @@ tasks.register("verifyFoundationCoordinates") {
 tasks.register("publishFoundationToLocalRepository") {
     group = "publishing"
     description = "Publishes neutral foundation modules to a freshly cleaned build-local Maven repository."
+    dependsOn(cleanFoundationLocalRepository)
     dependsOn(
         subprojects
             .filter { project -> neutralFoundationPrefixes.any { prefix -> project.path.startsWith(prefix) } }
