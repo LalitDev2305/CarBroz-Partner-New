@@ -6,12 +6,24 @@ pluginManagement {
     }
 }
 
+val consumePublishedFoundation = providers
+    .gradleProperty("carbroz.foundation.consumePublished")
+    .map(String::toBoolean)
+    .orElse(false)
+
+val foundationGroup = providers.gradleProperty("carbroz.foundation.group").get()
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        maven {
-            name = "foundationLocal"
-            url = rootDir.resolve("build/foundation-repository").toURI()
+        if (consumePublishedFoundation.get()) {
+            maven {
+                name = "foundationLocal"
+                url = rootDir.resolve("build/foundation-repository").toURI()
+                content {
+                    includeGroup(foundationGroup)
+                }
+            }
         }
         google()
         mavenCentral()
