@@ -10,13 +10,10 @@ import com.carbroz.runtime.action.PreparedAction
 import com.carbroz.runtime.binding.BindingContext
 import com.carbroz.runtime.binding.BindingNamespace
 import com.carbroz.runtime.binding.BindingValueSource
+import com.carbroz.runtime.sdui.SduiPipelineResult
 import com.carbroz.runtime.sdui.model.Command
 import com.carbroz.runtime.sdui.model.Screen
 import com.carbroz.runtime.sdui.model.ScreenDestination
-import com.carbroz.runtime.sdui.normalization.SduiNormalizationResult
-import com.carbroz.runtime.sdui.protocol.SduiDecodeResult
-import com.carbroz.runtime.sdui.protocol.SduiEnvelopeDto
-import com.carbroz.runtime.sdui.protocol.SduiValidationResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -28,25 +25,48 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
-data class DynamicScreenState(val destination: DynamicDestination? = null, val loading: Boolean = false, val actionInFlight: Boolean = false, val screen: Screen? = null, val failure: DynamicScreenFailure? = null)
-sealed interface DynamicScreenFailure { data class Network(val detail: String) : DynamicScreenFailure; data class Protocol(val detail: String) : DynamicScreenFailure; data class Action(val detail: String) : DynamicScreenFailure }
+data class DynamicScreenState(
+    val destination: DynamicDestination? = null,
+    val loading: Boolean = false,
+    val actionInFlight: Boolean = false,
+    val screen: Screen? = null,
+    val failure: DynamicScreenFailure? = null,
+)
+
+sealed interface DynamicScreenFailure {
+    data class Network(val detail: String) : DynamicScreenFailure
+    data class Protocol(val detail: String) : DynamicScreenFailure
+    data class Action(val detail: String) : DynamicScreenFailure
+}
 
 class DynamicScreenCache {
     private val screens = mutableMapOf<String, Screen>()
+
     fun get(destination: DynamicDestination): Screen? = screens[destination.navigationId]
-    fun put(destination: DynamicDestination, screen: Screen) { screens[destination.navigationId] = screen }
-    fun clear() { screens.clear() }
+
+    fun put(destination: DynamicDestination, screen: Screen) {
+        screens[destination.navigationId] = screen
+    }
+
+    fun clear() {
+        screens.clear()
+    }
 }
 
-fun interface DynamicBindingContextFactory { suspend fun create(screen: Screen?): BindingContext }
+fun interface DynamicBindingContextFactory {
+    suspend fun create(screen: Screen?): BindingContext
+}
+
 class DefaultDynamicBindingContextFactory : DynamicBindingContextFactory {
     override suspend fun create(screen: Screen?): BindingContext {
-        val source = BindingValueSource { path -> when (path.joinToString(".")) {
-            "id" -> screen?.let { JsonPrimitive(it.id) }
-            "template.id" -> screen?.let { JsonPrimitive(it.template.id) }
-            "template.type" -> screen?.let { JsonPrimitive(it.template.type.value) }
-            else -> null
-        } }
+        val source = BindingValueSource { path ->
+            when (path.joinToString(".")) {
+                "id" -> screen?.let { JsonPrimitive(it.id.value) }
+                "template.id" -> screen?.let { JsonPrimitive(it.template.id.value) }
+                "template.type" -> screen?.let { JsonPrimitive(it.template.type.value) }
+                else -> null
+            }
+        }
         return BindingContext.of(BindingNamespace.SCREEN to source)
     }
 }
@@ -64,35 +84,80 @@ class DynamicSduiStore(
 ) {
     private val mutableState = MutableStateFlow(DynamicScreenState())
     val state: StateFlow<DynamicScreenState> = mutableState.asStateFlow()
+
     private var loadJob: Job? = null
     private var actionJob: Job? = null
 
     fun show(destination: DynamicDestination, forceRefresh: Boolean = false) {
-        if (!forceRefresh) cache.get(destination)?.let { mutableState.value = DynamicScreenState(destination = destination, screen = it); return }
+        if (!forceRefresh) {
+            cache.get(destination)?.let { cached ->
+                mutableState.value = DynamicScreenState(destination = destination, screen = cached)
+                return
+            }
+        }
+
         loadJob?.cancel()
         loadJob = scope.launch {
             mutableState.value = DynamicScreenState(destination = destination, loading = true)
             val instruction = destination.instruction
-            val action = PreparedAction.Request(instruction.request.method, instruction.request.endpoint, instruction.destination, instruction.request.payload)
+            val action = PreparedAction.Request(
+                method = instruction.request.method,
+                endpoint = instruction.request.endpoint,
+                destination = instruction.destination,
+                payload = instruction.request.payload,
+            )
+
             when (val result = networkActions.execute(action)) {
-                is NetworkResult.Failure -> mutableState.update { it.copy(loading = false, failure = DynamicScreenFailure.Network(result.error.toString())) }
-                is NetworkResult.Success -> consume(destination, instruction.destination, result.response.body, result.response.statusCode)
+                is NetworkResult.Failure -> mutableState.update {
+                    it.copy(
+                        loading = false,
+                        failure = DynamicScreenFailure.Network(result.error.toString()),
+                    )
+                }
+
+                is NetworkResult.Success -> consume(
+                    destination = destination,
+                    expected = instruction.destination,
+                    body = result.response.body,
+                    status = result.response.statusCode,
+                )
             }
         }
     }
 
-    fun retry() { state.value.destination?.let { show(it, true) } }
+    fun retry() {
+        state.value.destination?.let { show(it, forceRefresh = true) }
+    }
 
     fun onCommand(command: Command) {
         if (state.value.actionInFlight) return
+
         actionJob?.cancel()
         actionJob = scope.launch {
             mutableState.update { it.copy(actionInFlight = true, failure = null) }
-            val context = ActionPreparationContext(bindingContexts.create(state.value.screen), null)
+            val context = ActionPreparationContext(
+                bindings = bindingContexts.create(state.value.screen),
+                form = null,
+            )
             when (val prepared = actionPreparer.prepare(command, context)) {
                 is ActionPreparationResult.Success -> execute(prepared.action)
-                else -> mutableState.update { it.copy(actionInFlight = false, failure = DynamicScreenFailure.Action(prepared.toString())) }
+                else -> mutableState.update {
+                    it.copy(
+                        actionInFlight = false,
+                        failure = DynamicScreenFailure.Action(prepared.toString()),
+                    )
+                }
             }
+        }
+    }
+
+    fun onRenderFailure(detail: String) {
+        mutableState.update {
+            it.copy(
+                loading = false,
+                actionInFlight = false,
+                failure = DynamicScreenFailure.Protocol(detail),
+            )
         }
     }
 
@@ -100,45 +165,126 @@ class DynamicSduiStore(
         try {
             when (action) {
                 is PreparedAction.Request -> when (val result = networkActions.execute(action)) {
-                    is NetworkResult.Failure -> mutableState.update { it.copy(actionInFlight = false, failure = DynamicScreenFailure.Network(result.error.toString())) }
+                    is NetworkResult.Failure -> mutableState.update {
+                        it.copy(
+                            actionInFlight = false,
+                            failure = DynamicScreenFailure.Network(result.error.toString()),
+                        )
+                    }
+
                     is NetworkResult.Success -> {
-                        val next = DynamicDestination(DynamicScreenInstruction(action.destination, DynamicScreenRequest(action.method, action.endpoint, action.payload), DynamicTransition.PUSH))
-                        consume(next, action.destination, result.response.body, result.response.statusCode)
-                        if (state.value.failure == null) applyTransition(next)
+                        val next = DynamicDestination(
+                            DynamicScreenInstruction(
+                                destination = action.destination,
+                                request = DynamicScreenRequest(
+                                    method = action.method,
+                                    endpoint = action.endpoint,
+                                    payload = action.payload,
+                                ),
+                                transition = DynamicTransition.PUSH,
+                            ),
+                        )
+                        consume(
+                            destination = next,
+                            expected = action.destination,
+                            body = result.response.body,
+                            status = result.response.statusCode,
+                        )
+                        if (state.value.failure == null) {
+                            applyTransition(next)
+                        }
                     }
                 }
-                is PreparedAction.Capability -> { capabilityActions.execute(action); mutableState.update { it.copy(actionInFlight = false) } }
-            }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: Throwable) { mutableState.update { it.copy(actionInFlight = false, failure = DynamicScreenFailure.Action(failure::class.simpleName ?: "action_failure")) } }
-    }
 
-    private fun consume(destination: DynamicDestination, expected: ScreenDestination, body: JsonElement?, status: Int) {
-        if (status !in 200..299 || body == null) { mutableState.update { it.copy(loading = false, actionInFlight = false, failure = DynamicScreenFailure.Network("http_$status")) }; return }
-        when (val decoded = runtime.decoder.decode(body.toString())) {
-            is SduiDecodeResult.Failure -> failProtocol(decoded.reason.name)
-            is SduiDecodeResult.Success -> validate(destination, expected, decoded.envelope)
-        }
-    }
-
-    private fun validate(destination: DynamicDestination, expected: ScreenDestination, envelope: SduiEnvelopeDto) {
-        when (val validated = runtime.validator.validate(envelope)) {
-            is SduiValidationResult.Failure -> failProtocol(validated.violations.joinToString { it.code.name })
-            is SduiValidationResult.Success -> when (val normalized = runtime.normalizer.normalize(validated.envelope)) {
-                is SduiNormalizationResult.Failure -> failProtocol(normalized.violations.joinToString { it.code.name })
-                is SduiNormalizationResult.Success -> {
-                    val screen = normalized.screen
-                    if (screen.id != expected.screenId || screen.template.id != expected.templateId || screen.template.type != expected.templateType) { failProtocol("destination_identity_mismatch"); return }
-                    cache.put(destination, screen)
-                    mutableState.value = DynamicScreenState(destination = destination, screen = screen)
+                is PreparedAction.Capability -> {
+                    capabilityActions.execute(action)
+                    mutableState.update { it.copy(actionInFlight = false) }
                 }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            mutableState.update {
+                it.copy(
+                    actionInFlight = false,
+                    failure = DynamicScreenFailure.Action(
+                        failure::class.simpleName ?: "action_failure",
+                    ),
+                )
+            }
         }
     }
 
-    private fun failProtocol(detail: String) { mutableState.update { it.copy(loading = false, actionInFlight = false, failure = DynamicScreenFailure.Protocol(detail)) } }
-    private fun applyTransition(destination: DynamicDestination) { when (destination.instruction.transition) {
-        DynamicTransition.PUSH -> navigation.dispatch(NavigationCommand.Push(destination)); DynamicTransition.REPLACE -> navigation.dispatch(NavigationCommand.ReplaceTop(destination)); DynamicTransition.RESET -> navigation.dispatch(NavigationCommand.ResetTo(destination)); DynamicTransition.STAY -> Unit
-    } }
-    fun close() { loadJob?.cancel(); actionJob?.cancel() }
+    private fun consume(
+        destination: DynamicDestination,
+        expected: ScreenDestination,
+        body: JsonElement?,
+        status: Int,
+    ) {
+        if (status !in 200..299) {
+            mutableState.update {
+                it.copy(
+                    loading = false,
+                    actionInFlight = false,
+                    failure = DynamicScreenFailure.Network("http_$status"),
+                )
+            }
+            return
+        }
+
+        if (body == null) {
+            failProtocol("missing_response_body")
+            return
+        }
+
+        when (val processed = runtime.pipeline.process(body.toString())) {
+            is SduiPipelineResult.Success -> acceptScreen(destination, expected, processed.screen)
+            else -> failProtocol(processed.toString())
+        }
+    }
+
+    private fun acceptScreen(
+        destination: DynamicDestination,
+        expected: ScreenDestination,
+        screen: Screen,
+    ) {
+        if (
+            screen.id.value != expected.screenId ||
+            screen.template.id.value != expected.templateId ||
+            screen.template.type != expected.templateType
+        ) {
+            failProtocol("destination_identity_mismatch")
+            return
+        }
+
+        cache.put(destination, screen)
+        mutableState.value = DynamicScreenState(
+            destination = destination,
+            screen = screen,
+        )
+    }
+
+    private fun failProtocol(detail: String) {
+        mutableState.update {
+            it.copy(
+                loading = false,
+                actionInFlight = false,
+                failure = DynamicScreenFailure.Protocol(detail),
+            )
+        }
+    }
+
+    private fun applyTransition(destination: DynamicDestination) {
+        when (destination.instruction.transition) {
+            DynamicTransition.PUSH -> navigation.dispatch(NavigationCommand.Push(destination))
+            DynamicTransition.REPLACE -> navigation.dispatch(NavigationCommand.ReplaceTop(destination))
+            DynamicTransition.RESET -> navigation.dispatch(NavigationCommand.ResetTo(destination))
+            DynamicTransition.STAY -> Unit
+        }
+    }
+
+    fun close() {
+        loadJob?.cancel()
+        actionJob?.cancel()
+    }
 }
