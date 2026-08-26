@@ -14,7 +14,7 @@ val foundationVersion = providers.gradleProperty("carbroz.foundation.version").g
 val neutralFoundationPrefixes = listOf(":foundation:", ":runtime:", ":data:", ":platform:")
 
 subprojects {
-    if (neutralFoundationPrefixes.any(path::startsWith)) {
+    if (neutralFoundationPrefixes.any { prefix -> path.startsWith(prefix) }) {
         group = foundationGroup
         version = foundationVersion
     }
@@ -26,7 +26,7 @@ tasks.register("verifyFoundationCoordinates") {
 
     doLast {
         val drift = subprojects.filter { project ->
-            neutralFoundationPrefixes.any(project.path::startsWith) &&
+            neutralFoundationPrefixes.any { prefix -> project.path.startsWith(prefix) } &&
                 (project.group.toString() != foundationGroup || project.version.toString() != foundationVersion)
         }
         require(drift.isEmpty()) {
