@@ -111,6 +111,53 @@ The build-local Maven repository must be cleaned before every aggregate foundati
 - CI exercises the same clean publication and published-consumer path.
 - No stale artifact, duplicate direct dependency, external repository, credential, or product-specific foundation assumption is introduced.
 
+## Slice 17.4 — Closed runtime-support consumers
+
+After the Slice 17.3 leaf cluster was frozen, two directly consumed modules formed closed second-tier dependency boundaries:
+
+- `:foundation:session`, whose CarBroz production dependencies are only `:foundation:security` and `:foundation:time`.
+- `:runtime:application`, whose CarBroz production dependencies are only `:foundation:lifecycle`, `:foundation:observability`, and `:foundation:time`.
+
+Published mode therefore consumes `session` and `runtime:application` through the canonical foundation release train while default development mode preserves project dependencies. Dependency insight must prove both selected artifacts and their already-adopted transitive foundation closure. Navigation, SDUI, data, platform, action, and binding modules remain project-bound in this slice.
+
+### Slice 17.4 acceptance criteria
+
+- `session` resolves as `com.carbroz.foundation:session:1.0.0-alpha01` in published mode.
+- `runtime:application` resolves as `com.carbroz.foundation:application:1.0.0-alpha01` in published mode.
+- Their CarBroz transitive dependencies are already within the frozen Slice 17.3 artifact cluster.
+- Partner Android host tests, Desktop tests, iOS Arm64 compilation, and iOS Simulator Arm64 compilation pass through published mode.
+- Repository-wide `check` remains green in default project mode.
+- No broader runtime/data/platform migration is introduced.
+
+## Slice 17.5 — Remaining direct leaf foundation adoption
+
+The remaining direct foundation dependencies of `:app:composition` were re-inspected after Slice 17.4. The next closed cluster is the complete set of direct leaf foundation modules that own no production dependency on another CarBroz module:
+
+- `:foundation:configuration`
+- `:foundation:architecture`
+- `:foundation:navigation`
+- `:foundation:adaptive`
+- `:foundation:design-system`
+- `:foundation:capabilities`
+- `:foundation:analytics`
+
+`configuration` remains semantically distinct because `AppConfiguration` is part of composition's host-facing public API. Published mode must therefore preserve the existing `api(...)` exposure rather than reducing it to an implementation dependency. The other six remain implementation dependencies.
+
+Navigation's upstream Compose/Navigation3 dependency-family warnings remain governed by the existing upstream-transition decision; migrating navigation to the published boundary must not introduce exclusions, forced versions, substitutions, downgrades, or warning suppression solely to silence those warnings.
+
+This slice intentionally does not adopt `:platform:background`, `:runtime:action`, `:runtime:binding`, `:runtime:sdui`, or any `:data:*` module. Those modules have larger CarBroz dependency closures and require separate source-of-truth inspection after this leaf boundary is proven.
+
+### Slice 17.5 acceptance criteria
+
+- All seven remaining direct leaf foundation modules resolve through canonical `com.carbroz.foundation:*:1.0.0-alpha01` coordinates when published mode is enabled.
+- `configuration` remains exposed with `api(...)` in both project and published modes.
+- Default development mode continues to consume the same seven modules as Gradle projects.
+- No direct leaf foundation module remains project-bound in `:app:composition` after the slice.
+- Partner Android host tests, Desktop tests, iOS Arm64 compilation, and iOS Simulator Arm64 compilation pass through published mode.
+- Repository-wide default-mode `check` remains green.
+- Existing known upstream Compose/KLIB warnings are not converted into CarBroz-owned suppression or dependency overrides.
+- Runtime, data, and platform modules outside the already-frozen Slice 17.4 boundary remain project dependencies.
+
 ## Slice 17.1 acceptance criteria
 
 - One canonical foundation group and version exist.
