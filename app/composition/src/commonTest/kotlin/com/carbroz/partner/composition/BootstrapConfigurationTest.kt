@@ -10,6 +10,8 @@ import com.carbroz.data.network.NetworkResponse
 import com.carbroz.data.network.NetworkResult
 import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupTaskResult
+import com.carbroz.runtime.sdui.model.NodeType
+import com.carbroz.runtime.sdui.model.RequestMethod
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -21,24 +23,26 @@ import kotlin.test.assertNull
 
 class BootstrapConfigurationTest {
     @Test
-    fun `successful bootstrap resolves allow-listed semantic route`() = runTest {
+    fun `successful bootstrap resolves validated dynamic screen instruction`() = runTest {
         var capturedRequest: NetworkRequest? = null
-        val routes = BootstrapRouteStore()
+        val destinations = BootstrapDestinationStore()
         val task = BootstrapConfigurationStartupTask(
             network = NetworkDataSource { request ->
                 capturedRequest = request
-                NetworkResult.Success(
-                    NetworkResponse(
-                        statusCode = 200,
-                        body = buildJsonObject { put("nextDestination", "reference-sdui") },
-                    ),
-                )
+                successfulBootstrapResponse()
             },
-            routes = routes,
+            destinations = destinations,
         )
 
         assertEquals(StartupTaskResult.Success, task.execute())
-        assertEquals(BootstrapRoute.Reference, routes.current())
+        val instruction = destinations.current() ?: error("missing bootstrap instruction")
+        assertEquals("screen-auth", instruction.destination.screenId)
+        assertEquals("template-form", instruction.destination.templateId)
+        assertEquals(NodeType("FORM"), instruction.destination.templateType)
+        assertEquals(RequestMethod.GET, instruction.request.method)
+        assertEquals("/api/v1/screen/auth", instruction.request.endpoint)
+        assertEquals(DynamicTransition.RESET, instruction.transition)
+        assertEquals("auth-entry", instruction.backStackKey)
         assertEquals(NetworkMethod.GET, capturedRequest?.method)
         assertEquals("/api/v1/app", capturedRequest?.endpoint?.value)
         assertEquals(NetworkAuthentication.NONE, capturedRequest?.authentication)
@@ -46,25 +50,27 @@ class BootstrapConfigurationTest {
     }
 
     @Test
-    fun `unsupported server destination is rejected without mutating route`() = runTest {
-        val routes = BootstrapRouteStore()
+    fun `invalid dynamic screen instruction is rejected without mutating destination`() = runTest {
+        val destinations = BootstrapDestinationStore()
         val task = BootstrapConfigurationStartupTask(
-            network = successfulNetwork("remote-class-name"),
-            routes = routes,
+            network = NetworkDataSource {
+                successfulBootstrapResponse(endpoint = "https://untrusted.example/screen")
+            },
+            destinations = destinations,
         )
 
         val failure = assertIs<StartupTaskResult.Failure>(task.execute())
         val reason = assertIs<StartupFailure.Expected>(failure.reason)
-        assertEquals("bootstrap_unsupported_destination", reason.code)
+        assertEquals("bootstrap_invalid_next_screen", reason.code)
         assertEquals(false, reason.recoverable)
-        assertNull(routes.current())
+        assertNull(destinations.current())
     }
 
     @Test
     fun `offline bootstrap is recoverable`() = runTest {
         val task = BootstrapConfigurationStartupTask(
             network = NetworkDataSource { NetworkResult.Failure(NetworkFailure.Offline) },
-            routes = BootstrapRouteStore(),
+            destinations = BootstrapDestinationStore(),
         )
 
         val failure = assertIs<StartupTaskResult.Failure>(task.execute())
@@ -75,7 +81,7 @@ class BootstrapConfigurationTest {
 
     @Test
     fun `malformed successful response fails closed`() = runTest {
-        val routes = BootstrapRouteStore()
+        val destinations = BootstrapDestinationStore()
         val task = BootstrapConfigurationStartupTask(
             network = NetworkDataSource {
                 NetworkResult.Success(
@@ -85,21 +91,31 @@ class BootstrapConfigurationTest {
                     ),
                 )
             },
-            routes = routes,
+            destinations = destinations,
         )
 
         val failure = assertIs<StartupTaskResult.Failure>(task.execute())
         val reason = assertIs<StartupFailure.Expected>(failure.reason)
         assertEquals("bootstrap_missing_object", reason.code)
-        assertNull(routes.current())
+        assertNull(destinations.current())
     }
 
-    private fun successfulNetwork(destination: String): NetworkDataSource = NetworkDataSource {
-        NetworkResult.Success(
-            NetworkResponse(
-                statusCode = 200,
-                body = buildJsonObject { put("nextDestination", destination) },
-            ),
-        )
-    }
+    private fun successfulBootstrapResponse(
+        endpoint: String = "/api/v1/screen/auth",
+    ): NetworkResult.Success = NetworkResult.Success(
+        NetworkResponse(
+            statusCode = 200,
+            body = buildJsonObject {
+                put("nextScreen", buildJsonObject {
+                    put("screenId", "screen-auth")
+                    put("templateId", "template-form")
+                    put("templateType", "FORM")
+                    put("endpoint", endpoint)
+                    put("method", "GET")
+                    put("transition", "RESET")
+                    put("backStackKey", "auth-entry")
+                })
+            },
+        ),
+    )
 }
