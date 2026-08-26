@@ -79,3 +79,18 @@ jobs:
           :app:composition:linkDebugFrameworkIosSimulatorArm64
           --warning-mode all
           --stacktrace
+      - name: Publish neutral foundation for iOS artifact-boundary verification
+        run: >-
+          ./gradlew
+          verifyFoundationCoordinates
+          publishFoundationToLocalRepository
+          --warning-mode all
+          --stacktrace
+      - name: Verify Partner consumes published foundation time artifact on iOS
+        run: >-
+          ./gradlew
+          :app:composition:compileKotlinIosArm64
+          :app:composition:compileKotlinIosSimulatorArm64
+          -Pcarbroz.foundation.consumePublished=true
+          --warning-mode all
+          --stacktrace
