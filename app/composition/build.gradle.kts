@@ -13,6 +13,13 @@ val consumePublishedFoundation = providers
 val foundationGroup = providers.gradleProperty("carbroz.foundation.group").get()
 val foundationVersion = providers.gradleProperty("carbroz.foundation.version").get()
 
+fun foundationDependency(module: String): Any =
+    if (consumePublishedFoundation.get()) {
+        "$foundationGroup:$module:$foundationVersion"
+    } else {
+        project(":foundation:$module")
+    }
+
 kotlin {
     android {
         namespace = "com.carbroz.partner.composition"
@@ -42,19 +49,18 @@ kotlin {
             api(project(":foundation:configuration"))
             implementation(project(":feature:splash"))
             implementation(project(":foundation:architecture"))
-            implementation(project(":foundation:lifecycle"))
-            if (consumePublishedFoundation.get()) {
-                implementation("$foundationGroup:time:$foundationVersion")
-            } else {
-                implementation(project(":foundation:time"))
-            }
-            implementation(project(":foundation:security"))
+
+            // Phase 17.3: migrate one coherent leaf foundation cluster together.
+            implementation(foundationDependency("lifecycle"))
+            implementation(foundationDependency("time"))
+            implementation(foundationDependency("security"))
+            implementation(foundationDependency("observability"))
+
             implementation(project(":foundation:session"))
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
             implementation(project(":foundation:capabilities"))
-            implementation(project(":foundation:observability"))
             implementation(project(":foundation:analytics"))
             implementation(project(":platform:background"))
             implementation(project(":runtime:application"))
