@@ -53,11 +53,10 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             // AppConfiguration is part of composition's public host-facing API.
-            api(project(":foundation:configuration"))
+            api(foundationDependency("configuration"))
             implementation(project(":feature:splash"))
-            implementation(project(":foundation:architecture"))
 
-            // Phase 17.3: coherent leaf foundation cluster.
+            // Phase 17.3: coherent runtime-support leaf cluster.
             implementation(foundationDependency("lifecycle"))
             implementation(foundationDependency("time"))
             implementation(foundationDependency("security"))
@@ -68,11 +67,16 @@ kotlin {
             implementation(foundationDependency("session"))
             implementation(neutralDependency(":runtime:application", "application"))
 
-            implementation(project(":foundation:navigation"))
-            implementation(project(":foundation:adaptive"))
-            implementation(project(":foundation:design-system"))
-            implementation(project(":foundation:capabilities"))
-            implementation(project(":foundation:analytics"))
+            // Phase 17.5: remaining direct leaf foundation modules. None owns a
+            // production dependency on another CarBroz module, so the published
+            // boundary stays closed while preserving configuration's public API.
+            implementation(foundationDependency("architecture"))
+            implementation(foundationDependency("navigation"))
+            implementation(foundationDependency("adaptive"))
+            implementation(foundationDependency("design-system"))
+            implementation(foundationDependency("capabilities"))
+            implementation(foundationDependency("analytics"))
+
             implementation(project(":platform:background"))
             implementation(project(":runtime:action"))
             implementation(project(":runtime:binding"))
