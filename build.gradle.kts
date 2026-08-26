@@ -34,6 +34,10 @@ subprojects {
                     }
                 }
             }
+
+            tasks.withType<org.gradle.api.publish.maven.tasks.PublishToMavenRepository>().configureEach {
+                mustRunAfter(rootProject.tasks.named("cleanFoundationLocalRepository"))
+            }
         }
     }
 }
