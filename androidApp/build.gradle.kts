@@ -12,7 +12,7 @@ val productionApiBaseUrl = providers.gradleProperty("carbroz.api.production")
 
 android {
     namespace = "com.carbroz.partner"
-    compileSdk = 36
+    compileSdk = 37
 
     buildFeatures {
         buildConfig = true
