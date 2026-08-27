@@ -23,6 +23,7 @@ import com.carbroz.runtime.sdui.model.ScreenDestination
 import com.carbroz.runtime.sdui.model.ScreenTransition
 import com.carbroz.runtime.sdui.rendering.SduiCommandIntent
 import com.carbroz.runtime.sdui.rendering.SduiRenderEvent
+import com.carbroz.runtime.sdui.rendering.SduiRuntimeValueSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -63,37 +64,30 @@ data class DynamicScreenSnapshot(
     val formState: FormState?,
     val runtimeValues: Map<String, JsonElement>,
     val lastResult: JsonElement?,
+    val lastExternalEvent: JsonElement?,
     val presentation: DynamicPresentationState?,
 )
 
-/** Bounded process-memory cache for back-stack restoration; it is intentionally separate from HTTP caching. */
+/** Bounded process-memory screen/runtime cache, intentionally separate from HTTP response caching. */
 class DynamicScreenCache(private val maxEntries: Int = 12) {
     private val snapshots = linkedMapOf<String, DynamicScreenSnapshot>()
 
     init { require(maxEntries > 0) }
 
     fun get(destination: DynamicDestination): DynamicScreenSnapshot? = snapshots[destination.navigationId]
-
     fun put(destination: DynamicDestination, snapshot: DynamicScreenSnapshot) {
         snapshots.remove(destination.navigationId)
         snapshots[destination.navigationId] = snapshot
         while (snapshots.size > maxEntries) snapshots.remove(snapshots.keys.first())
     }
-
     fun remove(destination: DynamicDestination) { snapshots.remove(destination.navigationId) }
     fun clear() { snapshots.clear() }
 }
 
-/** Product-neutral extension point for deriving a form store from a normalized screen. */
-fun interface DynamicFormStoreFactory {
-    fun create(screen: Screen): FormStore?
-}
+fun interface DynamicFormStoreFactory { fun create(screen: Screen): FormStore? }
+object NoDynamicFormStoreFactory : DynamicFormStoreFactory { override fun create(screen: Screen): FormStore? = null }
 
-object NoDynamicFormStoreFactory : DynamicFormStoreFactory {
-    override fun create(screen: Screen): FormStore? = null
-}
-
-/** Generic MVI-style state owner for every backend-driven screen. */
+/** Single generic MVI-style owner for every backend-driven screen. */
 class DynamicSduiStore(
     private val scope: CoroutineScope,
     private val runtime: DynamicSduiRuntime,
@@ -103,6 +97,7 @@ class DynamicSduiStore(
     private val navigation: NavigationStore,
     private val bindingContexts: DynamicBindingContextFactory,
     private val formStores: DynamicFormStoreFactory = NoDynamicFormStoreFactory,
+    private val backgroundActions: BackgroundActionExecutor = BackgroundActionExecutor(null, null),
     private val cache: DynamicScreenCache = DynamicScreenCache(),
 ) {
     private val mutableState = MutableStateFlow(DynamicScreenState())
@@ -113,6 +108,11 @@ class DynamicSduiStore(
     private var currentForm: FormStore? = null
     private var runtimeValues: Map<String, JsonElement> = emptyMap()
     private var lastResult: JsonElement? = null
+    private var lastExternalEvent: JsonElement? = null
+
+    val renderValues: SduiRuntimeValueSource = SduiRuntimeValueSource { _, bindingKey ->
+        bindingKey?.let { currentForm?.state?.value?.get(FormFieldId(it))?.value }
+    }
 
     fun show(destination: DynamicDestination, forceRefresh: Boolean = false) {
         if (state.value.destination?.navigationId != destination.navigationId) snapshotCurrent()
@@ -151,9 +151,7 @@ class DynamicSduiStore(
         }
     }
 
-    fun retry() {
-        state.value.destination?.let { show(it, forceRefresh = true) }
-    }
+    fun retry() { state.value.destination?.let { show(it, forceRefresh = true) } }
 
     fun onCommand(intent: SduiCommandIntent) {
         if (state.value.actionInFlight) return
@@ -167,6 +165,7 @@ class DynamicSduiStore(
                         screen = state.value.screen,
                         form = currentForm,
                         event = intent.event,
+                        externalEvent = lastExternalEvent,
                         result = lastResult,
                         runtimeValues = runtimeValues,
                         navigationId = state.value.destination?.navigationId,
@@ -176,17 +175,47 @@ class DynamicSduiStore(
             )
             when (val prepared = actionPreparer.prepare(intent.command, context)) {
                 is ActionPreparationResult.Success -> execute(prepared.action)
-                else -> mutableState.update {
-                    it.copy(actionInFlight = false, failure = DynamicScreenFailure.Action(prepared.toString()))
-                }
+                else -> failAction(prepared.toString())
             }
         }
     }
 
-    fun onRenderFailure(detail: String) {
-        mutableState.update {
-            it.copy(loading = false, actionInFlight = false, failure = DynamicScreenFailure.Protocol(detail))
+    fun onExternalData(values: JsonObject) {
+        lastExternalEvent = values
+        runtimeValues = runtimeValues + values.toMap()
+        snapshotCurrent()
+    }
+
+    fun refreshFromExternalEvent() {
+        val destination = state.value.destination ?: return
+        if (destination.instruction.request.method == RequestMethod.GET) {
+            show(destination, forceRefresh = true)
+        } else {
+            lastExternalEvent = JsonObject(mapOf("refreshRejected" to JsonPrimitive("non_idempotent_destination")))
         }
+    }
+
+    fun onExternalInstruction(instruction: DynamicScreenInstruction) {
+        val destination = DynamicDestination(instruction)
+        if (instruction.transition == ScreenTransition.STAY && navigation.state.value.current.navigationId == destination.navigationId) {
+            show(destination, forceRefresh = true)
+        } else {
+            applyTransition(destination, instruction.transition)
+        }
+    }
+
+    /** Backgrounding never lets in-flight screen/action work continue invisibly. */
+    fun suspendForBackground() {
+        snapshotCurrent()
+        loadJob?.cancel()
+        actionJob?.cancel()
+        loadJob = null
+        actionJob = null
+        mutableState.update { it.copy(loading = false, actionInFlight = false) }
+    }
+
+    fun onRenderFailure(detail: String) {
+        mutableState.update { it.copy(loading = false, actionInFlight = false, failure = DynamicScreenFailure.Protocol(detail)) }
     }
 
     fun dismissPresentation() {
@@ -207,16 +236,12 @@ class DynamicSduiStore(
                     snapshotCurrent()
                 }
                 is PreparedAction.Form -> executeForm(action)
+                is PreparedAction.Background -> executeBackground(action)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
-            mutableState.update {
-                it.copy(
-                    actionInFlight = false,
-                    failure = DynamicScreenFailure.Action(failure::class.simpleName ?: "action_failure"),
-                )
-            }
+            failAction(failure::class.simpleName ?: "action_failure")
         }
     }
 
@@ -228,10 +253,7 @@ class DynamicSduiStore(
             is NetworkResult.Success -> {
                 if (result.response.statusCode !in 200..299) {
                     mutableState.update {
-                        it.copy(
-                            actionInFlight = false,
-                            failure = DynamicScreenFailure.Network("http_${result.response.statusCode}"),
-                        )
+                        it.copy(actionInFlight = false, failure = DynamicScreenFailure.Network("http_${result.response.statusCode}"))
                     }
                     return
                 }
@@ -242,22 +264,12 @@ class DynamicSduiStore(
                         snapshotCurrent()
                     }
                     RequestResponseMode.SCREEN -> {
-                        val destination = action.destination
-                            ?: return failAction("screen_response_missing_destination")
-                        val restorePolicy = if (action.method == RequestMethod.GET) {
-                            DynamicRestorePolicy.CACHE_FIRST
-                        } else {
-                            DynamicRestorePolicy.CACHE_ONLY
-                        }
+                        val destination = action.destination ?: return failAction("screen_response_missing_destination")
+                        val restorePolicy = if (action.method == RequestMethod.GET) DynamicRestorePolicy.CACHE_FIRST else DynamicRestorePolicy.CACHE_ONLY
                         val next = DynamicDestination(
                             DynamicScreenInstruction(
                                 destination = destination,
-                                request = DynamicScreenRequest(
-                                    method = action.method,
-                                    endpoint = action.endpoint,
-                                    payload = action.payload,
-                                    authentication = action.authentication,
-                                ),
+                                request = DynamicScreenRequest(action.method, action.endpoint, action.payload, action.authentication),
                                 transition = action.transition,
                                 backStackKey = action.backStackKey?.takeIf { it.isNotBlank() } ?: destination.screenId,
                                 restorePolicy = restorePolicy,
@@ -313,32 +325,32 @@ class DynamicSduiStore(
         snapshotCurrent()
     }
 
-    private fun consumeScreenRequest(
-        destination: DynamicDestination,
-        expected: ScreenDestination,
-        result: NetworkResult,
-    ) {
+    private suspend fun executeBackground(action: PreparedAction.Background) {
+        when (val result = backgroundActions.execute(action)) {
+            BackgroundActionResult.Success -> {
+                lastResult = JsonObject(mapOf("background" to JsonPrimitive("success")))
+                mutableState.update { it.copy(actionInFlight = false) }
+                snapshotCurrent()
+            }
+            is BackgroundActionResult.Unsupported -> failAction(result.reason)
+            is BackgroundActionResult.Rejected -> failAction(result.reason)
+        }
+    }
+
+    private fun consumeScreenRequest(destination: DynamicDestination, expected: ScreenDestination, result: NetworkResult) {
         when (result) {
             is NetworkResult.Failure -> mutableState.update {
                 it.copy(loading = false, failure = DynamicScreenFailure.Network(result.error.toString()))
             }
             is NetworkResult.Success -> {
                 if (result.response.statusCode !in 200..299) {
-                    mutableState.update {
-                        it.copy(loading = false, failure = DynamicScreenFailure.Network("http_${result.response.statusCode}"))
-                    }
-                } else {
-                    consumeScreenResponse(destination, expected, result.response.body)
-                }
+                    mutableState.update { it.copy(loading = false, failure = DynamicScreenFailure.Network("http_${result.response.statusCode}")) }
+                } else consumeScreenResponse(destination, expected, result.response.body)
             }
         }
     }
 
-    private fun consumeScreenResponse(
-        destination: DynamicDestination,
-        expected: ScreenDestination,
-        body: JsonElement?,
-    ) {
+    private fun consumeScreenResponse(destination: DynamicDestination, expected: ScreenDestination, body: JsonElement?) {
         if (body == null) return failProtocol("missing_response_body")
         when (val processed = runtime.pipeline.process(body.toString())) {
             is SduiPipelineResult.Success -> acceptScreen(destination, expected, processed.screen)
@@ -356,6 +368,7 @@ class DynamicSduiStore(
         currentForm = formStores.create(screen)
         runtimeValues = emptyMap()
         lastResult = null
+        lastExternalEvent = null
         mutableState.value = DynamicScreenState(destination = destination, screen = screen, form = currentForm)
         if (destination.instruction.restorePolicy != DynamicRestorePolicy.NETWORK_ONLY) snapshotCurrent()
     }
@@ -365,6 +378,7 @@ class DynamicSduiStore(
         snapshot.formState?.let { currentForm?.restore(it) }
         runtimeValues = snapshot.runtimeValues
         lastResult = snapshot.lastResult
+        lastExternalEvent = snapshot.lastExternalEvent
         mutableState.value = DynamicScreenState(
             destination = destination,
             screen = snapshot.screen,
@@ -384,6 +398,7 @@ class DynamicSduiStore(
                 formState = currentForm?.state?.value,
                 runtimeValues = runtimeValues,
                 lastResult = lastResult,
+                lastExternalEvent = lastExternalEvent,
                 presentation = state.value.presentation,
             ),
         )
@@ -391,8 +406,9 @@ class DynamicSduiStore(
 
     private fun updateFormFromEvent(event: SduiRenderEvent) {
         val changed = event as? SduiRenderEvent.ValueChanged ?: return
-        val fieldId = changed.path.segments.lastOrNull()?.value ?: return
+        val fieldId = changed.fieldId ?: changed.path.segments.lastOrNull()?.value ?: return
         currentForm?.update(FormFieldId(fieldId), JsonPrimitive(changed.value))
+        snapshotCurrent()
     }
 
     private fun applyTransition(destination: DynamicDestination, transition: ScreenTransition) {
@@ -401,8 +417,7 @@ class DynamicSduiStore(
             ScreenTransition.REPLACE -> navigation.dispatch(NavigationCommand.ReplaceTop(destination))
             ScreenTransition.RESET -> navigation.dispatch(NavigationCommand.ResetTo(destination))
             ScreenTransition.STAY -> {
-                val current = navigation.state.value.current
-                if (current.navigationId != destination.navigationId) {
+                if (navigation.state.value.current.navigationId != destination.navigationId) {
                     navigation.dispatch(NavigationCommand.ReplaceTop(destination))
                 }
             }
@@ -410,9 +425,7 @@ class DynamicSduiStore(
     }
 
     private fun failProtocol(detail: String) {
-        mutableState.update {
-            it.copy(loading = false, actionInFlight = false, failure = DynamicScreenFailure.Protocol(detail))
-        }
+        mutableState.update { it.copy(loading = false, actionInFlight = false, failure = DynamicScreenFailure.Protocol(detail)) }
     }
 
     private fun failAction(detail: String) {
