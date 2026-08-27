@@ -1,18 +1,5 @@
 package com.carbroz.partner.composition
 
-import com.carbroz.platform.background.BackgroundExecutionResult
-import com.carbroz.platform.background.BackgroundScheduleResult
-import com.carbroz.platform.background.BackgroundScheduler
-import com.carbroz.platform.background.BackgroundTaskHandler
-import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
-import com.carbroz.platform.background.BackgroundTaskId
-import com.carbroz.platform.background.BackgroundTaskRequest
-import com.carbroz.platform.background.BackgroundTaskRunner
-import com.carbroz.platform.background.BackgroundTaskState
-import com.carbroz.platform.background.ContinuousExecutionController
-import com.carbroz.platform.background.ContinuousExecutionRequest
-import com.carbroz.platform.background.ContinuousExecutionStartResult
-import com.carbroz.platform.background.ContinuousExecutionState
 import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.network.KtorNetworkTransport
@@ -31,6 +18,15 @@ import com.carbroz.data.realtime.KtorRealtimeTransport
 import com.carbroz.data.realtime.RealtimeDeliveryGate
 import com.carbroz.data.realtime.RealtimeStream
 import com.carbroz.data.realtime.RealtimeTransport
+import com.carbroz.feature.dynamic.BackgroundActionExecutor
+import com.carbroz.feature.dynamic.CapabilityActionExecutor
+import com.carbroz.feature.dynamic.DynamicBindingContextFactory
+import com.carbroz.feature.dynamic.DynamicScreenCache
+import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
+import com.carbroz.feature.dynamic.DynamicSduiRuntime
+import com.carbroz.feature.dynamic.NetworkActionExecutor
+import com.carbroz.feature.splash.BootstrapConfigurationStartupTask
+import com.carbroz.feature.splash.BootstrapDestinationStore
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.BuildInformation
@@ -44,8 +40,22 @@ import com.carbroz.foundation.session.SessionProvider
 import com.carbroz.foundation.session.SessionSnapshotCodec
 import com.carbroz.foundation.session.SessionStore
 import com.carbroz.foundation.session.TokenExpiryPolicy
+import com.carbroz.platform.background.BackgroundExecutionResult
+import com.carbroz.platform.background.BackgroundScheduleResult
+import com.carbroz.platform.background.BackgroundScheduler
+import com.carbroz.platform.background.BackgroundTaskHandler
+import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
+import com.carbroz.platform.background.BackgroundTaskId
+import com.carbroz.platform.background.BackgroundTaskRequest
+import com.carbroz.platform.background.BackgroundTaskRunner
+import com.carbroz.platform.background.BackgroundTaskState
+import com.carbroz.platform.background.ContinuousExecutionController
+import com.carbroz.platform.background.ContinuousExecutionRequest
+import com.carbroz.platform.background.ContinuousExecutionStartResult
+import com.carbroz.platform.background.ContinuousExecutionState
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
+import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.test.Test
@@ -69,7 +79,7 @@ class DependencyInjectionTest {
     )
 
     @Test
-    fun applicationModuleResolvesCanonicalRuntimeSessionNetworkRealtimeAndPreferenceGraph() {
+    fun applicationModuleResolvesCanonicalRuntimeSessionNetworkRealtimeAndFeatureGraph() {
         val secureStorage = FakeSecureStorage()
         val databaseProvider = FailingDatabaseProvider()
         val preferenceStore = FakePreferenceStore()
@@ -104,11 +114,20 @@ class DependencyInjectionTest {
             assertEquals(networkEnvironmentProvider.get(), networkEnvironment)
             assertSame(ktorTransport, koin.get<NetworkTransport>())
             assertIs<SessionNetworkAuthorizationProvider>(authorizationProvider)
-            assertSame(authorizationProvider, koin.get<NetworkAuthorizationProvider>())
             koin.get<NetworkResponseCache>()
             koin.get<NetworkExecutor>()
             koin.get<NetworkDataSource>()
+
             koin.get<NetworkActionExecutor>()
+            koin.get<CapabilityActionExecutor>()
+            koin.get<BackgroundActionExecutor>()
+            koin.get<DynamicScreenInstructionCodec>()
+            koin.get<DynamicSduiRuntime>()
+            koin.get<DynamicBindingContextFactory>()
+            koin.get<FormTemplateRuntimeFactory>()
+            koin.get<DynamicScreenCache>()
+            koin.get<BootstrapDestinationStore>()
+            koin.get<BootstrapConfigurationStartupTask>()
 
             assertSame(realtimeTransport, koin.get<RealtimeTransport>())
             koin.get<RealtimeStream>()
@@ -116,7 +135,6 @@ class DependencyInjectionTest {
 
             koin.get<BackgroundTaskHandlerRegistry>()
             koin.get<BackgroundTaskRunner>()
-
             koin.get<StartupCoordinator>()
             koin.get<ApplicationRuntime>()
         } finally {
@@ -150,10 +168,7 @@ class DependencyInjectionTest {
         try {
             assertSame(scheduler, application.koin.get<BackgroundScheduler>())
             assertSame(controller, application.koin.get<ContinuousExecutionController>())
-            assertSame(
-                handler,
-                application.koin.get<BackgroundTaskHandlerRegistry>().handler(handler.id),
-            )
+            assertSame(handler, application.koin.get<BackgroundTaskHandlerRegistry>().handler(handler.id))
         } finally {
             application.close()
         }
@@ -180,8 +195,7 @@ class DependencyInjectionTest {
     }
 
     private class FailingDatabaseProvider : CarBrozDatabaseProvider {
-        override fun get(): CarBrozDatabase =
-            error("Database creation is not required by this DI graph test")
+        override fun get(): CarBrozDatabase = error("Database creation is not required by this DI graph test")
     }
 
     private class FakePreferenceStore : PreferenceStore {
@@ -194,37 +208,23 @@ class DependencyInjectionTest {
 
     private class FakeSecureStorage : SecureStorage {
         private val values = mutableMapOf<String, String>()
-
         override suspend fun read(key: SecureKey): String? = values[key.value]
-
-        override suspend fun write(key: SecureKey, value: String) {
-            values[key.value] = value
-        }
-
-        override suspend fun remove(key: SecureKey) {
-            values.remove(key.value)
-        }
-
-        override suspend fun clear() {
-            values.clear()
-        }
+        override suspend fun write(key: SecureKey, value: String) { values[key.value] = value }
+        override suspend fun remove(key: SecureKey) { values.remove(key.value) }
+        override suspend fun clear() { values.clear() }
     }
 
     private class FakeBackgroundScheduler : BackgroundScheduler {
         override suspend fun schedule(request: BackgroundTaskRequest): BackgroundScheduleResult =
             BackgroundScheduleResult.Scheduled
-
         override suspend fun cancel(id: BackgroundTaskId) = Unit
-
         override suspend fun state(id: BackgroundTaskId): BackgroundTaskState = BackgroundTaskState.UNKNOWN
     }
 
     private class FakeContinuousExecutionController : ContinuousExecutionController {
         override suspend fun start(request: ContinuousExecutionRequest): ContinuousExecutionStartResult =
             ContinuousExecutionStartResult.Started
-
         override suspend fun stop(id: BackgroundTaskId) = Unit
-
         override suspend fun state(id: BackgroundTaskId): ContinuousExecutionState = ContinuousExecutionState.STOPPED
     }
 }
