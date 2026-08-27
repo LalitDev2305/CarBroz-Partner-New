@@ -30,6 +30,7 @@ kotlin {
             implementation(project(":foundation:design-system"))
             implementation(project(":runtime:application"))
             implementation(project(":data:network"))
+            implementation(project(":data:preferences"))
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.compose.runtime)
