@@ -10,13 +10,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleState
 import com.carbroz.foundation.navigation.NavigationStore
+import com.carbroz.runtime.action.ActionPreparer
+import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collectLatest
 
 /** Process-provided dependencies for the one generic post-Splash feature. */
 class DynamicFeatureFactory(
-    private val runtime: DynamicSduiRuntime,
+    private val sduiRuntime: SduiRuntime,
+    private val actionPreparer: ActionPreparer,
     private val networkActions: NetworkActionExecutor,
     private val capabilityActions: CapabilityActionExecutor,
     private val backgroundActions: BackgroundActionExecutor,
@@ -27,8 +30,8 @@ class DynamicFeatureFactory(
 ) {
     fun create(scope: CoroutineScope): DynamicFeatureStore = DynamicFeatureStore(
         scope = scope,
-        runtime = runtime,
-        actionPreparer = runtime.actions,
+        sduiRuntime = sduiRuntime,
+        actionPreparer = actionPreparer,
         networkActions = networkActions,
         capabilityActions = capabilityActions,
         navigation = navigation,
@@ -38,7 +41,7 @@ class DynamicFeatureFactory(
         cache = cache,
     )
 
-    internal fun runtime(): DynamicSduiRuntime = runtime
+    internal fun sduiRuntime(): SduiRuntime = sduiRuntime
 }
 
 /**
@@ -71,7 +74,7 @@ fun DynamicFeature(
 
     DynamicScreen(
         state = state,
-        runtime = factory.runtime(),
+        sduiRuntime = factory.sduiRuntime(),
         store = store,
     )
 }
