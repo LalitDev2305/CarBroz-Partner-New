@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -29,8 +31,8 @@ import com.carbroz.foundation.navigation.NavigationStore
 import com.carbroz.foundation.observability.Observability
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.sdui.rendering.DynamicScreenHost
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.koinInject
 
 /** Splash is static; every post-bootstrap screen is a generic backend-driven destination. */
@@ -45,12 +47,20 @@ fun CarBrozApp() {
     val networkActions = koinInject<NetworkActionExecutor>()
     val capabilityActions = koinInject<CapabilityActionExecutor>()
     val dynamicRuntime = koinInject<DynamicSduiRuntime>()
+    val bindingContexts = koinInject<DynamicBindingContextFactory>()
+    val formStores = koinInject<DynamicFormStoreFactory>()
     val scope = rememberCoroutineScope()
 
-    val splashStore = remember(applicationRuntime, scope) {
-        SplashStore(applicationRuntime, scope)
-    }
-    val dynamicStore = remember(dynamicRuntime, networkActions, capabilityActions, navigationStore, scope) {
+    val splashStore = remember(applicationRuntime, scope) { SplashStore(applicationRuntime, scope) }
+    val dynamicStore = remember(
+        dynamicRuntime,
+        networkActions,
+        capabilityActions,
+        navigationStore,
+        bindingContexts,
+        formStores,
+        scope,
+    ) {
         DynamicSduiStore(
             scope = scope,
             runtime = dynamicRuntime,
@@ -58,6 +68,8 @@ fun CarBrozApp() {
             networkActions = networkActions,
             capabilityActions = capabilityActions,
             navigation = navigationStore,
+            bindingContexts = bindingContexts,
+            formStores = formStores,
         )
     }
 
@@ -77,21 +89,15 @@ fun CarBrozApp() {
     }
 
     LaunchedEffect(lifecycle, splashStore) {
-        lifecycle.state.collectLatest { state ->
-            splashStore.dispatch(SplashIntent.LifecycleChanged(state))
-        }
+        lifecycle.state.collectLatest { splashStore.dispatch(SplashIntent.LifecycleChanged(it)) }
     }
-
-    LaunchedEffect(Unit) {
-        splashStore.dispatch(SplashIntent.Start)
-    }
-
+    LaunchedEffect(Unit) { splashStore.dispatch(SplashIntent.Start) }
     LaunchedEffect(splashState.isReady) {
         if (splashState.isReady && navigationStore.state.value.current == SplashDestination) {
             val instruction = bootstrapDestinations.current()
             if (instruction == null) {
                 observability.crash(
-                    event = com.carbroz.foundation.observability.CrashEvent(
+                    com.carbroz.foundation.observability.CrashEvent(
                         category = "app-composition",
                         message = "Bootstrap completed without a dynamic destination.",
                     ),
@@ -108,14 +114,10 @@ fun CarBrozApp() {
                 state = splashState,
                 onRetry = { splashStore.dispatch(SplashIntent.Retry) },
             )
-
             is DynamicDestination -> {
-                LaunchedEffect(destination.navigationId) {
-                    dynamicStore.show(destination)
-                }
+                LaunchedEffect(destination.navigationId) { dynamicStore.show(destination) }
                 DynamicScreenContent(dynamicState, dynamicRuntime, dynamicStore)
             }
-
             else -> UnsupportedDestination(destination.navigationId)
         }
     }
@@ -129,7 +131,7 @@ private fun DynamicScreenContent(
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
-            state.loading -> CircularProgressIndicator()
+            state.loading && state.screen == null -> CircularProgressIndicator()
             state.failure != null -> Column(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -139,17 +141,38 @@ private fun DynamicScreenContent(
                 Text(state.failure.toString(), style = MaterialTheme.typography.bodySmall)
                 Button(onClick = store::retry) { Text("Retry") }
             }
-
             state.screen != null -> DynamicScreenHost(
                 screen = state.screen,
                 dispatcher = runtime.renderer,
-                onCommand = { store.onCommand(it.command) },
+                onCommand = store::onCommand,
                 onRenderFailure = { store.onRenderFailure(it.toString()) },
             )
         }
 
-        if (state.actionInFlight) {
-            CircularProgressIndicator()
+        if (state.actionInFlight) CircularProgressIndicator()
+        state.presentation?.let { DynamicPresentationHost(it, store::dismissPresentation) }
+    }
+}
+
+@Composable
+private fun DynamicPresentationHost(
+    presentation: DynamicPresentationState,
+    onDismiss: () -> Unit,
+) {
+    val message = (presentation.properties["message"] as? JsonPrimitive)?.content
+        ?: presentation.id
+    Surface(
+        modifier = Modifier.padding(24.dp).widthIn(max = 480.dp),
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(presentation.kind.name, style = MaterialTheme.typography.labelMedium)
+            Text(message, style = MaterialTheme.typography.bodyLarge)
+            Button(onClick = onDismiss) { Text("Dismiss") }
         }
     }
 }
