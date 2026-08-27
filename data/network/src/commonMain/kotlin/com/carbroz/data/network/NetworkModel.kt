@@ -15,7 +15,8 @@ value class NetworkEndpoint(val value: String) {
 
 enum class NetworkMethod { GET, POST, PUT, PATCH, DELETE }
 
-enum class NetworkAuthentication { NONE, SESSION }
+/** SESSION requires a token; OPTIONAL_SESSION attaches one only when a restored session exists. */
+enum class NetworkAuthentication { NONE, SESSION, OPTIONAL_SESSION }
 
 data class NetworkRequest(
     val method: NetworkMethod,
