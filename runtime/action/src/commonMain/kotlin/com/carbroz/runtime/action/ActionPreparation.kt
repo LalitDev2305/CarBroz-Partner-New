@@ -74,6 +74,7 @@ sealed interface ActionPreparationResult {
     data class UnsupportedCommand(val command: Command) : ActionPreparationResult
     data class DefinitionRejectedCommand(val command: Command) : ActionPreparationResult
     data class InvalidCondition(val command: ConditionalCommand) : ActionPreparationResult
+    data class InvalidSequence(val command: SequenceCommand, val reason: String) : ActionPreparationResult
 }
 
 class ActionPreparer(
@@ -95,9 +96,17 @@ class ActionPreparer(
 
     private fun prepareSequence(command: SequenceCommand, context: ActionPreparationContext): ActionPreparationResult {
         val prepared = mutableListOf<PreparedAction>()
-        command.commands.forEach { child ->
+        command.commands.forEachIndexed { index, child ->
             when (val result = prepare(child, context)) {
-                is ActionPreparationResult.Success -> prepared += result.action
+                is ActionPreparationResult.Success -> {
+                    if (index != command.commands.lastIndex && result.action.isTerminalTransition()) {
+                        return ActionPreparationResult.InvalidSequence(
+                            command,
+                            "screen/navigation transition must be the final sequence action",
+                        )
+                    }
+                    prepared += result.action
+                }
                 else -> return result
             }
         }
@@ -114,5 +123,12 @@ class ActionPreparer(
         val branch = if (condition) command.whenTrue else command.whenFalse
             ?: return ActionPreparationResult.Success(PreparedAction.Sequence(emptyList()))
         return prepare(branch, context)
+    }
+
+    private fun PreparedAction.isTerminalTransition(): Boolean = when (this) {
+        is PreparedAction.Navigation -> true
+        is PreparedAction.Request -> responseMode == RequestResponseMode.SCREEN
+        is PreparedAction.Sequence -> actions.lastOrNull()?.isTerminalTransition() == true
+        else -> false
     }
 }
