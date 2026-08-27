@@ -33,6 +33,17 @@ import com.carbroz.data.sync.OutboxStore
 import com.carbroz.data.sync.RoomOutboxStore
 import com.carbroz.data.sync.SyncConflictResolver
 import com.carbroz.data.sync.SyncCoordinator
+import com.carbroz.feature.dynamic.BackgroundActionExecutor
+import com.carbroz.feature.dynamic.CapabilityActionExecutor
+import com.carbroz.feature.dynamic.DefaultDynamicBindingContextFactory
+import com.carbroz.feature.dynamic.DynamicBindingContextFactory
+import com.carbroz.feature.dynamic.DynamicScreenCache
+import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
+import com.carbroz.feature.dynamic.DynamicSduiRuntime
+import com.carbroz.feature.dynamic.NetworkActionExecutor
+import com.carbroz.feature.dynamic.createDynamicSduiRuntime
+import com.carbroz.feature.splash.BootstrapConfigurationStartupTask
+import com.carbroz.feature.splash.BootstrapDestinationStore
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.analytics.AnalyticsPolicy
 import com.carbroz.foundation.analytics.AnalyticsTracker
@@ -74,6 +85,7 @@ import com.carbroz.platform.background.ContinuousExecutionController
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.DefaultApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
+import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -188,10 +200,8 @@ fun carBrozApplicationModule(
     single<DynamicBindingContextFactory> {
         DefaultDynamicBindingContextFactory(sessionProvider = get(), configurationProvider = get())
     }
-    single<DynamicFormStoreFactory> { CoreDynamicFormStoreFactory(get<DynamicSduiRuntime>().registry) }
+    single { FormTemplateRuntimeFactory(get<DynamicSduiRuntime>().registry) }
     single { DynamicScreenCache() }
-    single { DynamicRealtimeEventDecoder(instructionCodec = get()) }
-    single { DynamicRealtimeCoordinator(decoder = get()) }
 
     single { createKtorRealtimeTransport() }
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
