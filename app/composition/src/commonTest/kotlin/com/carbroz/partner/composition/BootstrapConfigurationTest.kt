@@ -11,7 +11,9 @@ import com.carbroz.data.network.NetworkResult
 import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupTaskResult
 import com.carbroz.runtime.sdui.model.NodeType
+import com.carbroz.runtime.sdui.model.RequestAuthentication
 import com.carbroz.runtime.sdui.model.RequestMethod
+import com.carbroz.runtime.sdui.model.ScreenTransition
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -36,17 +38,19 @@ class BootstrapConfigurationTest {
 
         assertEquals(StartupTaskResult.Success, task.execute())
         val instruction = destinations.current() ?: error("missing bootstrap instruction")
-        assertEquals("screen-auth", instruction.destination.screenId)
+        assertEquals("screen-entry", instruction.destination.screenId)
         assertEquals("template-form", instruction.destination.templateId)
         assertEquals(NodeType("FORM"), instruction.destination.templateType)
         assertEquals(RequestMethod.GET, instruction.request.method)
-        assertEquals("/api/v1/screen/auth", instruction.request.endpoint)
-        assertEquals(DynamicTransition.RESET, instruction.transition)
-        assertEquals("auth-entry", instruction.backStackKey)
+        assertEquals("/api/v1/screen/entry", instruction.request.endpoint)
+        assertEquals(RequestAuthentication.OPTIONAL_SESSION, instruction.request.authentication)
+        assertEquals(ScreenTransition.RESET, instruction.transition)
+        assertEquals(DynamicRestorePolicy.CACHE_FIRST, instruction.restorePolicy)
+        assertEquals("entry", instruction.backStackKey)
         assertEquals(NetworkMethod.GET, capturedRequest?.method)
         assertEquals("/api/v1/app", capturedRequest?.endpoint?.value)
-        assertEquals(NetworkAuthentication.NONE, capturedRequest?.authentication)
-        assertIs<NetworkCachePolicy.NetworkFirst>(capturedRequest?.cachePolicy)
+        assertEquals(NetworkAuthentication.OPTIONAL_SESSION, capturedRequest?.authentication)
+        assertEquals(NetworkCachePolicy.NetworkOnly, capturedRequest?.cachePolicy)
     }
 
     @Test
@@ -84,36 +88,33 @@ class BootstrapConfigurationTest {
         val destinations = BootstrapDestinationStore()
         val task = BootstrapConfigurationStartupTask(
             network = NetworkDataSource {
-                NetworkResult.Success(
-                    NetworkResponse(
-                        statusCode = 200,
-                        body = JsonPrimitive("not-an-object"),
-                    ),
-                )
+                NetworkResult.Success(NetworkResponse(statusCode = 200, body = JsonPrimitive("not-an-object")))
             },
             destinations = destinations,
         )
 
         val failure = assertIs<StartupTaskResult.Failure>(task.execute())
         val reason = assertIs<StartupFailure.Expected>(failure.reason)
-        assertEquals("bootstrap_missing_object", reason.code)
+        assertEquals("bootstrap_invalid_payload", reason.code)
         assertNull(destinations.current())
     }
 
     private fun successfulBootstrapResponse(
-        endpoint: String = "/api/v1/screen/auth",
+        endpoint: String = "/api/v1/screen/entry",
     ): NetworkResult.Success = NetworkResult.Success(
         NetworkResponse(
             statusCode = 200,
             body = buildJsonObject {
                 put("nextScreen", buildJsonObject {
-                    put("screenId", "screen-auth")
+                    put("screenId", "screen-entry")
                     put("templateId", "template-form")
                     put("templateType", "FORM")
                     put("endpoint", endpoint)
                     put("method", "GET")
+                    put("authentication", "OPTIONAL_SESSION")
                     put("transition", "RESET")
-                    put("backStackKey", "auth-entry")
+                    put("restorePolicy", "CACHE_FIRST")
+                    put("backStackKey", "entry")
                 })
             },
         ),
