@@ -1,7 +1,11 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.navigation.NavigationDestination
 import com.carbroz.foundation.navigation.NavigationDestinationRestorer
+import com.carbroz.foundation.navigation.NavigationRestorationPolicy
+import com.carbroz.foundation.navigation.NavigationRestorationResult
+import com.carbroz.foundation.navigation.NavigationState
 import com.carbroz.foundation.navigation.RestoredDestination
 import com.carbroz.runtime.sdui.model.RequestAuthentication
 import com.carbroz.runtime.sdui.model.RequestMethod
@@ -60,22 +64,44 @@ data class DynamicDestination(
 
 /**
  * Converts dynamic destinations to the foundation restoration contract. CACHE_ONLY entries are not
- * process-restorable because recreating them could replay a non-idempotent request. They therefore
- * deliberately fall back to the static root/bootstrap path after process death.
+ * process-restorable because recreating them could replay a non-idempotent request.
  */
 class DynamicNavigationPersistence(
     private val codec: DynamicScreenInstructionCodec = DynamicScreenInstructionCodec(),
 ) : NavigationDestinationRestorer {
-    fun persist(destination: NavigationDestination): RestoredDestination? {
-        val dynamic = destination as? DynamicDestination ?: return null
-        if (dynamic.instruction.restorePolicy == DynamicRestorePolicy.CACHE_ONLY) return null
-        return RestoredDestination(
-            navigationId = dynamic.navigationId,
-            payload = codec.encode(dynamic.instruction),
-        )
+    fun persist(destination: NavigationDestination): RestoredDestination? = when (destination) {
+        SplashDestination -> RestoredDestination(SplashDestination.navigationId)
+        is DynamicDestination -> {
+            if (destination.instruction.restorePolicy == DynamicRestorePolicy.CACHE_ONLY) null
+            else RestoredDestination(
+                navigationId = destination.navigationId,
+                payload = codec.encode(destination.instruction),
+            )
+        }
+        else -> null
     }
 
+    /**
+     * A stack is persisted atomically. If any entry is unsafe or unknown, an empty persisted stack is
+     * returned so the foundation restoration policy falls back to Splash/bootstrap rather than
+     * restoring a partial or semantically different stack.
+     */
+    fun persist(state: NavigationState): List<RestoredDestination> {
+        val persisted = state.backStack.map { persist(it) }
+        return if (persisted.any { it == null }) emptyList() else persisted.filterNotNull()
+    }
+
+    fun restoreStack(persisted: List<RestoredDestination>): NavigationRestorationResult =
+        NavigationRestorationPolicy.restore(
+            persisted = persisted,
+            fallbackRoot = SplashDestination,
+            restorer = this,
+        )
+
     override fun restore(destination: RestoredDestination): NavigationDestination? {
+        if (destination.navigationId == SplashDestination.navigationId) {
+            return SplashDestination.takeIf { destination.payload == null }
+        }
         if (!destination.navigationId.startsWith(DynamicDestination.PREFIX)) return null
         val payload = destination.payload ?: return null
         val decoded = codec.decode(payload) as? DynamicInstructionDecodeResult.Success ?: return null
