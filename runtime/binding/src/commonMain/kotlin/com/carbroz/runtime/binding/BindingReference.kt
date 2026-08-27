@@ -8,6 +8,7 @@ enum class BindingNamespace(val wireName: String) {
     CONFIG("config"),
     EVENT("event"),
     RESULT("result"),
+    RUNTIME("runtime"),
 }
 
 data class BindingReference(
@@ -22,10 +23,7 @@ data class BindingReference(
     override fun toString(): String = buildString {
         append('$')
         append(namespace.wireName)
-        path.forEach { segment ->
-            append('.')
-            append(segment)
-        }
+        path.forEach { segment -> append('.').append(segment) }
     }
 
     companion object {
