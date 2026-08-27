@@ -68,17 +68,23 @@ Dynamic screen restoration uses a bounded process-memory `DynamicScreenCache`. T
 
 ## 8. Process restoration safety
 
-Dynamic destinations participate in the foundation navigation restoration contract only when safe to persist and recreate.
+Dynamic destinations participate in one foundation navigation restoration contract. The contract persists semantic destination identity plus an opaque dynamic-instruction payload; it never persists framework navigation objects.
 
-`CACHE_ONLY` destinations are deliberately not persisted across process death because they may have been acquired through a non-idempotent request. Recreating such a destination could replay a POST/PUT/PATCH/DELETE. In that case restoration falls back to the static root/bootstrap path.
+Restoration is whole-stack and fail-closed. If any stack entry is missing, malformed, unknown, unsafe or fails identity verification, no prefix is replayed. Navigation falls back atomically to `SplashDestination`, after which normal startup/bootstrap reacquires a trusted backend-driven destination.
 
-Persisted dynamic instructions are decoded through the same `DynamicScreenInstructionCodec` used for external dynamic instructions and are accepted only when the reconstructed navigation identity matches the persisted identity.
+`CACHE_ONLY` destinations are deliberately not persisted across process death because they may have been acquired through a non-idempotent request. Recreating such a destination could replay a POST/PUT/PATCH/DELETE. A stack containing a non-persistable destination is therefore not serialized at all.
+
+Persisted dynamic instructions are decoded through `DynamicScreenInstructionCodec` and are accepted only when the reconstructed navigation identity exactly matches the persisted identity.
+
+`DynamicNavigationProcessStateBridge` is the single composition-level host bridge. It serializes only the semantic `RestoredDestination` stack and delegates destination reconstruction to `DynamicNavigationPersistence`. Its serialized value is for transient platform-owned saved-state containers only. It must never be written to durable preferences because a dynamic instruction may contain arbitrary request payload data.
+
+Android integrates this bridge through `MainActivity` `savedInstanceState` / `onSaveInstanceState`. DI is initialized before restore. Restore occurs before Compose content starts, so the first rendered navigation state is either the fully restored safe stack or the static Splash fallback. iOS and Desktop retain the same common restoration bridge for any host-owned transient restoration mechanism; no duplicate platform-specific destination codec is permitted.
 
 ## 9. Startup and session behavior
 
 Session restoration runs before bootstrap. `/api/v1/app` uses optional-session authentication: a session is attached when available, while a fresh signed-out launch remains valid. The backend therefore chooses the first dynamic screen for both new and returning users.
 
-Bootstrap never maps server values to client-known screen names.
+Bootstrap never maps server values to client-known screen names. It resets navigation only while the current destination is still Splash. A successfully restored dynamic destination is therefore not overwritten by bootstrap; a failed restoration leaves Splash in place and follows the normal backend bootstrap path.
 
 ## 10. External/realtime entry
 
@@ -92,13 +98,21 @@ Deferred work and genuinely continuous execution remain separate semantic concep
 
 Automatic sync is not enabled merely because outbox/sync infrastructure exists. Foreground/connectivity auto-sync remains opt-in until a product operation establishes safe offline semantics, idempotency and conflict policy.
 
-## 12. Extension rule
+## 12. Composition, DI and source-set ownership
+
+`app:composition` is the single wiring boundary for application runtime services. It owns construction/registration of the dynamic runtime, navigation store, bootstrap, bindings/forms, action execution, realtime coordination, lifecycle bridge, background execution and sync activation. Runtime modules must not create a second application graph.
+
+Shared runtime behavior lives in `commonMain`. Android/iOS/Desktop source sets contain only platform host adapters or platform implementations required by shared contracts. Runtime modules keep the same target matrix: Android, Desktop JVM, iOS arm64 and iOS simulator arm64, with the repository Android baseline (`compileSdk 37`, `minSdk 24`).
+
+Platform hosts must not reproduce dynamic destination parsing, route mapping, SDUI orchestration or business flow decisions. Android's saved-state callback is only a transient container adapter around the common process-state bridge.
+
+## 13. Extension rule
 
 Missing Partner-specific screens/components are not architecture defects during foundation work. New SDUI definitions and product/domain modules are added only when real rendering or client-owned business invariants require them.
 
 The runtime must remain extensible through registries and trusted semantic contracts rather than hardcoded business flow classes.
 
-## 13. Prohibited architecture regressions
+## 14. Prohibited architecture regressions
 
 Do not reintroduce:
 
@@ -109,4 +123,6 @@ Do not reintroduce:
 - raw platform navigation/background/capability types in SDUI wire payloads;
 - mutation of canonical normalized server `Screen` objects for transient runtime state;
 - automatic replay of non-idempotent requests during restoration or realtime refresh;
+- durable storage of arbitrary dynamic-instruction navigation payloads;
+- platform-specific duplicate destination codecs or navigation restoration graphs;
 - duplicate bootstrap/action dynamic-screen contracts.
