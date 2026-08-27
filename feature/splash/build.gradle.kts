@@ -22,12 +22,14 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":foundation:architecture"))
+            // Splash's public bootstrap handoff exposes DynamicScreenInstruction/Codec types.
+            // Keep this dependency explicit in the public API instead of leaking an implementation-only type.
+            api(project(":feature:dynamic"))
             implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:design-system"))
             implementation(project(":runtime:application"))
             implementation(project(":data:network"))
-            implementation(project(":feature:dynamic"))
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.compose.runtime)
