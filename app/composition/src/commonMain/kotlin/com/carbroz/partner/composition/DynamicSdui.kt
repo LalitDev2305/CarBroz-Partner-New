@@ -74,7 +74,7 @@ class DefaultDynamicBindingContextFactory : DynamicBindingContextFactory {
 /** Generic state owner for every backend-driven screen. No business screen names are known here. */
 class DynamicSduiStore(
     private val scope: CoroutineScope,
-    private val runtime: ReferenceSduiRuntime,
+    private val runtime: DynamicSduiRuntime,
     private val actionPreparer: ActionPreparer,
     private val networkActions: NetworkActionExecutor,
     private val capabilityActions: CapabilityActionExecutor,
