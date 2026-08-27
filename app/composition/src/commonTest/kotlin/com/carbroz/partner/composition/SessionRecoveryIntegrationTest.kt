@@ -103,8 +103,8 @@ class SessionRecoveryIntegrationTest {
 
         val current = assertIs<SessionState.Authenticated>(store.current())
         assertEquals("new-access", current.tokens.accessToken.reveal())
-        assertEquals("new-refresh", current.tokens.refreshToken?.reveal())
-        assertEquals(61_000L, current.tokens.accessTokenExpiresAtEpochMilliseconds)
+        assertEquals<String?>("new-refresh", current.tokens.refreshToken?.reveal())
+        assertEquals<Long?>(61_000L, current.tokens.accessTokenExpiresAtEpochMilliseconds)
     }
 
     @Test
