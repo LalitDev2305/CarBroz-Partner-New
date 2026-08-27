@@ -20,9 +20,12 @@ kotlin {
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
-            implementation(project(":foundation:capabilities"))
-            implementation(project(":runtime:binding"))
-            implementation(project(":runtime:sdui"))
+            // PreparedAction.Capability is part of the public semantic action contract.
+            api(project(":foundation:capabilities"))
+            // ActionPreparationContext publicly exposes BindingContext.
+            api(project(":runtime:binding"))
+            // PreparedAction and ActionPreparationContext publicly expose SDUI/form-template types.
+            api(project(":runtime:sdui"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
