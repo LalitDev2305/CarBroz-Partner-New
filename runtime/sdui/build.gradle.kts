@@ -21,6 +21,7 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
@@ -28,9 +29,11 @@ kotlin {
             implementation(libs.compose.ui)
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
+            implementation(project(":runtime:binding"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
