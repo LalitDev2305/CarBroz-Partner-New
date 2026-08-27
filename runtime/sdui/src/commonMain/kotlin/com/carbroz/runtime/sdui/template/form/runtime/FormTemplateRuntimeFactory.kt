@@ -5,13 +5,16 @@ import com.carbroz.runtime.sdui.model.NodeKind
 import com.carbroz.runtime.sdui.model.Screen
 import com.carbroz.runtime.sdui.model.elements
 import com.carbroz.runtime.sdui.registry.SduiRegistry
+import com.carbroz.runtime.sdui.template.form.FormTemplateDefinition
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Creates form state only when a screen contains registered form-contributing Elements. */
+/** FORM_TEMPLATE owns form state discovery and lifecycle; other templates never receive a FormStore. */
 class FormTemplateRuntimeFactory(
     private val registry: SduiRegistry,
 ) {
     fun create(screen: Screen): FormStore? {
+        if (screen.template.type != FormTemplateDefinition.type) return null
+
         val definitions = screen.elements().mapNotNull { element ->
             val contributor = registry.find(NodeKind.ELEMENT, element.type) as? FormFieldContributor
                 ?: return@mapNotNull null
@@ -24,7 +27,7 @@ class FormTemplateRuntimeFactory(
         }.toList()
 
         require(definitions.map { it.id }.distinct().size == definitions.size) {
-            "Duplicate form fieldId detected in normalized SDUI screen"
+            "Duplicate form fieldId detected in normalized FORM_TEMPLATE screen"
         }
         return definitions.takeIf { it.isNotEmpty() }?.let(::FormStore)
     }
