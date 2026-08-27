@@ -9,6 +9,7 @@ import com.carbroz.runtime.action.ActionPreparationResult
 import com.carbroz.runtime.action.ActionPreparer
 import com.carbroz.runtime.action.PreparedAction
 import com.carbroz.runtime.sdui.SduiPipelineResult
+import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.model.FormOperation
 import com.carbroz.runtime.sdui.model.NavigationOperation
 import com.carbroz.runtime.sdui.model.PresentationKind
@@ -86,7 +87,7 @@ class DynamicScreenCache(private val maxEntries: Int = 12) {
 /** Single feature-level MVI owner for every backend-driven screen. */
 class DynamicFeatureStore(
     private val scope: CoroutineScope,
-    private val runtime: DynamicSduiRuntime,
+    private val sduiRuntime: SduiRuntime,
     private val actionPreparer: ActionPreparer,
     private val networkActions: NetworkActionExecutor,
     private val capabilityActions: CapabilityActionExecutor,
@@ -367,7 +368,7 @@ class DynamicFeatureStore(
 
     private fun consumeScreenResponse(destination: DynamicDestination, expected: ScreenDestination, body: JsonElement?) {
         if (body == null) return failProtocol("missing_response_body")
-        when (val processed = runtime.pipeline.process(body.toString())) {
+        when (val processed = sduiRuntime.pipeline.process(body.toString())) {
             is SduiPipelineResult.Success -> acceptScreen(destination, expected, processed.screen)
             else -> failProtocol(processed.toString())
         }
