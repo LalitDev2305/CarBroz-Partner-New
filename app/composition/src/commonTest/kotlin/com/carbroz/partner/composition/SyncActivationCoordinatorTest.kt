@@ -19,25 +19,39 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncActivationCoordinatorTest {
     @Test
-    fun foregroundAndConnectivityTransitionsTriggerSyncWithoutDuplicateOnlineEmission() = runTest {
+    fun automaticSyncIsDisabledByDefault() = runTest {
         val lifecycle = FakeLifecycle()
         val connectivity = FakeConnectivity()
         val sync = RecordingSyncCoordinator()
-        val coordinator = SyncActivationCoordinator(lifecycle, connectivity, sync)
+        val job = SyncActivationCoordinator(lifecycle, connectivity, sync).start(this)
+        runCurrent()
+        lifecycle.mutable.value = AppLifecycleState.Foreground
+        connectivity.mutable.value = NetworkConnectivity.ONLINE
+        advanceUntilIdle()
+        assertEquals(emptyList(), sync.triggers)
+        job.cancel()
+    }
+
+    @Test
+    fun explicitlyEnabledTransitionsTriggerSyncWithoutDuplicateOnlineEmission() = runTest {
+        val lifecycle = FakeLifecycle()
+        val connectivity = FakeConnectivity()
+        val sync = RecordingSyncCoordinator()
+        val coordinator = SyncActivationCoordinator(
+            lifecycle,
+            connectivity,
+            sync,
+            SyncActivationPolicy(foregroundEnabled = true, connectivityRestoredEnabled = true),
+        )
         val job = coordinator.start(this)
         runCurrent()
-
         lifecycle.mutable.value = AppLifecycleState.Foreground
         advanceUntilIdle()
         connectivity.mutable.value = NetworkConnectivity.ONLINE
         advanceUntilIdle()
         connectivity.mutable.value = NetworkConnectivity.ONLINE
         advanceUntilIdle()
-
-        assertEquals(
-            listOf(SyncTrigger.FOREGROUND, SyncTrigger.CONNECTIVITY_RESTORED),
-            sync.triggers,
-        )
+        assertEquals(listOf(SyncTrigger.FOREGROUND, SyncTrigger.CONNECTIVITY_RESTORED), sync.triggers)
         job.cancel()
     }
 
@@ -46,28 +60,28 @@ class SyncActivationCoordinatorTest {
         val lifecycle = FakeLifecycle()
         val connectivity = FakeConnectivity()
         val sync = RecordingSyncCoordinator(failFirst = true)
-        val coordinator = SyncActivationCoordinator(lifecycle, connectivity, sync)
+        val coordinator = SyncActivationCoordinator(
+            lifecycle,
+            connectivity,
+            sync,
+            SyncActivationPolicy(foregroundEnabled = true),
+        )
         val job = coordinator.start(this)
         runCurrent()
-
         lifecycle.mutable.value = AppLifecycleState.Foreground
         advanceUntilIdle()
         lifecycle.mutable.value = AppLifecycleState.Background
         advanceUntilIdle()
         lifecycle.mutable.value = AppLifecycleState.Foreground
         advanceUntilIdle()
-
         assertEquals(listOf(SyncTrigger.FOREGROUND, SyncTrigger.FOREGROUND), sync.triggers)
         job.cancel()
     }
 
     @Test
-    fun manualRequestUsesManualTrigger() = runTest {
+    fun manualRequestAlwaysUsesManualTrigger() = runTest {
         val sync = RecordingSyncCoordinator()
-        val coordinator = SyncActivationCoordinator(FakeLifecycle(), FakeConnectivity(), sync)
-
-        coordinator.requestManualSync()
-
+        SyncActivationCoordinator(FakeLifecycle(), FakeConnectivity(), sync).requestManualSync()
         assertEquals(listOf(SyncTrigger.MANUAL), sync.triggers)
     }
 
@@ -81,11 +95,8 @@ class SyncActivationCoordinatorTest {
         override val state: StateFlow<NetworkConnectivity> = mutable
     }
 
-    private class RecordingSyncCoordinator(
-        private val failFirst: Boolean = false,
-    ) : SyncCoordinator {
+    private class RecordingSyncCoordinator(private val failFirst: Boolean = false) : SyncCoordinator {
         val triggers = mutableListOf<SyncTrigger>()
-
         override suspend fun synchronize(trigger: SyncTrigger): SyncReport {
             triggers += trigger
             if (failFirst && triggers.size == 1) error("expected test failure")
