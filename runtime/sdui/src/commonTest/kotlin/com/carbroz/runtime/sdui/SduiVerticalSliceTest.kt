@@ -7,8 +7,7 @@ import com.carbroz.runtime.sdui.model.RequestCommand
 import com.carbroz.runtime.sdui.normalization.SduiNormalizer
 import com.carbroz.runtime.sdui.protocol.SduiDecoder
 import com.carbroz.runtime.sdui.protocol.SduiSchemaValidator
-import com.carbroz.runtime.sdui.registry.CoreSduiDefinitions
-import com.carbroz.runtime.sdui.registry.SduiRegistryBuilder
+import com.carbroz.runtime.sdui.registry.SduiRegistryFactory
 import com.carbroz.runtime.sdui.rendering.SduiRenderEvent
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,9 +17,7 @@ import kotlin.test.assertNotNull
 class SduiVerticalSliceTest {
     @Test
     fun corePayloadNormalizesFullHierarchyAndIndexesButtonCommand() {
-        val registry = SduiRegistryBuilder().apply {
-            registerAll(CoreSduiDefinitions.all)
-        }.build()
+        val registry = SduiRegistryFactory.createCore()
         val pipeline = SduiPipeline(
             decoder = SduiDecoder(),
             validator = SduiSchemaValidator(),
@@ -35,9 +32,7 @@ class SduiVerticalSliceTest {
             normalizer = SduiNormalizer(registry),
         )
 
-        val result = pipeline.process(payload)
-        val screen = assertIs<SduiPipelineResult.Success>(result).screen
-
+        val screen = assertIs<SduiPipelineResult.Success>(pipeline.process(payload)).screen
         val component = screen.template.components.single()
         val commandIndex = SduiCommandIndex.from(screen)
         val path = buttonPath(screen)
@@ -47,20 +42,19 @@ class SduiVerticalSliceTest {
         val command = assertNotNull(commandIndex.commandFor(SduiRenderEvent.Activated(path)))
         val request = assertIs<RequestCommand>(command)
         assertEquals("/auth/send-otp", request.endpoint)
-        assertEquals("otp", request.destination.screenId)
-        assertEquals("auth_otp", request.destination.templateId)
-        assertEquals("FORM_TEMPLATE", request.destination.templateType.value)
+        assertEquals("otp", request.destination?.screenId)
+        assertEquals("auth_otp", request.destination?.templateId)
+        assertEquals("FORM_TEMPLATE", request.destination?.templateType?.value)
         assertEquals("STACK", component.type.value)
     }
 
     private fun buttonPath(screen: com.carbroz.runtime.sdui.model.Screen) =
-        screen.template.components.single()
-            .let { component ->
-                val sections = assertIs<com.carbroz.runtime.sdui.model.ComponentContent.Sections>(component.content)
-                val section = sections.values.single()
-                val groups = assertIs<com.carbroz.runtime.sdui.model.SectionContent.Groups>(section.content)
-                groups.values.single().elements.last().path
-            }
+        screen.template.components.single().let { component ->
+            val sections = assertIs<com.carbroz.runtime.sdui.model.ComponentContent.Sections>(component.content)
+            val section = sections.values.single()
+            val groups = assertIs<com.carbroz.runtime.sdui.model.SectionContent.Groups>(section.content)
+            groups.values.single().elements.last().path
+        }
 
     private val payload = """
         {
@@ -89,17 +83,12 @@ class SduiVerticalSliceTest {
                             {
                               "id": "title",
                               "type": "TEXT",
-                              "properties": {
-                                "text": "Welcome Back",
-                                "style": "TITLE_LARGE"
-                              }
+                              "properties": {"text": "Welcome Back", "style": "TITLE_LARGE"}
                             },
                             {
                               "id": "continue",
                               "type": "BUTTON",
-                              "properties": {
-                                "text": "Continue"
-                              },
+                              "properties": {"text": "Continue"},
                               "command": {
                                 "kind": "REQUEST",
                                 "method": "POST",
@@ -107,9 +96,7 @@ class SduiVerticalSliceTest {
                                 "screenId": "otp",
                                 "templateId": "auth_otp",
                                 "templateType": "FORM_TEMPLATE",
-                                "payload": {
-                                  "phone": "${'$'}form.phone"
-                                }
+                                "payload": {"phone": "${'$'}form.phone"}
                               }
                             }
                           ]
