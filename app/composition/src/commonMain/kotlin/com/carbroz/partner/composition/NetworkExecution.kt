@@ -7,19 +7,17 @@ import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
 import com.carbroz.data.network.NetworkResult
 import com.carbroz.runtime.action.PreparedAction
+import com.carbroz.runtime.sdui.model.RequestAuthentication
 import com.carbroz.runtime.sdui.model.RequestMethod
 
 /** Trusted integration boundary from generic prepared request actions to the canonical network stack. */
 class NetworkActionExecutor(private val dataSource: NetworkDataSource) {
-    suspend fun execute(
-        action: PreparedAction.Request,
-        authentication: NetworkAuthentication = NetworkAuthentication.SESSION,
-    ): NetworkResult = dataSource.execute(
+    suspend fun execute(action: PreparedAction.Request): NetworkResult = dataSource.execute(
         NetworkRequest(
             method = action.method.toNetworkMethod(),
             endpoint = NetworkEndpoint(action.endpoint),
             payload = action.payload,
-            authentication = authentication,
+            authentication = action.authentication.toNetworkAuthentication(),
         ),
     )
 
@@ -29,5 +27,10 @@ class NetworkActionExecutor(private val dataSource: NetworkDataSource) {
         RequestMethod.PUT -> NetworkMethod.PUT
         RequestMethod.PATCH -> NetworkMethod.PATCH
         RequestMethod.DELETE -> NetworkMethod.DELETE
+    }
+
+    private fun RequestAuthentication.toNetworkAuthentication(): NetworkAuthentication = when (this) {
+        RequestAuthentication.NONE -> NetworkAuthentication.NONE
+        RequestAuthentication.SESSION -> NetworkAuthentication.SESSION
     }
 }
