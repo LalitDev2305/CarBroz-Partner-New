@@ -29,7 +29,8 @@ kotlin {
             implementation(libs.compose.ui)
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
-            implementation(project(":runtime:binding"))
+            // FormTemplate runtime exposes BindingValueSource through its public binding adapter.
+            api(project(":runtime:binding"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
