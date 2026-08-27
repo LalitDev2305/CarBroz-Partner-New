@@ -81,16 +81,16 @@ class SduiCompatibilityPolicy(
     }
 
     private fun MutableList<RequestCommandDto>.collectFrom(elements: List<ElementDto>) {
-        elements.forEach { element -> element.command?.let { collectCommand(it) } }
+        elements.forEach { element -> element.command?.let { command -> collectCommand(command) } }
     }
 
     private fun MutableList<RequestCommandDto>.collectCommand(command: CommandDto) {
         when (command) {
             is RequestCommandDto -> add(command)
-            is SequenceCommandDto -> command.commands.forEach(::collectCommand)
+            is SequenceCommandDto -> command.commands.forEach { child -> collectCommand(child) }
             is ConditionalCommandDto -> {
                 collectCommand(command.whenTrue)
-                command.whenFalse?.let(::collectCommand)
+                command.whenFalse?.let { child -> collectCommand(child) }
             }
             else -> Unit
         }
