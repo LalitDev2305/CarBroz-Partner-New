@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.carbroz.partner.composition.AppLifecycleBridge
 import com.carbroz.partner.composition.CarBrozApp
-import com.carbroz.partner.composition.DynamicNavigationProcessStateBridge
+import com.carbroz.partner.composition.NavigationProcessStateBridge
 import com.carbroz.partner.composition.initializeCarBrozAndroidApplication
 
 /** Android host entry point. Reusable application behavior belongs in KMP modules. */
@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
             versionCode = BuildConfig.VERSION_CODE.toLong(),
             applicationId = BuildConfig.APPLICATION_ID,
         )
-        DynamicNavigationProcessStateBridge.restore(savedInstanceState?.getString(NAVIGATION_PROCESS_STATE_KEY))
+        NavigationProcessStateBridge.restore(savedInstanceState?.getString(NAVIGATION_PROCESS_STATE_KEY))
         setContent { CarBrozApp() }
     }
 
@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        DynamicNavigationProcessStateBridge.save()?.let {
+        NavigationProcessStateBridge.save()?.let {
             outState.putString(NAVIGATION_PROCESS_STATE_KEY, it)
         }
         super.onSaveInstanceState(outState)
