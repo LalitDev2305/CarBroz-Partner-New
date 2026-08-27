@@ -43,8 +43,11 @@ import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.feature.dynamic.NetworkActionExecutor
+import com.carbroz.feature.splash.BootstrapClientCapabilities
+import com.carbroz.feature.splash.BootstrapConfigurationCache
 import com.carbroz.feature.splash.BootstrapConfigurationStartupTask
-import com.carbroz.feature.splash.BootstrapDestinationStore
+import com.carbroz.feature.splash.BootstrapStore
+import com.carbroz.feature.splash.PreferenceBackedBootstrapConfigurationCache
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.analytics.AnalyticsPolicy
 import com.carbroz.foundation.analytics.AnalyticsTracker
@@ -223,8 +226,24 @@ fun carBrozApplicationModule(
     single { NetworkActionExecutor(dataSource = get()) }
 
     single { DynamicScreenInstructionCodec() }
-    single { BootstrapDestinationStore() }
-    single { BootstrapConfigurationStartupTask(network = get(), destinations = get(), instructionCodec = get()) }
+    single { BootstrapStore() }
+    single<BootstrapConfigurationCache> { PreferenceBackedBootstrapConfigurationCache(preferences = get()) }
+    single {
+        BootstrapClientCapabilities(
+            versionName = configuration.buildInformation.versionName,
+            versionCode = configuration.buildInformation.versionCode,
+            applicationId = configuration.buildInformation.applicationId,
+        )
+    }
+    single {
+        BootstrapConfigurationStartupTask(
+            network = get(),
+            store = get(),
+            configurationCache = get(),
+            client = get(),
+            instructionCodec = get(),
+        )
+    }
 
     single<SduiRuntime> {
         SduiRuntimeFactory.createCore(
