@@ -24,7 +24,6 @@ import com.carbroz.feature.dynamic.DynamicBindingContextFactory
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
-import com.carbroz.feature.dynamic.DynamicSduiRuntime
 import com.carbroz.feature.dynamic.NetworkActionExecutor
 import com.carbroz.feature.splash.BootstrapConfigurationStartupTask
 import com.carbroz.feature.splash.BootstrapDestinationStore
@@ -54,8 +53,10 @@ import com.carbroz.platform.background.ContinuousExecutionController
 import com.carbroz.platform.background.ContinuousExecutionRequest
 import com.carbroz.platform.background.ContinuousExecutionStartResult
 import com.carbroz.platform.background.ContinuousExecutionState
+import com.carbroz.runtime.action.ActionPreparer
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
+import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -123,7 +124,8 @@ class DependencyInjectionTest {
             koin.get<CapabilityActionExecutor>()
             koin.get<BackgroundActionExecutor>()
             koin.get<DynamicScreenInstructionCodec>()
-            koin.get<DynamicSduiRuntime>()
+            koin.get<SduiRuntime>()
+            koin.get<ActionPreparer>()
             koin.get<DynamicBindingContextFactory>()
             koin.get<FormTemplateRuntimeFactory>()
             koin.get<DynamicScreenCache>()
@@ -217,15 +219,13 @@ class DependencyInjectionTest {
     }
 
     private class FakeBackgroundScheduler : BackgroundScheduler {
-        override suspend fun schedule(request: BackgroundTaskRequest): BackgroundScheduleResult =
-            BackgroundScheduleResult.Scheduled
+        override suspend fun schedule(request: BackgroundTaskRequest): BackgroundScheduleResult = BackgroundScheduleResult.Scheduled
         override suspend fun cancel(id: BackgroundTaskId) = Unit
         override suspend fun state(id: BackgroundTaskId): BackgroundTaskState = BackgroundTaskState.UNKNOWN
     }
 
     private class FakeContinuousExecutionController : ContinuousExecutionController {
-        override suspend fun start(request: ContinuousExecutionRequest): ContinuousExecutionStartResult =
-            ContinuousExecutionStartResult.Started
+        override suspend fun start(request: ContinuousExecutionRequest): ContinuousExecutionStartResult = ContinuousExecutionStartResult.Started
         override suspend fun stop(id: BackgroundTaskId) = Unit
         override suspend fun state(id: BackgroundTaskId): ContinuousExecutionState = ContinuousExecutionState.STOPPED
     }
