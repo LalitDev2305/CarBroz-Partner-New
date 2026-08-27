@@ -2,7 +2,6 @@ package com.carbroz.partner.composition
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -16,11 +15,15 @@ import androidx.compose.ui.Modifier
 import com.carbroz.feature.dynamic.DynamicDestination
 import com.carbroz.feature.dynamic.DynamicFeature
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
-import com.carbroz.feature.splash.BootstrapDestinationStore
+import com.carbroz.feature.splash.BootstrapStore
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.feature.splash.SplashIntent
 import com.carbroz.feature.splash.SplashScreen
 import com.carbroz.feature.splash.SplashStore
+import com.carbroz.foundation.capabilities.CapabilityKind
+import com.carbroz.foundation.capabilities.CapabilityRegistry
+import com.carbroz.foundation.capabilities.GenericCapabilityRequest
+import com.carbroz.foundation.designsystem.CarBrozTheme
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.navigation.Navigation3Host
 import com.carbroz.foundation.navigation.NavigationCommand
@@ -30,6 +33,8 @@ import com.carbroz.foundation.navigation.NavigationStore
 import com.carbroz.foundation.observability.Observability
 import com.carbroz.runtime.application.ApplicationRuntime
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.koinInject
 
 /** Composition wires feature content into the canonical navigation presentation adapter. */
@@ -40,11 +45,14 @@ fun CarBrozApp() {
     val observability = koinInject<Observability>()
     val applicationRuntime = koinInject<ApplicationRuntime>()
     val lifecycle = koinInject<AppLifecycle>()
-    val bootstrapDestinations = koinInject<BootstrapDestinationStore>()
+    val bootstrap = koinInject<BootstrapStore>()
+    val capabilityRegistry = koinInject<CapabilityRegistry>()
     val dynamicFeatureFactory = koinInject<DynamicFeatureFactory>()
     val scope = rememberCoroutineScope()
 
-    val splashStore = remember(applicationRuntime, scope) { SplashStore(applicationRuntime, scope) }
+    val splashStore = remember(applicationRuntime, bootstrap, scope) {
+        SplashStore(applicationRuntime, bootstrap, scope)
+    }
     val navigationState by navigationStore.state.collectAsState()
     val splashState by splashStore.state.collectAsState()
 
@@ -64,7 +72,7 @@ fun CarBrozApp() {
     LaunchedEffect(Unit) { splashStore.dispatch(SplashIntent.Start) }
     LaunchedEffect(splashState.isReady) {
         if (splashState.isReady && navigationStore.state.value.current == SplashDestination) {
-            val instruction = bootstrapDestinations.current()
+            val instruction = bootstrap.currentInstruction()
             if (instruction == null) {
                 observability.crash(
                     com.carbroz.foundation.observability.CrashEvent(
@@ -78,7 +86,7 @@ fun CarBrozApp() {
         }
     }
 
-    MaterialTheme {
+    CarBrozTheme {
         Navigation3Host(
             state = navigationState,
             destinationContent = NavigationDestinationContent { destination ->
@@ -86,6 +94,17 @@ fun CarBrozApp() {
                     destination = destination,
                     splashState = splashState,
                     onSplashRetry = { splashStore.dispatch(SplashIntent.Retry) },
+                    onSplashUpdate = { uri ->
+                        scope.launch {
+                            capabilityRegistry.execute(
+                                GenericCapabilityRequest(
+                                    kind = CapabilityKind.EXTERNAL_URI,
+                                    operation = "open",
+                                    arguments = mapOf("uri" to JsonPrimitive(uri)),
+                                ),
+                            )
+                        }
+                    },
                     dynamicFeatureFactory = dynamicFeatureFactory,
                     lifecycle = lifecycle,
                 )
@@ -100,11 +119,16 @@ private fun DestinationContent(
     destination: NavigationDestination,
     splashState: com.carbroz.feature.splash.SplashState,
     onSplashRetry: () -> Unit,
+    onSplashUpdate: (String) -> Unit,
     dynamicFeatureFactory: DynamicFeatureFactory,
     lifecycle: AppLifecycle,
 ) {
     when (destination) {
-        SplashDestination -> SplashScreen(state = splashState, onRetry = onSplashRetry)
+        SplashDestination -> SplashScreen(
+            state = splashState,
+            onRetry = onSplashRetry,
+            onUpdateRequested = onSplashUpdate,
+        )
         is DynamicDestination -> DynamicFeature(
             destination = destination,
             factory = dynamicFeatureFactory,
