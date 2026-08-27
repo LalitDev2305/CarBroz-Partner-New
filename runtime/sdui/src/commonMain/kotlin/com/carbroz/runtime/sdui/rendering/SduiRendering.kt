@@ -14,6 +14,7 @@ import com.carbroz.runtime.sdui.model.Section
 import com.carbroz.runtime.sdui.model.SectionContent
 import com.carbroz.runtime.sdui.model.Template
 import com.carbroz.runtime.sdui.registry.SduiRegistry
+import kotlinx.serialization.json.JsonElement
 
 sealed interface SduiRenderEvent {
     val path: NodePath
@@ -28,7 +29,19 @@ sealed interface SduiRenderEvent {
 
 fun interface SduiEventSink { fun emit(event: SduiRenderEvent) }
 
-data class SduiRenderContext(val events: SduiEventSink)
+/** Read-only runtime overlay values. SDUI remains independent of form/session implementations. */
+fun interface SduiRuntimeValueSource {
+    fun resolve(path: NodePath, bindingKey: String?): JsonElement?
+
+    companion object {
+        val Empty = SduiRuntimeValueSource { _, _ -> null }
+    }
+}
+
+data class SduiRenderContext(
+    val events: SduiEventSink,
+    val values: SduiRuntimeValueSource = SduiRuntimeValueSource.Empty,
+)
 
 interface RenderableSduiDefinition {
     @Composable fun RenderTemplate(node: Template, context: SduiRenderContext, children: @Composable () -> Unit): Boolean = false
