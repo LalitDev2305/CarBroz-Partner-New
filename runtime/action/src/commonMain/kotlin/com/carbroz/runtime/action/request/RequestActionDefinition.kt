@@ -16,13 +16,10 @@ class RequestActionDefinition(
 ) : ActionDefinition {
     override val kind: CommandKind = RequestCommand.KIND
 
-    override fun prepare(
-        command: Command,
-        context: ActionPreparationContext,
-    ): ActionPreparationResult? {
+    override fun prepare(command: Command, context: ActionPreparationContext): ActionPreparationResult? {
         val request = command as? RequestCommand ?: return null
 
-        if (context.form != null && !context.form.validate()) {
+        if (request.validateForm && context.form != null && !context.form.validate()) {
             return ActionPreparationResult.FormInvalid
         }
 
@@ -36,6 +33,10 @@ class RequestActionDefinition(
                         endpoint = request.endpoint,
                         destination = request.destination,
                         payload = payload,
+                        authentication = request.authentication,
+                        responseMode = request.responseMode,
+                        transition = request.transition,
+                        backStackKey = request.backStackKey,
                     ),
                 )
             }
