@@ -13,6 +13,8 @@ import com.carbroz.runtime.sdui.model.BackgroundCommand
 import com.carbroz.runtime.sdui.model.BackgroundOperation
 import com.carbroz.runtime.sdui.model.Command
 import com.carbroz.runtime.sdui.model.CommandKind
+import com.carbroz.runtime.sdui.model.ConditionalCommand
+import com.carbroz.runtime.sdui.model.LocalStateCommand
 import com.carbroz.runtime.sdui.model.NavigationOperation
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.model.RequestCommand
@@ -20,6 +22,8 @@ import com.carbroz.runtime.sdui.model.RequestMethod
 import com.carbroz.runtime.sdui.model.RequestResponseMode
 import com.carbroz.runtime.sdui.model.ScreenDestination
 import com.carbroz.runtime.sdui.model.SduiNavigationCommand
+import com.carbroz.runtime.sdui.model.SequenceCommand
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -103,6 +107,42 @@ class ActionPreparerTest {
             ).action,
         )
         assertEquals("generic-task", background.id)
+    }
+
+    @Test
+    fun sequencePreparesExistingCommandsWithoutRendererChanges() {
+        val sequence = SequenceCommand(
+            listOf(
+                LocalStateCommand(mapOf("step" to JsonPrimitive("one"))),
+                SduiNavigationCommand(NavigationOperation.POP),
+            ),
+        )
+        val result = assertIs<ActionPreparationResult.Success>(
+            ActionPreparer(coreRegistry()).prepare(sequence, ActionPreparationContext(BindingContext.of())),
+        )
+        val prepared = assertIs<PreparedAction.Sequence>(result.action)
+        assertEquals(2, prepared.actions.size)
+        assertIs<PreparedAction.LocalState>(prepared.actions[0])
+        assertIs<PreparedAction.Navigation>(prepared.actions[1])
+    }
+
+    @Test
+    fun conditionalResolvesBindingAndPreparesOnlySelectedBranch() {
+        val context = ActionPreparationContext(
+            BindingContext.of(
+                BindingNamespace.RUNTIME to com.carbroz.runtime.binding.BindingValueSource { path ->
+                    if (path == listOf("allowed")) JsonPrimitive(true) else null
+                },
+            ),
+        )
+        val conditional = ConditionalCommand(
+            condition = JsonPrimitive("\$runtime.allowed"),
+            whenTrue = LocalStateCommand(mapOf("branch" to JsonPrimitive("yes"))),
+            whenFalse = LocalStateCommand(mapOf("branch" to JsonPrimitive("no"))),
+        )
+        val result = assertIs<ActionPreparationResult.Success>(ActionPreparer(coreRegistry()).prepare(conditional, context))
+        val prepared = assertIs<PreparedAction.LocalState>(result.action)
+        assertEquals(JsonPrimitive("yes"), prepared.values["branch"])
     }
 
     @Test
