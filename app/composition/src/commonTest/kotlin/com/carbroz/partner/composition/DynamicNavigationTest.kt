@@ -16,10 +16,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
-class DynamicNavigationTest {
+class ApplicationNavigationPersistenceTest {
     @Test
     fun safeDynamicDestinationRoundTripsThroughProcessRestorationContract() {
-        val persistence = DynamicNavigationPersistence()
+        val persistence = ApplicationNavigationPersistence()
         val original = DynamicDestination(instruction())
         val persisted = persistence.persist(original) ?: error("destination must be persistable")
         val restored = assertIs<DynamicDestination>(persistence.restore(persisted))
@@ -30,7 +30,7 @@ class DynamicNavigationTest {
 
     @Test
     fun cacheOnlyDestinationIsNeverPersistedBecauseRestorationCouldReplayMutation() {
-        val persistence = DynamicNavigationPersistence()
+        val persistence = ApplicationNavigationPersistence()
         val destination = DynamicDestination(
             instruction().copy(
                 request = DynamicScreenRequest(RequestMethod.POST, "/api/v1/action"),
@@ -42,7 +42,7 @@ class DynamicNavigationTest {
 
     @Test
     fun restorationFailsClosedWhenIdentityDoesNotMatchPayload() {
-        val persistence = DynamicNavigationPersistence()
+        val persistence = ApplicationNavigationPersistence()
         val payload = DynamicScreenInstructionCodec().encode(instruction())
         assertNull(
             persistence.restore(
@@ -56,7 +56,7 @@ class DynamicNavigationTest {
 
     @Test
     fun processStateCodecRoundTripsSemanticRestorationData() {
-        val codec = DynamicNavigationProcessStateCodec()
+        val codec = NavigationProcessStateCodec()
         val expected = listOf(
             RestoredDestination("splash"),
             RestoredDestination(
@@ -69,11 +69,11 @@ class DynamicNavigationTest {
 
     @Test
     fun malformedProcessStateFailsClosedBeforeDestinationRestoration() {
-        assertNull(DynamicNavigationProcessStateCodec().decode("not-json"))
+        assertNull(NavigationProcessStateCodec().decode("not-json"))
     }
 
     private fun instruction() = DynamicScreenInstruction(
-        destination = ScreenDestination("screen-1", "template-7", NodeType("FORM")),
+        destination = ScreenDestination("screen-1", "template-7", NodeType("FORM_TEMPLATE")),
         request = DynamicScreenRequest(RequestMethod.GET, "/api/v1/screen/next", JsonObject(emptyMap())),
         transition = ScreenTransition.PUSH,
         backStackKey = "instance-9",
