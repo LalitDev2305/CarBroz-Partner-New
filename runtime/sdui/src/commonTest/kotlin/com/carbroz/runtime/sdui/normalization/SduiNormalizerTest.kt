@@ -2,11 +2,15 @@ package com.carbroz.runtime.sdui.normalization
 
 import com.carbroz.runtime.sdui.extension.PropertyDecodeResult
 import com.carbroz.runtime.sdui.extension.SduiDefinition
+import com.carbroz.runtime.sdui.model.BackgroundCommand
 import com.carbroz.runtime.sdui.model.EmptyNodeProperties
 import com.carbroz.runtime.sdui.model.NodeKind
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.model.RequestCommand
 import com.carbroz.runtime.sdui.model.RequestMethod
+import com.carbroz.runtime.sdui.model.RequestResponseMode
+import com.carbroz.runtime.sdui.protocol.BackgroundCommandDto
+import com.carbroz.runtime.sdui.protocol.CommandDto
 import com.carbroz.runtime.sdui.protocol.ComponentDto
 import com.carbroz.runtime.sdui.protocol.ElementDto
 import com.carbroz.runtime.sdui.protocol.RequestCommandDto
@@ -22,37 +26,56 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 
 class SduiNormalizerTest {
     @Test
-    fun validRequestCommandNormalizesIntoTrustedDestinationContract() {
-        val binding = "\$form.phone"
+    fun validScreenRequestNormalizesIntoTrustedDestinationContract() {
+        val binding = "\$form.value"
         val envelope = envelope(
             RequestCommandDto(
                 method = "post",
-                endpoint = "/auth/send-otp",
-                screenId = "otp",
-                templateId = "auth_otp",
+                endpoint = "/api/v1/action",
+                screenId = "next-screen",
+                templateId = "next-template",
                 templateType = "FORM_TEMPLATE",
-                payload = JsonObject(mapOf("phone" to JsonPrimitive(binding))),
+                payload = JsonObject(mapOf("value" to JsonPrimitive(binding))),
             ),
         )
         assertEquals(SduiValidationResult.Valid, SduiSchemaValidator().validate(envelope))
-
-        val result = assertIs<SduiNormalizationResult.Success>(
-            SduiNormalizer(registry()).normalize(envelope),
-        )
-        val command = assertIs<RequestCommand>(
-            (result.screen.template.components.single().content as com.carbroz.runtime.sdui.model.ComponentContent.Elements)
-                .values.single().command,
-        )
-
+        val command = normalizedCommand<RequestCommand>(envelope)
+        val destination = assertNotNull(command.destination)
         assertEquals(RequestMethod.POST, command.method)
-        assertEquals("/auth/send-otp", command.endpoint)
-        assertEquals("otp", command.destination.screenId)
-        assertEquals("auth_otp", command.destination.templateId)
-        assertEquals(NodeType("FORM_TEMPLATE"), command.destination.templateType)
-        assertEquals(JsonPrimitive(binding), command.payload["phone"])
+        assertEquals("next-screen", destination.screenId)
+        assertEquals(JsonPrimitive(binding), command.payload["value"])
+    }
+
+    @Test
+    fun noScreenRequestDoesNotRequireDestinationIdentity() {
+        val envelope = envelope(
+            RequestCommandDto(
+                method = "POST",
+                endpoint = "/api/v1/state",
+                responseMode = "NONE",
+                validateForm = false,
+            ),
+        )
+        assertEquals(SduiValidationResult.Valid, SduiSchemaValidator().validate(envelope))
+        val command = normalizedCommand<RequestCommand>(envelope)
+        assertEquals(RequestResponseMode.NONE, command.responseMode)
+        assertEquals(null, command.destination)
+    }
+
+    @Test
+    fun backgroundCommandNormalizesWithoutPlatformTypesInProtocolLayer() {
+        val envelope = envelope(
+            BackgroundCommandDto(
+                operation = "CANCEL",
+                id = "generic-task",
+            ),
+        )
+        assertEquals(SduiValidationResult.Valid, SduiSchemaValidator().validate(envelope))
+        assertEquals("generic-task", normalizedCommand<BackgroundCommand>(envelope).id)
     }
 
     @Test
@@ -60,13 +83,12 @@ class SduiNormalizerTest {
         val envelope = envelope(
             RequestCommandDto(
                 method = "POST",
-                endpoint = "https://evil.example/send-otp",
-                screenId = "otp",
-                templateId = "auth_otp",
+                endpoint = "https://evil.example/action",
+                screenId = "next",
+                templateId = "template",
                 templateType = "FORM_TEMPLATE",
             ),
         )
-
         val invalid = assertIs<SduiValidationResult.Invalid>(SduiSchemaValidator().validate(envelope))
         assertEquals(SduiViolationCode.EndpointMustBeRelative, invalid.violations.single().code)
     }
@@ -76,13 +98,12 @@ class SduiNormalizerTest {
         val envelope = envelope(
             RequestCommandDto(
                 method = "TRACE",
-                endpoint = "/auth/send-otp",
-                screenId = "otp",
-                templateId = "auth_otp",
+                endpoint = "/api/v1/action",
+                screenId = "next",
+                templateId = "template",
                 templateType = "FORM_TEMPLATE",
             ),
         )
-
         val invalid = assertIs<SduiValidationResult.Invalid>(SduiSchemaValidator().validate(envelope))
         assertEquals(SduiViolationCode.UnsupportedRequestMethod, invalid.violations.single().code)
     }
@@ -91,28 +112,26 @@ class SduiNormalizerTest {
     fun normalizationRejectsUnknownElementDefinitionBeforeRendering() {
         val envelope = envelope(command = null, elementType = "UNKNOWN")
         assertEquals(SduiValidationResult.Valid, SduiSchemaValidator().validate(envelope))
-
-        val result = assertIs<SduiNormalizationResult.Failure>(
-            SduiNormalizer(registry()).normalize(envelope),
+        assertIs<SduiNormalizationError.UnsupportedDefinition>(
+            assertIs<SduiNormalizationResult.Failure>(SduiNormalizer(registry()).normalize(envelope)).error,
         )
-        assertIs<SduiNormalizationError.UnsupportedDefinition>(result.error)
     }
 
     @Test
     fun normalizedNodePathUsesSemanticIdsRatherThanIndexes() {
-        val result = assertIs<SduiNormalizationResult.Success>(
-            SduiNormalizer(registry()).normalize(envelope(command = null)),
-        )
-        val element = (result.screen.template.components.single().content as com.carbroz.runtime.sdui.model.ComponentContent.Elements)
-            .values.single()
-
+        val result = assertIs<SduiNormalizationResult.Success>(SduiNormalizer(registry()).normalize(envelope(command = null)))
+        val element = (result.screen.template.components.single().content as com.carbroz.runtime.sdui.model.ComponentContent.Elements).values.single()
         assertEquals("screen/template/component/continue", element.path.toString())
     }
 
-    private fun envelope(
-        command: RequestCommandDto?,
-        elementType: String = "button",
-    ) = SduiEnvelopeDto(
+    private inline fun <reified T> normalizedCommand(envelope: SduiEnvelopeDto): T {
+        val result = assertIs<SduiNormalizationResult.Success>(SduiNormalizer(registry()).normalize(envelope))
+        val command = (result.screen.template.components.single().content as com.carbroz.runtime.sdui.model.ComponentContent.Elements)
+            .values.single().command
+        return assertIs<T>(command)
+    }
+
+    private fun envelope(command: CommandDto?, elementType: String = "button") = SduiEnvelopeDto(
         protocolVersion = 1,
         schemaVersion = 1,
         screen = ScreenDto(
@@ -125,13 +144,7 @@ class SduiNormalizerTest {
                     ComponentDto(
                         id = "component",
                         type = "form",
-                        elements = listOf(
-                            ElementDto(
-                                id = "continue",
-                                type = elementType,
-                                command = command,
-                            ),
-                        ),
+                        elements = listOf(ElementDto(id = "continue", type = elementType, command = command)),
                     ),
                 ),
             ),
@@ -144,12 +157,8 @@ class SduiNormalizerTest {
         register(TestDefinition(NodeKind.ELEMENT, "button"))
     }.build()
 
-    private class TestDefinition(
-        override val kind: NodeKind,
-        type: String,
-    ) : SduiDefinition<EmptyNodeProperties> {
+    private class TestDefinition(override val kind: NodeKind, type: String) : SduiDefinition<EmptyNodeProperties> {
         override val type: NodeType = NodeType(type)
-
         override fun decodeProperties(raw: JsonObject): PropertyDecodeResult<EmptyNodeProperties> =
             PropertyDecodeResult.Success(EmptyNodeProperties)
     }
