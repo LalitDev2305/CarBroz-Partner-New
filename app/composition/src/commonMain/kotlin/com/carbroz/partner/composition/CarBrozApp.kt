@@ -41,10 +41,10 @@ fun CarBrozApp() {
     val observability = koinInject<Observability>()
     val applicationRuntime = koinInject<ApplicationRuntime>()
     val lifecycle = koinInject<AppLifecycle>()
-    val bootstrapDestinations = koinInject<BootstrapRouteStore>()
+    val bootstrapDestinations = koinInject<BootstrapDestinationStore>()
     val networkActions = koinInject<NetworkActionExecutor>()
     val capabilityActions = koinInject<CapabilityActionExecutor>()
-    val dynamicRuntime = koinInject<ReferenceSduiRuntime>()
+    val dynamicRuntime = koinInject<DynamicSduiRuntime>()
     val scope = rememberCoroutineScope()
 
     val splashStore = remember(applicationRuntime, scope) {
@@ -124,7 +124,7 @@ fun CarBrozApp() {
 @Composable
 private fun DynamicScreenContent(
     state: DynamicScreenState,
-    runtime: ReferenceSduiRuntime,
+    runtime: DynamicSduiRuntime,
     store: DynamicSduiStore,
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
