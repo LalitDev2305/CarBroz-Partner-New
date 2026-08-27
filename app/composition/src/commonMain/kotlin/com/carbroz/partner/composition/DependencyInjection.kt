@@ -200,10 +200,10 @@ fun carBrozApplicationModule(
     }
     single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
     single { NetworkActionExecutor(dataSource = get()) }
-    single { BootstrapRouteStore() }
-    single { BootstrapConfigurationStartupTask(network = get(), routes = get()) }
+    single { BootstrapDestinationStore() }
+    single { BootstrapConfigurationStartupTask(network = get(), destinations = get()) }
 
-    single { createReferenceSduiRuntime(configuration = get()) }
+    single { createDynamicSduiRuntime(configuration = get()) }
 
     single { createKtorRealtimeTransport() }
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
