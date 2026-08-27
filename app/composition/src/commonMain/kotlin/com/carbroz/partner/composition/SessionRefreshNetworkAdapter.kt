@@ -1,5 +1,6 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.network.NetworkEndpoint
 import com.carbroz.data.network.NetworkEnvironment
 import com.carbroz.data.network.NetworkFailure
 import com.carbroz.data.network.NetworkResult
@@ -42,7 +43,7 @@ internal class CarBrozTokenRefresher(
             transport.execute(
                 TransportRequest(
                     method = "POST",
-                    url = environment.resolve(REFRESH_ENDPOINT),
+                    url = environment.resolve(NetworkEndpoint(REFRESH_ENDPOINT)),
                     headers = emptyMap(),
                     body = requestBody,
                 ),
