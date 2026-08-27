@@ -1,5 +1,6 @@
 package com.carbroz.runtime.sdui.properties
 
+import com.carbroz.runtime.sdui.model.NodeProperties
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -33,6 +34,11 @@ data class CommonNodeProperties(
     val borderWidthDp: Float = 0f,
     val cornerRadiusDp: Float = 0f,
 )
+
+/** Implemented by normalized properties that participate in the shared modifier/visibility contract. */
+interface CommonNodePropertyOwner : NodeProperties {
+    val common: CommonNodeProperties
+}
 
 sealed interface CommonPropertiesDecodeResult {
     data class Success(val value: CommonNodeProperties) : CommonPropertiesDecodeResult
