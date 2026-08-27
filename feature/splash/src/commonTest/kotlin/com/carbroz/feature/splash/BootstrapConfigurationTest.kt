@@ -41,7 +41,7 @@ class BootstrapConfigurationTest {
         val instruction = destinations.current() ?: error("missing bootstrap instruction")
         assertEquals("screen-entry", instruction.destination.screenId)
         assertEquals("template-form", instruction.destination.templateId)
-        assertEquals(NodeType("FORM"), instruction.destination.templateType)
+        assertEquals(NodeType("FORM_TEMPLATE"), instruction.destination.templateType)
         assertEquals(RequestMethod.GET, instruction.request.method)
         assertEquals("/api/v1/screen/entry", instruction.request.endpoint)
         assertEquals(RequestAuthentication.OPTIONAL_SESSION, instruction.request.authentication)
@@ -103,7 +103,7 @@ class BootstrapConfigurationTest {
                     put("nextScreen", buildJsonObject {
                         put("screenId", "screen-entry")
                         put("templateId", "template-form")
-                        put("templateType", "FORM")
+                        put("templateType", "FORM_TEMPLATE")
                         put("endpoint", endpoint)
                         put("method", "GET")
                         put("authentication", "OPTIONAL_SESSION")
