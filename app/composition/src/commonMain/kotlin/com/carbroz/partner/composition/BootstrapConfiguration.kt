@@ -1,7 +1,6 @@
 package com.carbroz.partner.composition
 
 import com.carbroz.data.network.NetworkAuthentication
-import com.carbroz.data.network.NetworkCachePolicy
 import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.NetworkEndpoint
 import com.carbroz.data.network.NetworkFailure
@@ -12,11 +11,14 @@ import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupTask
 import com.carbroz.runtime.application.startup.StartupTaskResult
 import com.carbroz.runtime.sdui.model.NodeType
+import com.carbroz.runtime.sdui.model.RequestAuthentication
 import com.carbroz.runtime.sdui.model.RequestMethod
 import com.carbroz.runtime.sdui.model.ScreenDestination
+import com.carbroz.runtime.sdui.model.ScreenTransition
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
 
 /** Process-scoped owner of the validated first backend-driven screen instruction. */
 class BootstrapDestinationStore {
@@ -27,17 +29,34 @@ class BootstrapDestinationStore {
     }
 
     fun current(): DynamicScreenInstruction? = resolved
+    fun clear() { resolved = null }
 }
 
+@Serializable
+private data class BootstrapResponseDto(val nextScreen: BootstrapScreenInstructionDto)
+
+@Serializable
+private data class BootstrapScreenInstructionDto(
+    val screenId: String,
+    val templateId: String,
+    val templateType: String,
+    val endpoint: String,
+    val method: String = "GET",
+    val authentication: String = "OPTIONAL_SESSION",
+    val transition: String = "RESET",
+    val backStackKey: String? = null,
+    val restorePolicy: String = "CACHE_FIRST",
+    val payload: JsonObject = JsonObject(emptyMap()),
+)
+
 /**
- * Executes the application bootstrap/config request through the canonical network stack.
- * `/api/v1/app` is intentionally a public bootstrap endpoint; an already-restored session is
- * still owned by SessionStore and can be used by subsequent SESSION-authenticated screen calls.
- * The response is untrusted and is normalized into [DynamicScreenInstruction] before use.
+ * Session restoration runs before this task. Bootstrap then attaches that session only when one exists,
+ * allowing the backend—not the client—to decide the first dynamic screen for both fresh and returning users.
  */
 class BootstrapConfigurationStartupTask(
     private val network: NetworkDataSource,
     private val destinations: BootstrapDestinationStore,
+    private val json: Json = Json { ignoreUnknownKeys = true },
 ) : StartupTask {
     override val id: String = "bootstrap-configuration"
 
@@ -46,10 +65,7 @@ class BootstrapConfigurationStartupTask(
             NetworkRequest(
                 method = NetworkMethod.GET,
                 endpoint = NetworkEndpoint("/api/v1/app"),
-                authentication = NetworkAuthentication.NONE,
-                cachePolicy = NetworkCachePolicy.NetworkFirst(
-                    fallbackMaxAgeMillis = BOOTSTRAP_CACHE_MAX_AGE_MILLIS,
-                ),
+                authentication = NetworkAuthentication.OPTIONAL_SESSION,
             ),
         )
     ) {
@@ -67,39 +83,22 @@ class BootstrapConfigurationStartupTask(
                 ),
             )
         }
-
-        val body = response.body as? JsonObject ?: return invalidResponse("bootstrap_missing_object")
-        val next = body["nextScreen"] as? JsonObject ?: return invalidResponse("bootstrap_missing_next_screen")
-        val instruction = next.toInstruction() ?: return invalidResponse("bootstrap_invalid_next_screen")
+        val body = response.body ?: return invalidResponse("bootstrap_missing_body")
+        val dto = runCatching { json.decodeFromJsonElement<BootstrapResponseDto>(body) }
+            .getOrElse { return invalidResponse("bootstrap_invalid_payload") }
+        val instruction = dto.nextScreen.toInstruction()
+            ?: return invalidResponse("bootstrap_invalid_next_screen")
         destinations.resolve(instruction)
         return StartupTaskResult.Success
     }
 
-    private fun JsonObject.toInstruction(): DynamicScreenInstruction? {
-        val screenId = string("screenId") ?: return null
-        val templateId = string("templateId") ?: return null
-        val templateType = string("templateType") ?: return null
-        val endpoint = string("endpoint") ?: return null
+    private fun BootstrapScreenInstructionDto.toInstruction(): DynamicScreenInstruction? {
         if (screenId.isBlank() || templateId.isBlank() || templateType.isBlank()) return null
-        if (!endpoint.startsWith('/') || endpoint.startsWith("//")) return null
-
-        val method = when (string("method")?.uppercase() ?: "GET") {
-            "GET" -> RequestMethod.GET
-            "POST" -> RequestMethod.POST
-            "PUT" -> RequestMethod.PUT
-            "PATCH" -> RequestMethod.PATCH
-            "DELETE" -> RequestMethod.DELETE
-            else -> return null
-        }
-        val transition = when (string("transition")?.uppercase() ?: "RESET") {
-            "PUSH" -> DynamicTransition.PUSH
-            "REPLACE" -> DynamicTransition.REPLACE
-            "RESET" -> DynamicTransition.RESET
-            "STAY" -> DynamicTransition.STAY
-            else -> return null
-        }
-        val backStackKey = string("backStackKey")?.takeIf { it.isNotBlank() } ?: screenId
-        val payload = this["payload"] as? JsonObject ?: JsonObject(emptyMap())
+        if (!endpoint.startsWith('/') || endpoint.startsWith("//") || "://" in endpoint) return null
+        val requestMethod = enumValue<RequestMethod>(method) ?: return null
+        val requestAuthentication = enumValue<RequestAuthentication>(authentication) ?: return null
+        val screenTransition = enumValue<ScreenTransition>(transition) ?: return null
+        val policy = enumValue<DynamicRestorePolicy>(restorePolicy) ?: return null
 
         return DynamicScreenInstruction(
             destination = ScreenDestination(
@@ -107,19 +106,23 @@ class BootstrapConfigurationStartupTask(
                 templateId = templateId,
                 templateType = NodeType(templateType),
             ),
-            request = DynamicScreenRequest(method = method, endpoint = endpoint, payload = payload),
-            transition = transition,
-            backStackKey = backStackKey,
+            request = DynamicScreenRequest(
+                method = requestMethod,
+                endpoint = endpoint,
+                payload = payload,
+                authentication = requestAuthentication,
+            ),
+            transition = screenTransition,
+            backStackKey = backStackKey?.takeIf { it.isNotBlank() } ?: screenId,
+            restorePolicy = policy,
         )
     }
 
-    private fun JsonObject.string(name: String): String? =
-        this[name]?.jsonPrimitive?.contentOrNull?.trim()
+    private inline fun <reified T : Enum<T>> enumValue(value: String): T? =
+        enumValues<T>().firstOrNull { it.name == value.uppercase() }
 
     private fun invalidResponse(code: String): StartupTaskResult.Failure =
-        StartupTaskResult.Failure(
-            StartupFailure.Expected(code = code, recoverable = false),
-        )
+        StartupTaskResult.Failure(StartupFailure.Expected(code = code, recoverable = false))
 
     private fun NetworkFailure.toStartupFailure(): StartupFailure.Expected = when (this) {
         NetworkFailure.Offline -> StartupFailure.Expected("bootstrap_offline", recoverable = true)
@@ -130,9 +133,5 @@ class BootstrapConfigurationStartupTask(
         )
         NetworkFailure.Transport -> StartupFailure.Expected("bootstrap_transport", recoverable = true)
         is NetworkFailure.InvalidRequest -> StartupFailure.Expected("bootstrap_invalid_request", recoverable = false)
-    }
-
-    private companion object {
-        const val BOOTSTRAP_CACHE_MAX_AGE_MILLIS: Long = 5 * 60 * 1000L
     }
 }
