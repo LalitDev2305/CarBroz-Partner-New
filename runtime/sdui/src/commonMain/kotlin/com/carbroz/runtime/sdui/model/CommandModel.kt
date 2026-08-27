@@ -129,3 +129,20 @@ data class BackgroundCommand(
     override val kind: CommandKind = KIND
     companion object { val KIND = CommandKind("BACKGROUND") }
 }
+
+/** Executes child commands in order. Renderers remain unaware of composition semantics. */
+data class SequenceCommand(val commands: List<Command>) : Command {
+    init { require(commands.isNotEmpty()) { "Sequence command must contain at least one command" } }
+    override val kind: CommandKind = KIND
+    companion object { val KIND = CommandKind("SEQUENCE") }
+}
+
+/** Resolves [condition] through the binding runtime and prepares one branch only. */
+data class ConditionalCommand(
+    val condition: JsonElement,
+    val whenTrue: Command,
+    val whenFalse: Command? = null,
+) : Command {
+    override val kind: CommandKind = KIND
+    companion object { val KIND = CommandKind("CONDITIONAL") }
+}
