@@ -4,14 +4,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-/** Untrusted semantic command instruction attached to an interactive Element. */
 @Serializable
 sealed interface CommandDto
 
-/**
- * Trusted request intent is normalized from this wire DTO. A request may either return another
- * dynamic screen or complete without a screen transition. Business screen names never appear here.
- */
 @Serializable
 @SerialName("REQUEST")
 data class RequestCommandDto(
@@ -28,7 +23,6 @@ data class RequestCommandDto(
     val validateForm: Boolean = true,
 ) : CommandDto
 
-/** Semantic platform capability request. Platform APIs and provider selection stay client-owned. */
 @Serializable
 @SerialName("CAPABILITY")
 data class CapabilityCommandDto(
@@ -37,7 +31,6 @@ data class CapabilityCommandDto(
     val arguments: JsonObject = JsonObject(emptyMap()),
 ) : CommandDto
 
-/** Back-stack operation that requires no network request. */
 @Serializable
 @SerialName("NAVIGATION")
 data class NavigationCommandDto(
@@ -45,7 +38,6 @@ data class NavigationCommandDto(
     val targetNavigationId: String? = null,
 ) : CommandDto
 
-/** Generic presentation effect; application composition decides how it is displayed. */
 @Serializable
 @SerialName("PRESENTATION")
 data class PresentationCommandDto(
@@ -55,16 +47,24 @@ data class PresentationCommandDto(
     val properties: JsonObject = JsonObject(emptyMap()),
 ) : CommandDto
 
-/** Screen-runtime local state mutation. */
 @Serializable
 @SerialName("LOCAL_STATE")
-data class LocalStateCommandDto(
-    val values: JsonObject,
-) : CommandDto
+data class LocalStateCommandDto(val values: JsonObject) : CommandDto
 
-/** Generic form operation owned by runtime:form. */
 @Serializable
 @SerialName("FORM")
-data class FormCommandDto(
+data class FormCommandDto(val operation: String) : CommandDto
+
+@Serializable
+@SerialName("BACKGROUND")
+data class BackgroundCommandDto(
     val operation: String,
+    val id: String,
+    val workKind: String = "PROCESSING",
+    val earliestStartDelayMillis: Long = 0L,
+    val networkRequirement: String = "NOT_REQUIRED",
+    val requiresCharging: Boolean = false,
+    val title: String? = null,
+    val description: String? = null,
+    val input: JsonObject = JsonObject(emptyMap()),
 ) : CommandDto
