@@ -7,7 +7,6 @@ import com.carbroz.runtime.sdui.protocol.RequestCommandDto
 import com.carbroz.runtime.sdui.protocol.SduiEnvelopeDto
 import com.carbroz.runtime.sdui.registry.SduiRegistry
 
-/** Client-side protocol/schema support declared by the application runtime. */
 data class SduiClientCompatibility(
     val clientVersion: Int,
     val supportedProtocolVersions: IntRange,
@@ -21,11 +20,7 @@ sealed interface SduiCompatibilityResult {
 }
 
 sealed interface SduiCompatibilityIssue {
-    data class ClientTooOld(
-        val minimumClientVersion: Int,
-        val actualClientVersion: Int,
-    ) : SduiCompatibilityIssue
-
+    data class ClientTooOld(val minimumClientVersion: Int, val actualClientVersion: Int) : SduiCompatibilityIssue
     data class UnsupportedProtocolVersion(val version: Int) : SduiCompatibilityIssue
     data class UnsupportedSchemaVersion(val version: Int) : SduiCompatibilityIssue
     data class UnsupportedRequiredDefinition(val type: String) : SduiCompatibilityIssue
@@ -33,10 +28,7 @@ sealed interface SduiCompatibilityIssue {
     data class UnsupportedRequestDestinationTemplate(val type: String) : SduiCompatibilityIssue
 }
 
-/**
- * Evaluates client support before normalization/rendering and before a REQUEST command
- * can later execute. It intentionally does not perform networking or capability execution.
- */
+/** Compatibility runs only after schema validation; no-screen requests have no destination template to check. */
 class SduiCompatibilityPolicy(
     private val client: SduiClientCompatibility,
     private val registry: SduiRegistry,
@@ -45,10 +37,7 @@ class SduiCompatibilityPolicy(
         val issues = mutableListOf<SduiCompatibilityIssue>()
 
         if (client.clientVersion < envelope.minimumClientVersion) {
-            issues += SduiCompatibilityIssue.ClientTooOld(
-                minimumClientVersion = envelope.minimumClientVersion,
-                actualClientVersion = client.clientVersion,
-            )
+            issues += SduiCompatibilityIssue.ClientTooOld(envelope.minimumClientVersion, client.clientVersion)
         }
         if (envelope.protocolVersion !in client.supportedProtocolVersions) {
             issues += SduiCompatibilityIssue.UnsupportedProtocolVersion(envelope.protocolVersion)
@@ -65,17 +54,14 @@ class SduiCompatibilityPolicy(
             .filterNot(client.supportedCapabilities::contains)
             .forEach { issues += SduiCompatibilityIssue.UnsupportedRequiredCapability(it) }
 
-        requestCommands(envelope).forEach { command ->
-            if (!registry.supports(NodeKind.TEMPLATE, NodeType(command.templateType))) {
-                issues += SduiCompatibilityIssue.UnsupportedRequestDestinationTemplate(command.templateType)
-            }
-        }
+        requestCommands(envelope)
+            .filter { it.responseMode.equals("SCREEN", ignoreCase = true) }
+            .mapNotNull(RequestCommandDto::templateType)
+            .filterNot { registry.supports(NodeKind.TEMPLATE, NodeType(it)) }
+            .forEach { issues += SduiCompatibilityIssue.UnsupportedRequestDestinationTemplate(it) }
 
-        return if (issues.isEmpty()) {
-            SduiCompatibilityResult.Compatible
-        } else {
-            SduiCompatibilityResult.Incompatible(issues)
-        }
+        return if (issues.isEmpty()) SduiCompatibilityResult.Compatible
+        else SduiCompatibilityResult.Incompatible(issues)
     }
 
     private fun supportsAnyDefinitionType(type: String): Boolean =
@@ -86,19 +72,12 @@ class SduiCompatibilityPolicy(
             addRequestCommands(component.elements)
             component.sections.forEach { section ->
                 addRequestCommands(section.elements)
-                section.groups.forEach { group ->
-                    addRequestCommands(group.elements)
-                }
+                section.groups.forEach { group -> addRequestCommands(group.elements) }
             }
         }
     }
 
     private fun MutableList<RequestCommandDto>.addRequestCommands(elements: List<ElementDto>) {
-        elements.forEach { element ->
-            val command = element.command
-            if (command is RequestCommandDto) {
-                add(command)
-            }
-        }
+        elements.forEach { element -> (element.command as? RequestCommandDto)?.let(::add) }
     }
 }
