@@ -4,6 +4,9 @@ import com.carbroz.foundation.capabilities.GenericCapabilityRequest
 import com.carbroz.runtime.binding.BindingContext
 import com.carbroz.runtime.binding.BindingResolutionError
 import com.carbroz.runtime.form.FormStore
+import com.carbroz.runtime.sdui.model.BackgroundNetworkRequirement
+import com.carbroz.runtime.sdui.model.BackgroundOperation
+import com.carbroz.runtime.sdui.model.BackgroundWorkKind
 import com.carbroz.runtime.sdui.model.Command
 import com.carbroz.runtime.sdui.model.FormOperation
 import com.carbroz.runtime.sdui.model.NavigationOperation
@@ -17,13 +20,11 @@ import com.carbroz.runtime.sdui.model.ScreenTransition
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
-/** Runtime data available when a trusted SDUI command is activated. */
 data class ActionPreparationContext(
     val bindings: BindingContext,
     val form: FormStore? = null,
 )
 
-/** Fully validated client-owned execution intents. */
 sealed interface PreparedAction {
     data class Request(
         val method: RequestMethod,
@@ -37,21 +38,26 @@ sealed interface PreparedAction {
     ) : PreparedAction
 
     data class Capability(val request: GenericCapabilityRequest) : PreparedAction
-
-    data class Navigation(
-        val operation: NavigationOperation,
-        val targetNavigationId: String? = null,
-    ) : PreparedAction
-
+    data class Navigation(val operation: NavigationOperation, val targetNavigationId: String? = null) : PreparedAction
     data class Presentation(
         val operation: PresentationOperation,
         val kind: PresentationKind,
         val id: String,
         val properties: JsonObject,
     ) : PreparedAction
-
     data class LocalState(val values: Map<String, JsonElement>) : PreparedAction
     data class Form(val operation: FormOperation) : PreparedAction
+    data class Background(
+        val operation: BackgroundOperation,
+        val id: String,
+        val workKind: BackgroundWorkKind,
+        val earliestStartDelayMillis: Long,
+        val networkRequirement: BackgroundNetworkRequirement,
+        val requiresCharging: Boolean,
+        val title: String?,
+        val description: String?,
+        val input: JsonObject,
+    ) : PreparedAction
 }
 
 sealed interface ActionPreparationResult {
@@ -62,7 +68,6 @@ sealed interface ActionPreparationResult {
     data class DefinitionRejectedCommand(val command: Command) : ActionPreparationResult
 }
 
-/** Converts trusted semantic commands into fully resolved execution intents through the immutable registry. */
 class ActionPreparer(private val registry: ActionRegistry) {
     fun prepare(command: Command, context: ActionPreparationContext): ActionPreparationResult {
         val definition = registry.find(command.kind)
