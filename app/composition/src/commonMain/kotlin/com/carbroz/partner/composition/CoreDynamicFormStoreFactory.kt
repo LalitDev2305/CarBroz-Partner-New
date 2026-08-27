@@ -22,7 +22,7 @@ object CoreDynamicFormStoreFactory : DynamicFormStoreFactory {
                 initialValue = JsonPrimitive(properties.initialValue),
                 validators = if (properties.required) listOf(requiredValidator) else emptyList(),
             )
-        }
+        }.toList()
         return definitions.takeIf { it.isNotEmpty() }?.let(::FormStore)
     }
 
@@ -35,10 +35,16 @@ object CoreDynamicFormStoreFactory : DynamicFormStoreFactory {
         for (component in template.components) {
             when (val content = component.content) {
                 is ComponentContent.Elements -> yieldAll(content.values)
-                is ComponentContent.Sections -> for (section in content.values) {
-                    when (val sectionContent = section.content) {
-                        is SectionContent.Elements -> yieldAll(sectionContent.values)
-                        is SectionContent.Groups -> sectionContent.values.forEach { yieldAll(it.elements) }
+                is ComponentContent.Sections -> {
+                    for (section in content.values) {
+                        when (val sectionContent = section.content) {
+                            is SectionContent.Elements -> yieldAll(sectionContent.values)
+                            is SectionContent.Groups -> {
+                                for (group in sectionContent.values) {
+                                    yieldAll(group.elements)
+                                }
+                            }
+                        }
                     }
                 }
             }
