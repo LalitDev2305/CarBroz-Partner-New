@@ -8,11 +8,13 @@ import com.carbroz.runtime.sdui.model.Element
 import com.carbroz.runtime.sdui.model.Group
 import com.carbroz.runtime.sdui.model.NodeKind
 import com.carbroz.runtime.sdui.model.NodePath
+import com.carbroz.runtime.sdui.model.NodeProperties
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.model.Screen
 import com.carbroz.runtime.sdui.model.Section
 import com.carbroz.runtime.sdui.model.SectionContent
 import com.carbroz.runtime.sdui.model.Template
+import com.carbroz.runtime.sdui.properties.CommonNodePropertyOwner
 import com.carbroz.runtime.sdui.registry.SduiRegistry
 import kotlinx.serialization.json.JsonElement
 
@@ -29,7 +31,6 @@ sealed interface SduiRenderEvent {
 
 fun interface SduiEventSink { fun emit(event: SduiRenderEvent) }
 
-/** Read-only runtime overlay values. SDUI remains independent of form/session implementations. */
 fun interface SduiRuntimeValueSource {
     fun resolve(path: NodePath, bindingKey: String?): JsonElement?
 
@@ -65,6 +66,7 @@ class SduiRendererDispatcher(private val registry: SduiRegistry) {
 
     @Composable
     private fun renderTemplate(node: Template, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
+        if (!isVisible(node.properties)) return
         dispatch(NodeKind.TEMPLATE, node.type, node.path, onFailure) { definition ->
             definition.RenderTemplate(node, context) { node.components.forEach { renderComponent(it, context, onFailure) } }
         }
@@ -72,6 +74,7 @@ class SduiRendererDispatcher(private val registry: SduiRegistry) {
 
     @Composable
     private fun renderComponent(node: Component, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
+        if (!isVisible(node.properties)) return
         dispatch(NodeKind.COMPONENT, node.type, node.path, onFailure) { definition ->
             definition.RenderComponent(node, context) {
                 when (val content = node.content) {
@@ -84,6 +87,7 @@ class SduiRendererDispatcher(private val registry: SduiRegistry) {
 
     @Composable
     private fun renderSection(node: Section, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
+        if (!isVisible(node.properties)) return
         dispatch(NodeKind.SECTION, node.type, node.path, onFailure) { definition ->
             definition.RenderSection(node, context) {
                 when (val content = node.content) {
@@ -96,6 +100,7 @@ class SduiRendererDispatcher(private val registry: SduiRegistry) {
 
     @Composable
     private fun renderGroup(node: Group, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
+        if (!isVisible(node.properties)) return
         dispatch(NodeKind.GROUP, node.type, node.path, onFailure) { definition ->
             definition.RenderGroup(node, context) { node.elements.forEach { renderElement(it, context, onFailure) } }
         }
@@ -103,6 +108,7 @@ class SduiRendererDispatcher(private val registry: SduiRegistry) {
 
     @Composable
     private fun renderElement(node: Element, context: SduiRenderContext, onFailure: (SduiRenderFailure) -> Unit) {
+        if (!isVisible(node.properties)) return
         dispatch(NodeKind.ELEMENT, node.type, node.path, onFailure) { it.RenderElement(node, context) }
     }
 
@@ -122,4 +128,7 @@ class SduiRendererDispatcher(private val registry: SduiRegistry) {
         }
         if (!render(renderable)) onFailure(SduiRenderFailure.DefinitionRejectedNode(kind, type, path))
     }
+
+    private fun isVisible(properties: NodeProperties): Boolean =
+        (properties as? CommonNodePropertyOwner)?.common?.visible != false
 }
