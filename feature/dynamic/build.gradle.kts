@@ -28,7 +28,8 @@ kotlin {
             implementation(project(":foundation:session"))
             implementation(project(":runtime:action"))
             implementation(project(":runtime:binding"))
-            implementation(project(":runtime:sdui"))
+            // DynamicScreenInstruction/Destination publicly expose canonical SDUI model types.
+            api(project(":runtime:sdui"))
             implementation(project(":data:network"))
             implementation(project(":data:realtime"))
             implementation(project(":platform:background"))
