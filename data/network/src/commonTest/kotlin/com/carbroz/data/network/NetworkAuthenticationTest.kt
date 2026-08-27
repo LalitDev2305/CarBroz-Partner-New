@@ -19,27 +19,39 @@ class NetworkAuthenticationTest {
             },
             authorizationProvider = NetworkAuthorizationProvider { "Bearer access-token" },
         )
-
         assertIs<NetworkResult.Success>(executor.execute(sessionGet()))
         assertIs<NetworkResult.Success>(executor.execute(publicGet()))
-
         assertEquals("Bearer access-token", captured[0].headers["Authorization"])
         assertNull(captured[1].headers["Authorization"])
+    }
+
+    @Test
+    fun optionalSessionExecutesWithOrWithoutRestoredAuthorization() = runTest {
+        val captured = mutableListOf<TransportRequest>()
+        val authenticated = executor(
+            transport = NetworkTransport { captured += it; NetworkResult.Success(NetworkResponse(200)) },
+            authorizationProvider = NetworkAuthorizationProvider { "Bearer restored" },
+        )
+        assertIs<NetworkResult.Success>(authenticated.execute(optionalSessionGet()))
+        assertEquals("Bearer restored", captured.single().headers["Authorization"])
+
+        captured.clear()
+        val signedOut = executor(
+            transport = NetworkTransport { captured += it; NetworkResult.Success(NetworkResponse(200)) },
+            authorizationProvider = NetworkAuthorizationProvider { null },
+        )
+        assertIs<NetworkResult.Success>(signedOut.execute(optionalSessionGet()))
+        assertNull(captured.single().headers["Authorization"])
     }
 
     @Test
     fun sessionRequestWithoutAuthenticatedAuthorizationFailsBeforeTransport() = runTest {
         var attempts = 0
         val executor = executor(
-            transport = NetworkTransport {
-                attempts += 1
-                NetworkResult.Success(NetworkResponse(200))
-            },
+            transport = NetworkTransport { attempts += 1; NetworkResult.Success(NetworkResponse(200)) },
             authorizationProvider = NetworkAuthorizationProvider { null },
         )
-
         val result = executor.execute(sessionGet())
-
         val failure = assertIs<NetworkResult.Failure>(result)
         assertIs<NetworkFailure.InvalidRequest>(failure.error)
         assertEquals(0, attempts)
@@ -55,11 +67,8 @@ class NetworkAuthenticationTest {
             transport = NetworkTransport { request ->
                 attempts += 1
                 seenAuthorization += request.headers["Authorization"]
-                if (attempts == 1) {
-                    NetworkResult.Failure(NetworkFailure.Http(401))
-                } else {
-                    NetworkResult.Success(NetworkResponse(200))
-                }
+                if (attempts == 1) NetworkResult.Failure(NetworkFailure.Http(401))
+                else NetworkResult.Success(NetworkResponse(200))
             },
             authorizationProvider = NetworkAuthorizationProvider { "Bearer $token" },
             authenticationRecovery = NetworkAuthenticationRecovery {
@@ -68,10 +77,7 @@ class NetworkAuthenticationTest {
                 true
             },
         )
-
-        val result = executor.execute(sessionGet())
-
-        assertIs<NetworkResult.Success>(result)
+        assertIs<NetworkResult.Success>(executor.execute(sessionGet()))
         assertEquals(2, attempts)
         assertEquals(1, recoveries)
         assertEquals<List<String?>>(listOf("Bearer old-token", "Bearer new-token"), seenAuthorization)
@@ -82,20 +88,11 @@ class NetworkAuthenticationTest {
         var attempts = 0
         var recoveries = 0
         val executor = executor(
-            transport = NetworkTransport {
-                attempts += 1
-                NetworkResult.Failure(NetworkFailure.Http(401))
-            },
+            transport = NetworkTransport { attempts += 1; NetworkResult.Failure(NetworkFailure.Http(401)) },
             authorizationProvider = NetworkAuthorizationProvider { "Bearer access-token" },
-            authenticationRecovery = NetworkAuthenticationRecovery {
-                recoveries += 1
-                false
-            },
+            authenticationRecovery = NetworkAuthenticationRecovery { recoveries += 1; false },
         )
-
-        val result = executor.execute(sessionGet())
-
-        val failure = assertIs<NetworkResult.Failure>(result)
+        val failure = assertIs<NetworkResult.Failure>(executor.execute(sessionGet()))
         assertEquals(NetworkFailure.Http(401), failure.error)
         assertEquals(1, attempts)
         assertEquals(1, recoveries)
@@ -106,20 +103,11 @@ class NetworkAuthenticationTest {
         var attempts = 0
         var recoveries = 0
         val executor = executor(
-            transport = NetworkTransport {
-                attempts += 1
-                NetworkResult.Failure(NetworkFailure.Http(401))
-            },
+            transport = NetworkTransport { attempts += 1; NetworkResult.Failure(NetworkFailure.Http(401)) },
             authorizationProvider = NetworkAuthorizationProvider { "Bearer access-token" },
-            authenticationRecovery = NetworkAuthenticationRecovery {
-                recoveries += 1
-                true
-            },
+            authenticationRecovery = NetworkAuthenticationRecovery { recoveries += 1; true },
         )
-
-        val result = executor.execute(sessionGet())
-
-        val failure = assertIs<NetworkResult.Failure>(result)
+        val failure = assertIs<NetworkResult.Failure>(executor.execute(sessionGet()))
         assertEquals(NetworkFailure.Http(401), failure.error)
         assertEquals(2, attempts)
         assertEquals(1, recoveries)
@@ -130,25 +118,13 @@ class NetworkAuthenticationTest {
         var attempts = 0
         var recoveries = 0
         val executor = executor(
-            transport = NetworkTransport {
-                attempts += 1
-                NetworkResult.Failure(NetworkFailure.Http(401))
-            },
+            transport = NetworkTransport { attempts += 1; NetworkResult.Failure(NetworkFailure.Http(401)) },
             authorizationProvider = NetworkAuthorizationProvider { "Bearer access-token" },
-            authenticationRecovery = NetworkAuthenticationRecovery {
-                recoveries += 1
-                true
-            },
+            authenticationRecovery = NetworkAuthenticationRecovery { recoveries += 1; true },
         )
-
         val result = executor.execute(
-            NetworkRequest(
-                method = NetworkMethod.POST,
-                endpoint = NetworkEndpoint("/mutation"),
-                authentication = NetworkAuthentication.SESSION,
-            ),
+            NetworkRequest(NetworkMethod.POST, NetworkEndpoint("/mutation"), authentication = NetworkAuthentication.SESSION),
         )
-
         val failure = assertIs<NetworkResult.Failure>(result)
         assertEquals(NetworkFailure.Http(401), failure.error)
         assertEquals(1, attempts)
@@ -156,16 +132,13 @@ class NetworkAuthenticationTest {
     }
 
     @Test
-    fun concurrentUnauthorizedRequestsShareRecoveryBoundary() = runTest {
+    fun concurrentUnauthorizedRequestsRemainSafeAroundRecoveryBoundary() = runTest {
         var token = "old-token"
         var recoveryCalls = 0
         val executor = executor(
             transport = NetworkTransport { request ->
-                if (request.headers["Authorization"] == "Bearer old-token") {
-                    NetworkResult.Failure(NetworkFailure.Http(401))
-                } else {
-                    NetworkResult.Success(NetworkResponse(200))
-                }
+                if (request.headers["Authorization"] == "Bearer old-token") NetworkResult.Failure(NetworkFailure.Http(401))
+                else NetworkResult.Success(NetworkResponse(200))
             },
             authorizationProvider = NetworkAuthorizationProvider { "Bearer $token" },
             authenticationRecovery = NetworkAuthenticationRecovery {
@@ -174,12 +147,8 @@ class NetworkAuthenticationTest {
                 true
             },
         )
-
         val results = List(8) { async { executor.execute(sessionGet()) } }.awaitAll()
-
         results.forEach { assertIs<NetworkResult.Success>(it) }
-        // The network boundary remains safe under concurrency; canonical single-flight behavior
-        // itself is owned and tested by foundation:session.
         assertEquals(true, recoveryCalls >= 1)
     }
 
@@ -194,14 +163,7 @@ class NetworkAuthenticationTest {
         authenticationRecovery = authenticationRecovery,
     )
 
-    private fun sessionGet() = NetworkRequest(
-        method = NetworkMethod.GET,
-        endpoint = NetworkEndpoint("/profile"),
-        authentication = NetworkAuthentication.SESSION,
-    )
-
-    private fun publicGet() = NetworkRequest(
-        method = NetworkMethod.GET,
-        endpoint = NetworkEndpoint("/public"),
-    )
+    private fun sessionGet() = NetworkRequest(NetworkMethod.GET, NetworkEndpoint("/profile"), authentication = NetworkAuthentication.SESSION)
+    private fun optionalSessionGet() = NetworkRequest(NetworkMethod.GET, NetworkEndpoint("/bootstrap"), authentication = NetworkAuthentication.OPTIONAL_SESSION)
+    private fun publicGet() = NetworkRequest(NetworkMethod.GET, NetworkEndpoint("/public"))
 }
