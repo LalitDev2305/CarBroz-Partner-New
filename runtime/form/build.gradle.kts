@@ -7,7 +7,7 @@ plugins {
 kotlin {
     android {
         namespace = "com.carbroz.runtime.form"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 24
         withHostTest {}
     }
