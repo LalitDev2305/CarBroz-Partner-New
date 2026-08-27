@@ -1,15 +1,8 @@
 package com.carbroz.partner.composition
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -20,7 +13,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import com.carbroz.feature.dynamic.BackgroundActionExecutor
+import com.carbroz.feature.dynamic.CapabilityActionExecutor
+import com.carbroz.feature.dynamic.DynamicBindingContextFactory
+import com.carbroz.feature.dynamic.DynamicDestination
+import com.carbroz.feature.dynamic.DynamicFeatureStore
+import com.carbroz.feature.dynamic.DynamicScreen
+import com.carbroz.feature.dynamic.DynamicScreenCache
+import com.carbroz.feature.dynamic.DynamicSduiRuntime
+import com.carbroz.feature.dynamic.NetworkActionExecutor
+import com.carbroz.feature.splash.BootstrapDestinationStore
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.feature.splash.SplashIntent
 import com.carbroz.feature.splash.SplashScreen
@@ -31,12 +33,11 @@ import com.carbroz.foundation.navigation.NavigationCommand
 import com.carbroz.foundation.navigation.NavigationStore
 import com.carbroz.foundation.observability.Observability
 import com.carbroz.runtime.application.ApplicationRuntime
-import com.carbroz.runtime.sdui.rendering.DynamicScreenHost
+import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.koinInject
 
-/** Splash is static; every post-bootstrap screen is a generic backend-driven destination. */
+/** App composition selects feature roots; dynamic-screen behavior belongs to feature:dynamic. */
 @Composable
 fun CarBrozApp() {
     val navigationStore = koinInject<NavigationStore>()
@@ -50,7 +51,7 @@ fun CarBrozApp() {
     val backgroundActions = koinInject<BackgroundActionExecutor>()
     val dynamicRuntime = koinInject<DynamicSduiRuntime>()
     val bindingContexts = koinInject<DynamicBindingContextFactory>()
-    val formStores = koinInject<DynamicFormStoreFactory>()
+    val formRuntime = koinInject<FormTemplateRuntimeFactory>()
     val screenCache = koinInject<DynamicScreenCache>()
     val scope = rememberCoroutineScope()
 
@@ -62,11 +63,11 @@ fun CarBrozApp() {
         backgroundActions,
         navigationStore,
         bindingContexts,
-        formStores,
+        formRuntime,
         screenCache,
         scope,
     ) {
-        DynamicSduiStore(
+        DynamicFeatureStore(
             scope = scope,
             runtime = dynamicRuntime,
             actionPreparer = dynamicRuntime.actions,
@@ -74,7 +75,7 @@ fun CarBrozApp() {
             capabilityActions = capabilityActions,
             navigation = navigationStore,
             bindingContexts = bindingContexts,
-            formStores = formStores,
+            formRuntime = formRuntime,
             backgroundActions = backgroundActions,
             cache = screenCache,
         )
@@ -109,7 +110,7 @@ fun CarBrozApp() {
                 observability.crash(
                     com.carbroz.foundation.observability.CrashEvent(
                         category = "app-composition",
-                        message = "Bootstrap completed without a dynamic destination.",
+                        message = "Splash bootstrap completed without a dynamic destination.",
                     ),
                 )
             } else {
@@ -126,60 +127,9 @@ fun CarBrozApp() {
             )
             is DynamicDestination -> {
                 LaunchedEffect(destination.navigationId) { dynamicStore.show(destination) }
-                DynamicScreenContent(dynamicState, dynamicRuntime, dynamicStore)
+                DynamicScreen(dynamicState, dynamicRuntime, dynamicStore)
             }
             else -> UnsupportedDestination(destination.navigationId)
-        }
-    }
-}
-
-@Composable
-private fun DynamicScreenContent(
-    state: DynamicScreenState,
-    runtime: DynamicSduiRuntime,
-    store: DynamicSduiStore,
-) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        when {
-            state.loading && state.screen == null -> CircularProgressIndicator()
-            state.failure != null -> Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("Unable to load dynamic screen")
-                Text(state.failure.toString(), style = MaterialTheme.typography.bodySmall)
-                Button(onClick = store::retry) { Text("Retry") }
-            }
-            state.screen != null -> DynamicScreenHost(
-                screen = state.screen,
-                dispatcher = runtime.renderer,
-                onCommand = store::onCommand,
-                onRenderFailure = { store.onRenderFailure(it.toString()) },
-                values = store.renderValues,
-            )
-        }
-
-        if (state.actionInFlight) CircularProgressIndicator()
-        state.presentation?.let { DynamicPresentationHost(it, store::dismissPresentation) }
-    }
-}
-
-@Composable
-private fun DynamicPresentationHost(
-    presentation: DynamicPresentationState,
-    onDismiss: () -> Unit,
-) {
-    val message = (presentation.properties["message"] as? JsonPrimitive)?.content ?: presentation.id
-    Surface(
-        modifier = Modifier.padding(24.dp).widthIn(max = 480.dp),
-        tonalElevation = 6.dp,
-        shadowElevation = 6.dp,
-    ) {
-        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(presentation.kind.name, style = MaterialTheme.typography.labelMedium)
-            Text(message, style = MaterialTheme.typography.bodyLarge)
-            Button(onClick = onDismiss) { Text("Dismiss") }
         }
     }
 }
