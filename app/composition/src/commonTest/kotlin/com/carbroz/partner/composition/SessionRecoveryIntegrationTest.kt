@@ -99,7 +99,10 @@ class SessionRecoveryIntegrationTest {
         assertIs<NetworkResult.Success>(result)
         assertEquals(2, protectedCalls)
         assertEquals(1, refreshCalls)
-        assertEquals(listOf("Bearer old-access", "Bearer new-access"), seenAuthorization)
+        assertEquals<List<String?>>(
+            listOf("Bearer old-access", "Bearer new-access"),
+            seenAuthorization,
+        )
 
         val current = assertIs<SessionState.Authenticated>(store.current())
         assertEquals("new-access", current.tokens.accessToken.reveal())
