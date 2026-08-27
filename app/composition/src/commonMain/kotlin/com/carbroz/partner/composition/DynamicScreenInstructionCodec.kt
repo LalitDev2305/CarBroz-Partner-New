@@ -6,6 +6,7 @@ import com.carbroz.runtime.sdui.model.RequestMethod
 import com.carbroz.runtime.sdui.model.ScreenDestination
 import com.carbroz.runtime.sdui.model.ScreenTransition
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
