@@ -188,7 +188,7 @@ fun carBrozApplicationModule(
     single<DynamicBindingContextFactory> {
         DefaultDynamicBindingContextFactory(sessionProvider = get(), configurationProvider = get())
     }
-    single<DynamicFormStoreFactory> { CoreDynamicFormStoreFactory }
+    single<DynamicFormStoreFactory> { CoreDynamicFormStoreFactory(get<DynamicSduiRuntime>().registry) }
     single { DynamicScreenCache() }
     single { DynamicRealtimeEventDecoder(instructionCodec = get()) }
     single { DynamicRealtimeCoordinator(decoder = get()) }
