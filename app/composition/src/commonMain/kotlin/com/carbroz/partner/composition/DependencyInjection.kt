@@ -7,6 +7,7 @@ import com.carbroz.data.database.RoomDatabaseHealthCheck
 import com.carbroz.data.network.ExecutorNetworkDataSource
 import com.carbroz.data.network.InMemoryNetworkResponseCache
 import com.carbroz.data.network.KtorNetworkTransport
+import com.carbroz.data.network.NetworkAuthenticationRecovery
 import com.carbroz.data.network.NetworkAuthorizationProvider
 import com.carbroz.data.network.NetworkConnectivityObserver
 import com.carbroz.data.network.NetworkConnectivityProvider
@@ -18,6 +19,7 @@ import com.carbroz.data.network.NetworkRequestId
 import com.carbroz.data.network.NetworkRequestIdProvider
 import com.carbroz.data.network.NetworkResponseCache
 import com.carbroz.data.network.NetworkTransport
+import com.carbroz.data.network.SessionNetworkAuthenticationRecovery
 import com.carbroz.data.network.SessionNetworkAuthorizationProvider
 import com.carbroz.data.network.createKtorNetworkTransport
 import com.carbroz.data.preferences.PreferenceStore
@@ -71,9 +73,12 @@ import com.carbroz.foundation.session.JsonSessionSnapshotCodec
 import com.carbroz.foundation.session.SecureSessionPersistence
 import com.carbroz.foundation.session.SessionPersistence
 import com.carbroz.foundation.session.SessionProvider
+import com.carbroz.foundation.session.SessionRefreshCoordinator
 import com.carbroz.foundation.session.SessionSnapshotCodec
 import com.carbroz.foundation.session.SessionStore
+import com.carbroz.foundation.session.SingleFlightTokenRefresher
 import com.carbroz.foundation.session.TokenExpiryPolicy
+import com.carbroz.foundation.session.TokenRefresher
 import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
 import com.carbroz.platform.background.BackgroundScheduler
@@ -89,6 +94,8 @@ import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.SduiRuntimeFactory
 import com.carbroz.runtime.sdui.compatibility.SduiClientCompatibility
 import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -175,6 +182,27 @@ fun carBrozApplicationModule(
     single { createKtorNetworkTransport() }
     single<NetworkTransport> { get<KtorNetworkTransport>() }
     single<NetworkAuthorizationProvider> { SessionNetworkAuthorizationProvider(sessionProvider = get()) }
+
+    single<CoroutineScope> { CoroutineScope(SupervisorJob()) }
+    single<TokenRefresher> {
+        SingleFlightTokenRefresher(
+            delegate = CarBrozTokenRefresher(
+                environment = get(),
+                transport = get(),
+                clock = get(),
+            ),
+            scope = get(),
+        )
+    }
+    single {
+        SessionRefreshCoordinator(
+            sessionStore = get(),
+            expiryPolicy = get(),
+            tokenRefresher = get(),
+        )
+    }
+    single<NetworkAuthenticationRecovery> { SessionNetworkAuthenticationRecovery(coordinator = get()) }
+
     single<NetworkResponseCache> { InMemoryNetworkResponseCache() }
     single<NetworkRequestIdProvider> {
         val correlationIds = get<CorrelationIdProvider>()
@@ -185,6 +213,7 @@ fun carBrozApplicationModule(
             environment = get(),
             transport = get(),
             authorizationProvider = get(),
+            authenticationRecovery = get(),
             connectivityProvider = get(),
             requestIdProvider = get(),
             responseCache = get(),
