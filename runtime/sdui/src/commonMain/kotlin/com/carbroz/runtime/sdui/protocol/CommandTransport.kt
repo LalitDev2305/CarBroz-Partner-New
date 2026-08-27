@@ -4,32 +4,28 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-/**
- * Untrusted command instruction attached to an interactive Element.
- *
- * Wire contracts intentionally expose only semantic server intent. Runtime dispatch,
- * binding resolution, networking, navigation and MVI orchestration stay client-owned.
- */
+/** Untrusted semantic command instruction attached to an interactive Element. */
 @Serializable
 sealed interface CommandDto
 
 /**
- * Acquires the next SDUI screen from a trusted endpoint.
- *
- * Destination metadata is declared before execution so compatibility can be checked
- * before the request and the returned screen can be verified against the requested
- * destination contract. [templateType] selects the registered template definition;
- * [screenId] and [templateId] are destination identity, not hard-coded screen routing.
+ * Trusted request intent is normalized from this wire DTO. A request may either return another
+ * dynamic screen or complete without a screen transition. Business screen names never appear here.
  */
 @Serializable
 @SerialName("REQUEST")
 data class RequestCommandDto(
     val method: String,
     val endpoint: String,
-    val screenId: String,
-    val templateId: String,
-    val templateType: String,
+    val screenId: String? = null,
+    val templateId: String? = null,
+    val templateType: String? = null,
     val payload: JsonObject = JsonObject(emptyMap()),
+    val authentication: String = "SESSION",
+    val responseMode: String = "SCREEN",
+    val transition: String = "PUSH",
+    val backStackKey: String? = null,
+    val validateForm: Boolean = true,
 ) : CommandDto
 
 /** Semantic platform capability request. Platform APIs and provider selection stay client-owned. */
@@ -39,4 +35,36 @@ data class CapabilityCommandDto(
     val capability: String,
     val operation: String,
     val arguments: JsonObject = JsonObject(emptyMap()),
+) : CommandDto
+
+/** Back-stack operation that requires no network request. */
+@Serializable
+@SerialName("NAVIGATION")
+data class NavigationCommandDto(
+    val operation: String,
+    val targetNavigationId: String? = null,
+) : CommandDto
+
+/** Generic presentation effect; application composition decides how it is displayed. */
+@Serializable
+@SerialName("PRESENTATION")
+data class PresentationCommandDto(
+    val operation: String,
+    val presentationKind: String,
+    val id: String,
+    val properties: JsonObject = JsonObject(emptyMap()),
+) : CommandDto
+
+/** Screen-runtime local state mutation. */
+@Serializable
+@SerialName("LOCAL_STATE")
+data class LocalStateCommandDto(
+    val values: JsonObject,
+) : CommandDto
+
+/** Generic form operation owned by runtime:form. */
+@Serializable
+@SerialName("FORM")
+data class FormCommandDto(
+    val operation: String,
 ) : CommandDto
