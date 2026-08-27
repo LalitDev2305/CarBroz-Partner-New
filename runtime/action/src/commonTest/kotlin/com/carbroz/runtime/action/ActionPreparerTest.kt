@@ -126,6 +126,6 @@ class ActionPreparerTest {
         method = RequestMethod.POST,
         endpoint = "/api/v1/action",
         destination = ScreenDestination("next-screen", "form-template", NodeType("FORM_TEMPLATE")),
-        payload = mapOf("value" to JsonPrimitive("$form.value")),
+        payload = mapOf("value" to JsonPrimitive("\$form.value")),
     )
 }
