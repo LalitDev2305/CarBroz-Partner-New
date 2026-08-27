@@ -7,5 +7,9 @@ object CoreActionDefinitions {
     val all: List<ActionDefinition> = listOf(
         RequestActionDefinition(),
         CapabilityActionDefinition(),
+        NavigationActionDefinition(),
+        PresentationActionDefinition(),
+        LocalStateActionDefinition(),
+        FormActionDefinition(),
     )
 }
