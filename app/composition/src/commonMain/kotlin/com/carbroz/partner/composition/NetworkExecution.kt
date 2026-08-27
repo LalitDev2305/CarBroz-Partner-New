@@ -32,5 +32,6 @@ class NetworkActionExecutor(private val dataSource: NetworkDataSource) {
     private fun RequestAuthentication.toNetworkAuthentication(): NetworkAuthentication = when (this) {
         RequestAuthentication.NONE -> NetworkAuthentication.NONE
         RequestAuthentication.SESSION -> NetworkAuthentication.SESSION
+        RequestAuthentication.OPTIONAL_SESSION -> NetworkAuthentication.OPTIONAL_SESSION
     }
 }
