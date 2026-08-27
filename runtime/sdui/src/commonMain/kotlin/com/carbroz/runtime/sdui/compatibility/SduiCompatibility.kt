@@ -2,9 +2,12 @@ package com.carbroz.runtime.sdui.compatibility
 
 import com.carbroz.runtime.sdui.model.NodeKind
 import com.carbroz.runtime.sdui.model.NodeType
+import com.carbroz.runtime.sdui.protocol.CommandDto
+import com.carbroz.runtime.sdui.protocol.ConditionalCommandDto
 import com.carbroz.runtime.sdui.protocol.ElementDto
 import com.carbroz.runtime.sdui.protocol.RequestCommandDto
 import com.carbroz.runtime.sdui.protocol.SduiEnvelopeDto
+import com.carbroz.runtime.sdui.protocol.SequenceCommandDto
 import com.carbroz.runtime.sdui.registry.SduiRegistry
 
 data class SduiClientCompatibility(
@@ -69,15 +72,27 @@ class SduiCompatibilityPolicy(
 
     private fun requestCommands(envelope: SduiEnvelopeDto): List<RequestCommandDto> = buildList {
         envelope.screen.template.components.forEach { component ->
-            addRequestCommands(component.elements)
+            collectFrom(component.elements)
             component.sections.forEach { section ->
-                addRequestCommands(section.elements)
-                section.groups.forEach { group -> addRequestCommands(group.elements) }
+                collectFrom(section.elements)
+                section.groups.forEach { group -> collectFrom(group.elements) }
             }
         }
     }
 
-    private fun MutableList<RequestCommandDto>.addRequestCommands(elements: List<ElementDto>) {
-        elements.forEach { element -> (element.command as? RequestCommandDto)?.let(::add) }
+    private fun MutableList<RequestCommandDto>.collectFrom(elements: List<ElementDto>) {
+        elements.forEach { element -> element.command?.let { collectCommand(it) } }
+    }
+
+    private fun MutableList<RequestCommandDto>.collectCommand(command: CommandDto) {
+        when (command) {
+            is RequestCommandDto -> add(command)
+            is SequenceCommandDto -> command.commands.forEach(::collectCommand)
+            is ConditionalCommandDto -> {
+                collectCommand(command.whenTrue)
+                command.whenFalse?.let(::collectCommand)
+            }
+            else -> Unit
+        }
     }
 }
