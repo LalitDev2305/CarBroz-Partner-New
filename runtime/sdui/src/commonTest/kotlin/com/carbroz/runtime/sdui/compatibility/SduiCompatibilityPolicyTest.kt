@@ -9,6 +9,7 @@ import com.carbroz.runtime.sdui.protocol.ComponentDto
 import com.carbroz.runtime.sdui.protocol.ElementDto
 import com.carbroz.runtime.sdui.protocol.RequestCommandDto
 import com.carbroz.runtime.sdui.protocol.ScreenDto
+import com.carbroz.runtime.sdui.protocol.SequenceCommandDto
 import com.carbroz.runtime.sdui.protocol.SduiEnvelopeDto
 import com.carbroz.runtime.sdui.protocol.TemplateDto
 import com.carbroz.runtime.sdui.registry.SduiRegistryBuilder
@@ -20,22 +21,16 @@ import kotlin.test.assertIs
 class SduiCompatibilityPolicyTest {
     @Test
     fun compatibleEnvelopePassesAllChecks() {
-        val result = policy().evaluate(envelope())
-        assertEquals(SduiCompatibilityResult.Compatible, result)
+        assertEquals(SduiCompatibilityResult.Compatible, policy().evaluate(envelope()))
     }
 
     @Test
     fun rejectsUnsupportedProtocolSchemaAndOldClient() {
         val result = assertIs<SduiCompatibilityResult.Incompatible>(
             policy(clientVersion = 3).evaluate(
-                envelope(
-                    protocolVersion = 4,
-                    schemaVersion = 5,
-                    minimumClientVersion = 4,
-                ),
+                envelope(protocolVersion = 4, schemaVersion = 5, minimumClientVersion = 4),
             ),
         )
-
         assertEquals(
             listOf(
                 SduiCompatibilityIssue.ClientTooOld(4, 3),
@@ -56,7 +51,6 @@ class SduiCompatibilityPolicyTest {
                 ),
             ),
         )
-
         assertEquals(
             listOf(
                 SduiCompatibilityIssue.UnsupportedRequiredDefinition("UNKNOWN_ELEMENT"),
@@ -71,7 +65,48 @@ class SduiCompatibilityPolicyTest {
         val result = assertIs<SduiCompatibilityResult.Incompatible>(
             policy(registerDestinationTemplate = false).evaluate(envelope()),
         )
+        assertEquals(
+            listOf(SduiCompatibilityIssue.UnsupportedRequestDestinationTemplate("FORM_TEMPLATE")),
+            result.issues,
+        )
+    }
 
+    @Test
+    fun noScreenRequestHasNoDestinationTemplateCompatibilityRequirement() {
+        val result = policy(registerDestinationTemplate = false).evaluate(
+            envelope(
+                command = RequestCommandDto(
+                    method = "POST",
+                    endpoint = "/state",
+                    responseMode = "NONE",
+                    screenId = null,
+                    templateId = null,
+                    templateType = null,
+                ),
+            ),
+        )
+        assertEquals(SduiCompatibilityResult.Compatible, result)
+    }
+
+    @Test
+    fun requestInsideSequenceIsStillCompatibilityChecked() {
+        val result = assertIs<SduiCompatibilityResult.Incompatible>(
+            policy(registerDestinationTemplate = false).evaluate(
+                envelope(
+                    command = SequenceCommandDto(
+                        listOf(
+                            RequestCommandDto(
+                                method = "POST",
+                                endpoint = "/next",
+                                screenId = "next",
+                                templateId = "next-template",
+                                templateType = "FORM_TEMPLATE",
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
         assertEquals(
             listOf(SduiCompatibilityIssue.UnsupportedRequestDestinationTemplate("FORM_TEMPLATE")),
             result.issues,
@@ -84,6 +119,13 @@ class SduiCompatibilityPolicyTest {
         minimumClientVersion: Int = 1,
         requiredDefinitions: Set<String> = emptySet(),
         requiredCapabilities: Set<String> = emptySet(),
+        command: com.carbroz.runtime.sdui.protocol.CommandDto = RequestCommandDto(
+            method = "POST",
+            endpoint = "/auth/send-otp",
+            screenId = "otp",
+            templateId = "auth_otp",
+            templateType = "FORM_TEMPLATE",
+        ),
     ) = SduiEnvelopeDto(
         protocolVersion = protocolVersion,
         schemaVersion = schemaVersion,
@@ -100,19 +142,7 @@ class SduiCompatibilityPolicyTest {
                     ComponentDto(
                         id = "form",
                         type = "FORM_COMPONENT",
-                        elements = listOf(
-                            ElementDto(
-                                id = "continue",
-                                type = "BUTTON",
-                                command = RequestCommandDto(
-                                    method = "POST",
-                                    endpoint = "/auth/send-otp",
-                                    screenId = "otp",
-                                    templateId = "auth_otp",
-                                    templateType = "FORM_TEMPLATE",
-                                ),
-                            ),
-                        ),
+                        elements = listOf(ElementDto(id = "continue", type = "BUTTON", command = command)),
                     ),
                 ),
             ),
@@ -125,13 +155,10 @@ class SduiCompatibilityPolicyTest {
     ): SduiCompatibilityPolicy {
         val registry = SduiRegistryBuilder().apply {
             register(TestDefinition(NodeKind.TEMPLATE, "AUTH_TEMPLATE"))
-            if (registerDestinationTemplate) {
-                register(TestDefinition(NodeKind.TEMPLATE, "FORM_TEMPLATE"))
-            }
+            if (registerDestinationTemplate) register(TestDefinition(NodeKind.TEMPLATE, "FORM_TEMPLATE"))
             register(TestDefinition(NodeKind.COMPONENT, "FORM_COMPONENT"))
             register(TestDefinition(NodeKind.ELEMENT, "BUTTON"))
         }.build()
-
         return SduiCompatibilityPolicy(
             client = SduiClientCompatibility(
                 clientVersion = clientVersion,
@@ -148,7 +175,6 @@ class SduiCompatibilityPolicyTest {
         type: String,
     ) : SduiDefinition<EmptyNodeProperties> {
         override val type: NodeType = NodeType(type)
-
         override fun decodeProperties(raw: JsonObject): PropertyDecodeResult<EmptyNodeProperties> =
             PropertyDecodeResult.Success(EmptyNodeProperties)
     }
