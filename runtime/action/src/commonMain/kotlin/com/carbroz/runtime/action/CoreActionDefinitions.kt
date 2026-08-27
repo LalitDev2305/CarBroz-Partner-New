@@ -13,3 +13,12 @@ object CoreActionDefinitions {
         BackgroundActionDefinition(),
     )
 }
+
+/** Canonical core action preparation assembly owned by runtime:action. */
+object ActionPreparerFactory {
+    fun createCore(): ActionPreparer = ActionPreparer(
+        ActionRegistry.builder()
+            .registerAll(CoreActionDefinitions.all)
+            .build(),
+    )
+}
