@@ -14,11 +14,11 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Immutable execution snapshot used to build binding sources for one activated command. */
 data class DynamicBindingSnapshot(
     val screen: Screen?,
     val form: FormStore?,
     val event: SduiRenderEvent?,
+    val externalEvent: JsonElement?,
     val result: JsonElement?,
     val runtimeValues: Map<String, JsonElement>,
     val navigationId: String?,
@@ -28,10 +28,6 @@ fun interface DynamicBindingContextFactory {
     suspend fun create(snapshot: DynamicBindingSnapshot): BindingContext
 }
 
-/**
- * Canonical binding composition. Tokens/secrets are deliberately excluded from SESSION bindings.
- * Every source is read at command-execution time so payload resolution never uses stale snapshots.
- */
 class DefaultDynamicBindingContextFactory(
     private val sessionProvider: SessionProvider,
     private val configurationProvider: ConfigurationProvider,
@@ -51,7 +47,8 @@ class DefaultDynamicBindingContextFactory(
                 ),
             )
         })
-        snapshot.event?.let { sources += BindingNamespace.EVENT to jsonSource(it.toBindingJson()) }
+        val event = snapshot.event?.toBindingJson() ?: snapshot.externalEvent
+        event?.let { sources += BindingNamespace.EVENT to jsonSource(it) }
         snapshot.result?.let { sources += BindingNamespace.RESULT to jsonSource(it) }
         sources += BindingNamespace.RUNTIME to jsonSource(
             JsonObject(
@@ -89,23 +86,19 @@ class DefaultDynamicBindingContextFactory(
 
     private fun SduiRenderEvent.toBindingJson(): JsonObject = when (this) {
         is SduiRenderEvent.Activated -> JsonObject(
-            mapOf(
-                "type" to JsonPrimitive("ACTIVATED"),
-                "path" to JsonPrimitive(path.toString()),
-            ),
+            mapOf("type" to JsonPrimitive("ACTIVATED"), "path" to JsonPrimitive(path.toString())),
         )
         is SduiRenderEvent.ValueChanged -> JsonObject(
-            mapOf(
-                "type" to JsonPrimitive("VALUE_CHANGED"),
-                "path" to JsonPrimitive(path.toString()),
-                "value" to JsonPrimitive(value),
-            ),
+            buildMap {
+                put("type", JsonPrimitive("VALUE_CHANGED"))
+                put("path", JsonPrimitive(path.toString()))
+                put("value", JsonPrimitive(value))
+                fieldId?.let { put("fieldId", JsonPrimitive(it)) }
+            },
         )
     }
 
     private fun jsonSource(root: JsonElement): BindingValueSource = BindingValueSource { path ->
-        path.fold(root as JsonElement?) { current, segment ->
-            (current as? JsonObject)?.get(segment)
-        }
+        path.fold(root as JsonElement?) { current, segment -> (current as? JsonObject)?.get(segment) }
     }
 }
