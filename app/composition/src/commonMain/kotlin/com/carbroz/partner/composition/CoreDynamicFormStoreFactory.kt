@@ -5,49 +5,37 @@ import com.carbroz.runtime.form.FormFieldId
 import com.carbroz.runtime.form.FormStore
 import com.carbroz.runtime.form.FormValidationError
 import com.carbroz.runtime.form.FormValidator
-import com.carbroz.runtime.sdui.element.input.InputElementProperties
-import com.carbroz.runtime.sdui.model.ComponentContent
-import com.carbroz.runtime.sdui.model.Element
+import com.carbroz.runtime.sdui.extension.FormFieldContributor
+import com.carbroz.runtime.sdui.model.NodeKind
 import com.carbroz.runtime.sdui.model.Screen
-import com.carbroz.runtime.sdui.model.SectionContent
+import com.carbroz.runtime.sdui.model.elements
+import com.carbroz.runtime.sdui.registry.SduiRegistry
 import kotlinx.serialization.json.JsonPrimitive
 
-/** Builds product-neutral form state only from registered generic INPUT elements. */
-object CoreDynamicFormStoreFactory : DynamicFormStoreFactory {
+/** Product-neutral form discovery through registered Element capabilities, never concrete Element property classes. */
+class CoreDynamicFormStoreFactory(
+    private val registry: SduiRegistry,
+) : DynamicFormStoreFactory {
     override fun create(screen: Screen): FormStore? {
         val definitions = screen.elements().mapNotNull { element ->
-            val properties = element.properties as? InputElementProperties ?: return@mapNotNull null
+            val contributor = registry.find(NodeKind.ELEMENT, element.type) as? FormFieldContributor
+                ?: return@mapNotNull null
+            val contribution = contributor.formFieldContribution(element.properties) ?: return@mapNotNull null
             FormFieldDefinition(
-                id = FormFieldId(properties.fieldId),
-                initialValue = JsonPrimitive(properties.initialValue),
-                validators = if (properties.required) listOf(requiredValidator) else emptyList(),
+                id = FormFieldId(contribution.fieldId),
+                initialValue = contribution.initialValue,
+                validators = if (contribution.required) listOf(requiredValidator) else emptyList(),
             )
         }.toList()
+
+        require(definitions.map { it.id }.distinct().size == definitions.size) {
+            "Duplicate form fieldId detected in normalized SDUI screen"
+        }
         return definitions.takeIf { it.isNotEmpty() }?.let(::FormStore)
     }
 
     private val requiredValidator = FormValidator { value, _ ->
         val content = (value as? JsonPrimitive)?.content.orEmpty()
         if (content.isBlank()) listOf(FormValidationError("required")) else emptyList()
-    }
-
-    private fun Screen.elements(): Sequence<Element> = sequence {
-        for (component in template.components) {
-            when (val content = component.content) {
-                is ComponentContent.Elements -> yieldAll(content.values)
-                is ComponentContent.Sections -> {
-                    for (section in content.values) {
-                        when (val sectionContent = section.content) {
-                            is SectionContent.Elements -> yieldAll(sectionContent.values)
-                            is SectionContent.Groups -> {
-                                for (group in sectionContent.values) {
-                                    yieldAll(group.elements)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
