@@ -2,7 +2,6 @@ package com.carbroz.feature.splash
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -42,10 +42,7 @@ private val SplashCyan = Color(0xFFE7F8F8)
 private val SplashInk = Color(0xFF101522)
 private val SplashBody = Color(0xFF565A62)
 
-/**
- * Native process-entry UI. No backend screen composition is encoded here; only startup branding and
- * startup-critical blocked/error states are rendered before the SDUI runtime becomes the screen owner.
- */
+/** Native process-entry UI. Backend screen composition starts only after this feature completes. */
 @Composable
 fun SplashScreen(
     state: SplashState,
@@ -55,45 +52,30 @@ fun SplashScreen(
 ) {
     Box(modifier = modifier.fillMaxSize().background(Color.White)) {
         SplashBackground(Modifier.fillMaxSize())
-
         Column(
             modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxWidth()
                 .widthIn(max = 520.dp)
-                .padding(horizontal = 28.dp, vertical = 28.dp),
+                .padding(horizontal = 28.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(Modifier.weight(0.16f))
-
-            CarWashMark(Modifier.size(width = 128.dp, height = 94.dp))
-            Spacer(Modifier.height(12.dp))
+            CarWashMark(Modifier.size(width = 128.dp, height = 92.dp))
+            Spacer(Modifier.height(8.dp))
             BrandWordmark()
-            Spacer(Modifier.height(4.dp))
             PartnerWordmark()
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             Text(
                 text = "Premium Car Care\nAt Your Doorstep",
                 color = SplashBody,
-                fontSize = 21.sp,
-                lineHeight = 29.sp,
-                fontWeight = FontWeight.Normal,
+                fontSize = 20.sp,
+                lineHeight = 28.sp,
                 textAlign = TextAlign.Center,
             )
-
-            Spacer(Modifier.height(14.dp))
-            PartnerCarArtwork(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .aspectRatio(1.55f),
-            )
-            Spacer(Modifier.weight(0.18f))
-
-            StartupStatus(
-                state = state,
-                onRetry = onRetry,
-                onUpdateRequested = onUpdateRequested,
-            )
+            Spacer(Modifier.height(10.dp))
+            PartnerCarArtwork(Modifier.fillMaxWidth(0.92f).aspectRatio(1.72f))
+            Spacer(Modifier.height(18.dp))
+            StartupStatus(state, onRetry, onUpdateRequested)
         }
     }
 }
@@ -114,14 +96,12 @@ private fun StartupStatus(
                 onAction = update?.storeUrl?.let { url -> { onUpdateRequested(url) } },
             )
         }
-
         SplashPhase.MAINTENANCE -> StartupBlockingCard(
             title = state.statusTitle,
             message = state.statusMessage,
             actionLabel = "Try again",
             onAction = onRetry,
         )
-
         SplashPhase.FAILED -> StartupBlockingCard(
             title = state.statusTitle,
             message = if (state.failure?.failure?.recoverable == true) {
@@ -132,26 +112,25 @@ private fun StartupStatus(
             actionLabel = "Retry",
             onAction = if (state.failure?.failure?.recoverable == true) onRetry else null,
         )
-
         else -> {
             LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth(0.78f).height(6.dp),
                 color = SplashTeal,
                 trackColor = SplashTealLight.copy(alpha = 0.48f),
             )
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             Text(
                 text = state.statusTitle,
                 color = SplashTeal,
-                fontSize = 22.sp,
+                fontSize = 21.sp,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = state.statusMessage,
                 color = SplashBody,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 textAlign = TextAlign.Center,
             )
         }
@@ -167,12 +146,12 @@ private fun StartupBlockingCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = Color.White.copy(alpha = 0.94f),
+        color = Color.White.copy(alpha = 0.95f),
         shape = RoundedCornerShape(24.dp),
         shadowElevation = 5.dp,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 22.dp, vertical = 20.dp),
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -182,7 +161,7 @@ private fun StartupBlockingCard(
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(7.dp))
             Text(
                 text = message,
                 color = SplashBody,
@@ -190,7 +169,7 @@ private fun StartupBlockingCard(
                 textAlign = TextAlign.Center,
             )
             if (onAction != null) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(14.dp))
                 Button(
                     onClick = onAction,
                     colors = ButtonDefaults.buttonColors(containerColor = SplashTeal),
@@ -206,36 +185,19 @@ private fun StartupBlockingCard(
 @Composable
 private fun BrandWordmark() {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = "Car",
-            color = SplashInk,
-            fontSize = 52.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = (-2).sp,
-        )
-        Text(
-            text = "Broz",
-            color = SplashTeal,
-            fontSize = 52.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = (-2).sp,
-        )
+        Text("Car", color = SplashInk, fontSize = 50.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp)
+        Text("Broz", color = SplashTeal, fontSize = 50.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp)
     }
 }
 
 @Composable
 private fun PartnerWordmark() {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.width(56.dp).height(2.dp)) { drawRect(SplashTeal) }
-        Spacer(Modifier.width(14.dp))
-        Text(
-            text = "P A R T N E R",
-            color = SplashTeal,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.width(14.dp))
-        Canvas(Modifier.width(56.dp).height(2.dp)) { drawRect(SplashTeal) }
+        Canvas(Modifier.width(54.dp).height(2.dp)) { drawRect(SplashTeal) }
+        Spacer(Modifier.width(13.dp))
+        Text("P A R T N E R", color = SplashTeal, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(13.dp))
+        Canvas(Modifier.width(54.dp).height(2.dp)) { drawRect(SplashTeal) }
     }
 }
 
@@ -244,61 +206,49 @@ private fun SplashBackground(modifier: Modifier = Modifier) {
     Canvas(modifier) {
         drawRect(
             brush = Brush.linearGradient(
-                colors = listOf(Color.White, SplashCyan.copy(alpha = 0.62f), Color.White),
+                colors = listOf(Color.White, SplashCyan.copy(alpha = 0.66f), Color.White),
                 start = Offset.Zero,
                 end = Offset(size.width, size.height),
             ),
         )
-
+        drawCircle(SplashCyan.copy(alpha = 0.95f), size.minDimension * 0.22f, Offset.Zero)
         drawCircle(
-            color = SplashCyan.copy(alpha = 0.92f),
-            radius = size.minDimension * 0.22f,
-            center = Offset(0f, 0f),
-        )
-        drawCircle(
-            color = SplashTealLight.copy(alpha = 0.32f),
-            radius = size.minDimension * 0.11f,
-            center = Offset(size.width, size.height * 0.20f),
+            SplashTealLight.copy(alpha = 0.32f),
+            size.minDimension * 0.11f,
+            Offset(size.width, size.height * 0.20f),
         )
 
         val lowerWave = Path().apply {
-            moveTo(0f, size.height * 0.56f)
+            moveTo(0f, size.height * 0.57f)
             cubicTo(
-                size.width * 0.24f,
-                size.height * 0.63f,
-                size.width * 0.31f,
-                size.height * 0.80f,
-                size.width * 0.58f,
-                size.height * 0.70f,
+                size.width * 0.22f, size.height * 0.63f,
+                size.width * 0.33f, size.height * 0.79f,
+                size.width * 0.58f, size.height * 0.70f,
             )
             cubicTo(
-                size.width * 0.79f,
-                size.height * 0.62f,
-                size.width * 0.88f,
-                size.height * 0.48f,
-                size.width,
-                size.height * 0.39f,
+                size.width * 0.80f, size.height * 0.62f,
+                size.width * 0.88f, size.height * 0.48f,
+                size.width, size.height * 0.39f,
             )
             lineTo(size.width, size.height)
             lineTo(0f, size.height)
             close()
         }
         drawPath(
-            path = lowerWave,
-            brush = Brush.linearGradient(
-                listOf(SplashTealLight.copy(alpha = 0.52f), SplashCyan.copy(alpha = 0.58f), Color.White),
-                start = Offset(0f, size.height * 0.64f),
-                end = Offset(size.width, size.height),
+            lowerWave,
+            Brush.linearGradient(
+                listOf(SplashTealLight.copy(alpha = 0.55f), SplashCyan.copy(alpha = 0.60f), Color.White),
+                Offset(0f, size.height * 0.63f),
+                Offset(size.width, size.height),
             ),
         )
-
         listOf(
             Offset(size.width * 0.12f, size.height * 0.28f) to size.minDimension * 0.025f,
             Offset(size.width * 0.88f, size.height * 0.51f) to size.minDimension * 0.025f,
             Offset(size.width * 0.09f, size.height * 0.63f) to size.minDimension * 0.016f,
         ).forEach { (center, radius) ->
             drawCircle(SplashTeal.copy(alpha = 0.20f), radius, center)
-            drawCircle(SplashTealLight.copy(alpha = 0.32f), radius * 0.62f, center + Offset(radius * 0.45f, -radius * 0.35f))
+            drawCircle(SplashTealLight.copy(alpha = 0.34f), radius * 0.62f, center + Offset(radius * 0.4f, -radius * 0.3f))
         }
     }
 }
@@ -306,44 +256,26 @@ private fun SplashBackground(modifier: Modifier = Modifier) {
 @Composable
 private fun CarWashMark(modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        val bodyTop = size.height * 0.52f
-        val bodyHeight = size.height * 0.31f
+        val bodyTop = size.height * 0.53f
         drawRoundRect(
             color = SplashTeal,
             topLeft = Offset(size.width * 0.17f, bodyTop),
-            size = Size(size.width * 0.66f, bodyHeight),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * 0.09f),
+            size = Size(size.width * 0.66f, size.height * 0.30f),
+            cornerRadius = CornerRadius(size.height * 0.09f),
         )
-        drawRoundRect(
-            color = Color.White,
-            topLeft = Offset(size.width * 0.25f, size.height * 0.59f),
-            size = Size(size.width * 0.12f, size.height * 0.055f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * 0.02f),
-        )
-        drawRoundRect(
-            color = Color.White,
-            topLeft = Offset(size.width * 0.63f, size.height * 0.59f),
-            size = Size(size.width * 0.12f, size.height * 0.055f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * 0.02f),
-        )
-        drawRoundRect(
-            color = Color.White,
-            topLeft = Offset(size.width * 0.41f, size.height * 0.72f),
-            size = Size(size.width * 0.18f, size.height * 0.025f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * 0.01f),
-        )
+        drawRoundRect(Color.White, Offset(size.width * 0.24f, size.height * 0.61f), Size(size.width * 0.12f, size.height * 0.05f), CornerRadius(size.height * 0.02f))
+        drawRoundRect(Color.White, Offset(size.width * 0.64f, size.height * 0.61f), Size(size.width * 0.12f, size.height * 0.05f), CornerRadius(size.height * 0.02f))
+        drawRoundRect(Color.White, Offset(size.width * 0.41f, size.height * 0.73f), Size(size.width * 0.18f, size.height * 0.025f), CornerRadius(size.height * 0.01f))
 
-        val foam = listOf(
+        listOf(
             Offset(size.width * 0.35f, size.height * 0.43f) to size.height * 0.16f,
-            Offset(size.width * 0.49f, size.height * 0.33f) to size.height * 0.20f,
-            Offset(size.width * 0.63f, size.height * 0.42f) to size.height * 0.15f,
-        )
-        foam.forEach { (center, radius) ->
+            Offset(size.width * 0.49f, size.height * 0.34f) to size.height * 0.20f,
+            Offset(size.width * 0.63f, size.height * 0.43f) to size.height * 0.15f,
+        ).forEach { (center, radius) ->
             drawCircle(Color.White, radius, center)
-            drawCircle(SplashTeal, radius, center, style = Stroke(width = size.height * 0.035f))
+            drawCircle(SplashTeal, radius, center, style = Stroke(size.height * 0.035f))
         }
-        drawRect(Color.White, Offset(size.width * 0.27f, size.height * 0.43f), Size(size.width * 0.46f, size.height * 0.15f))
-
+        drawRect(Color.White, Offset(size.width * 0.27f, size.height * 0.44f), Size(size.width * 0.46f, size.height * 0.14f))
         drawCircle(SplashTeal, size.height * 0.035f, Offset(size.width * 0.18f, size.height * 0.28f))
         drawCircle(SplashTeal, size.height * 0.025f, Offset(size.width * 0.75f, size.height * 0.32f))
         drawCircle(SplashTeal, size.height * 0.020f, Offset(size.width * 0.63f, size.height * 0.16f), style = Stroke(size.height * 0.025f))
@@ -355,11 +287,7 @@ private fun PartnerCarArtwork(modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        drawOval(
-            color = SplashTeal.copy(alpha = 0.13f),
-            topLeft = Offset(w * 0.08f, h * 0.69f),
-            size = Size(w * 0.84f, h * 0.20f),
-        )
+        drawOval(SplashTeal.copy(alpha = 0.14f), Offset(w * 0.08f, h * 0.69f), Size(w * 0.84f, h * 0.20f))
 
         val body = Path().apply {
             moveTo(w * 0.10f, h * 0.61f)
@@ -373,7 +301,7 @@ private fun PartnerCarArtwork(modifier: Modifier = Modifier) {
             close()
         }
         drawPath(body, Color(0xFFF9FCFD))
-        drawPath(body, Color(0xFFB8CFD2), style = Stroke(width = h * 0.012f))
+        drawPath(body, Color(0xFFB8CFD2), style = Stroke(h * 0.012f))
 
         val windows = Path().apply {
             moveTo(w * 0.38f, h * 0.39f)
@@ -384,31 +312,19 @@ private fun PartnerCarArtwork(modifier: Modifier = Modifier) {
         }
         drawPath(
             windows,
-            brush = Brush.linearGradient(
+            Brush.linearGradient(
                 listOf(Color(0xFF12262A), Color(0xFF3D5E63)),
-                start = Offset(w * 0.42f, h * 0.28f),
-                end = Offset(w * 0.75f, h * 0.44f),
+                Offset(w * 0.42f, h * 0.28f),
+                Offset(w * 0.75f, h * 0.44f),
             ),
         )
         drawLine(Color(0xFFAFC7CA), Offset(w * 0.57f, h * 0.27f), Offset(w * 0.56f, h * 0.43f), h * 0.009f)
-
-        drawRoundRect(
-            color = Color(0xFF172126),
-            topLeft = Offset(w * 0.23f, h * 0.57f),
-            size = Size(w * 0.50f, h * 0.12f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(h * 0.025f),
-        )
+        drawRoundRect(Color(0xFF172126), Offset(w * 0.23f, h * 0.57f), Size(w * 0.50f, h * 0.12f), CornerRadius(h * 0.025f))
         repeat(5) { index ->
             val x = w * (0.30f + index * 0.085f)
             drawLine(Color(0xFF516067), Offset(x, h * 0.59f), Offset(x, h * 0.67f), h * 0.006f)
         }
-        drawRoundRect(
-            color = Color(0xFF11171A),
-            topLeft = Offset(w * 0.42f, h * 0.66f),
-            size = Size(w * 0.18f, h * 0.075f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(h * 0.012f),
-        )
-        drawContext.canvas.nativeCanvas.let { /* Keeps artwork platform-neutral; plate text is rendered by geometry. */ }
+        drawRoundRect(Color(0xFF11171A), Offset(w * 0.42f, h * 0.66f), Size(w * 0.18f, h * 0.075f), CornerRadius(h * 0.012f))
         drawLine(SplashTeal, Offset(w * 0.44f, h * 0.70f), Offset(w * 0.58f, h * 0.70f), h * 0.008f)
 
         listOf(w * 0.24f, w * 0.79f).forEach { x ->
@@ -416,18 +332,7 @@ private fun PartnerCarArtwork(modifier: Modifier = Modifier) {
             drawCircle(Color(0xFF607479), h * 0.072f, Offset(x, h * 0.72f))
             drawCircle(Color(0xFF16282B), h * 0.040f, Offset(x, h * 0.72f))
         }
-
-        drawRoundRect(
-            color = Color(0xFFDFFBFA),
-            topLeft = Offset(w * 0.13f, h * 0.53f),
-            size = Size(w * 0.13f, h * 0.055f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(h * 0.02f),
-        )
-        drawRoundRect(
-            color = Color(0xFFDFFBFA),
-            topLeft = Offset(w * 0.75f, h * 0.52f),
-            size = Size(w * 0.12f, h * 0.055f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(h * 0.02f),
-        )
+        drawRoundRect(Color(0xFFDFFBFA), Offset(w * 0.13f, h * 0.53f), Size(w * 0.13f, h * 0.055f), CornerRadius(h * 0.02f))
+        drawRoundRect(Color(0xFFDFFBFA), Offset(w * 0.75f, h * 0.52f), Size(w * 0.12f, h * 0.055f), CornerRadius(h * 0.02f))
     }
 }
