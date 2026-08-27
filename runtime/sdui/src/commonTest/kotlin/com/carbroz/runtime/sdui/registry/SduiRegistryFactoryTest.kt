@@ -52,8 +52,8 @@ class SduiRegistryFactoryTest {
         }.build()
 
         assertTrue(registry.supports(NodeKind.ELEMENT, NodeType("RATING")))
-        val definition = registry.find(NodeKind.ELEMENT, NodeType("RATING")) as RatingElementDefinition
-        val decoded = definition.decodeProperties(JsonObject(mapOf("max" to JsonPrimitive(5))))
+        assertEquals(RatingElementDefinition, registry.find(NodeKind.ELEMENT, NodeType("RATING")))
+        val decoded = RatingElementDefinition.decodeProperties(JsonObject(mapOf("max" to JsonPrimitive(5))))
         assertEquals(5, assertIs<PropertyDecodeResult.Success<RatingProperties>>(decoded).properties.max)
     }
 
