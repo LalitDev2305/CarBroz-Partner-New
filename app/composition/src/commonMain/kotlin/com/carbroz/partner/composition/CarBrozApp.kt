@@ -26,6 +26,7 @@ import com.carbroz.feature.splash.SplashIntent
 import com.carbroz.feature.splash.SplashScreen
 import com.carbroz.feature.splash.SplashStore
 import com.carbroz.foundation.lifecycle.AppLifecycle
+import com.carbroz.foundation.lifecycle.AppLifecycleState
 import com.carbroz.foundation.navigation.NavigationCommand
 import com.carbroz.foundation.navigation.NavigationStore
 import com.carbroz.foundation.observability.Observability
@@ -46,9 +47,11 @@ fun CarBrozApp() {
     val bootstrapDestinations = koinInject<BootstrapDestinationStore>()
     val networkActions = koinInject<NetworkActionExecutor>()
     val capabilityActions = koinInject<CapabilityActionExecutor>()
+    val backgroundActions = koinInject<BackgroundActionExecutor>()
     val dynamicRuntime = koinInject<DynamicSduiRuntime>()
     val bindingContexts = koinInject<DynamicBindingContextFactory>()
     val formStores = koinInject<DynamicFormStoreFactory>()
+    val screenCache = koinInject<DynamicScreenCache>()
     val scope = rememberCoroutineScope()
 
     val splashStore = remember(applicationRuntime, scope) { SplashStore(applicationRuntime, scope) }
@@ -56,9 +59,11 @@ fun CarBrozApp() {
         dynamicRuntime,
         networkActions,
         capabilityActions,
+        backgroundActions,
         navigationStore,
         bindingContexts,
         formStores,
+        screenCache,
         scope,
     ) {
         DynamicSduiStore(
@@ -70,6 +75,8 @@ fun CarBrozApp() {
             navigation = navigationStore,
             bindingContexts = bindingContexts,
             formStores = formStores,
+            backgroundActions = backgroundActions,
+            cache = screenCache,
         )
     }
 
@@ -88,8 +95,11 @@ fun CarBrozApp() {
         }
     }
 
-    LaunchedEffect(lifecycle, splashStore) {
-        lifecycle.state.collectLatest { splashStore.dispatch(SplashIntent.LifecycleChanged(it)) }
+    LaunchedEffect(lifecycle, splashStore, dynamicStore) {
+        lifecycle.state.collectLatest { state ->
+            splashStore.dispatch(SplashIntent.LifecycleChanged(state))
+            if (state == AppLifecycleState.Background) dynamicStore.suspendForBackground()
+        }
     }
     LaunchedEffect(Unit) { splashStore.dispatch(SplashIntent.Start) }
     LaunchedEffect(splashState.isReady) {
@@ -146,6 +156,7 @@ private fun DynamicScreenContent(
                 dispatcher = runtime.renderer,
                 onCommand = store::onCommand,
                 onRenderFailure = { store.onRenderFailure(it.toString()) },
+                values = store.renderValues,
             )
         }
 
@@ -159,17 +170,13 @@ private fun DynamicPresentationHost(
     presentation: DynamicPresentationState,
     onDismiss: () -> Unit,
 ) {
-    val message = (presentation.properties["message"] as? JsonPrimitive)?.content
-        ?: presentation.id
+    val message = (presentation.properties["message"] as? JsonPrimitive)?.content ?: presentation.id
     Surface(
         modifier = Modifier.padding(24.dp).widthIn(max = 480.dp),
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(presentation.kind.name, style = MaterialTheme.typography.labelMedium)
             Text(message, style = MaterialTheme.typography.bodyLarge)
             Button(onClick = onDismiss) { Text("Dismiss") }
