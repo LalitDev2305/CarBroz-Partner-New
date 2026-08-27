@@ -65,11 +65,8 @@ class FormStore(definitions: List<FormFieldDefinition>) {
             if (!currentField.visible || !currentField.enabled || definition.asyncValidators.isEmpty()) continue
 
             mutableState.update { current ->
-                current.copy(
-                    fields = current.fields + (id to current.fields.getValue(id).copy(validating = true)),
-                )
+                current.copy(fields = current.fields + (id to current.fields.getValue(id).copy(validating = true)))
             }
-
             val snapshot = state.value
             val asyncErrors = definition.asyncValidators.flatMap { validator ->
                 validator.validate(snapshot.fields.getValue(id).value, snapshot)
@@ -101,6 +98,13 @@ class FormStore(definitions: List<FormFieldDefinition>) {
 
     fun endSubmission(error: String? = null) {
         mutableState.update { it.copy(submitting = false, submissionError = error) }
+    }
+
+    /** Restores a previously cached runtime form snapshot when definitions still match. */
+    fun restore(snapshot: FormState): Boolean {
+        if (snapshot.fields.keys != definitionsById.keys) return false
+        mutableState.value = validateSync(applyRules(snapshot.copy(submitting = false)))
+        return true
     }
 
     fun reset() {
