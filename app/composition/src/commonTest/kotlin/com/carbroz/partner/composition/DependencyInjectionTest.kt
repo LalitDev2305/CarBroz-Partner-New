@@ -21,6 +21,7 @@ import com.carbroz.data.realtime.RealtimeTransport
 import com.carbroz.feature.dynamic.BackgroundActionExecutor
 import com.carbroz.feature.dynamic.CapabilityActionExecutor
 import com.carbroz.feature.dynamic.DynamicBindingContextFactory
+import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.feature.dynamic.DynamicSduiRuntime
@@ -126,6 +127,7 @@ class DependencyInjectionTest {
             koin.get<DynamicBindingContextFactory>()
             koin.get<FormTemplateRuntimeFactory>()
             koin.get<DynamicScreenCache>()
+            koin.get<DynamicFeatureFactory>()
             koin.get<BootstrapDestinationStore>()
             koin.get<BootstrapConfigurationStartupTask>()
 
