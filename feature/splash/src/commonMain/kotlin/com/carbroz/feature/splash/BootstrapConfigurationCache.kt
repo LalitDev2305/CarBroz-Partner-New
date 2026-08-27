@@ -1,5 +1,6 @@
 package com.carbroz.feature.splash
 
+import com.carbroz.data.preferences.PreferenceKey
 import com.carbroz.data.preferences.PreferenceStore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -17,7 +18,7 @@ class PreferenceBackedBootstrapConfigurationCache(
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) : BootstrapConfigurationCache {
     override suspend fun read(): BootstrapRemoteConfiguration? {
-        val encoded = preferences.getString(KEY) ?: return null
+        val encoded = preferences.get(KEY) ?: return null
         val cached = runCatching { json.decodeFromString<CachedConfiguration>(encoded) }.getOrNull()
         if (cached == null || cached.version.isBlank()) {
             preferences.remove(KEY)
@@ -27,7 +28,7 @@ class PreferenceBackedBootstrapConfigurationCache(
     }
 
     override suspend fun write(configuration: BootstrapRemoteConfiguration) {
-        preferences.putString(
+        preferences.put(
             KEY,
             json.encodeToString(CachedConfiguration(configuration.version, configuration.data)),
         )
@@ -44,6 +45,6 @@ class PreferenceBackedBootstrapConfigurationCache(
     )
 
     private companion object {
-        const val KEY = "bootstrap.remote.configuration.v1"
+        val KEY: PreferenceKey<String> = PreferenceKey.string("bootstrap.remote.configuration.v1")
     }
 }
