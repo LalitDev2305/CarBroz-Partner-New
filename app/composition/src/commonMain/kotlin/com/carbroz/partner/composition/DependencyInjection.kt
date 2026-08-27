@@ -37,6 +37,7 @@ import com.carbroz.feature.dynamic.BackgroundActionExecutor
 import com.carbroz.feature.dynamic.CapabilityActionExecutor
 import com.carbroz.feature.dynamic.DefaultDynamicBindingContextFactory
 import com.carbroz.feature.dynamic.DynamicBindingContextFactory
+import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.feature.dynamic.DynamicSduiRuntime
@@ -202,6 +203,18 @@ fun carBrozApplicationModule(
     }
     single { FormTemplateRuntimeFactory(get<DynamicSduiRuntime>().registry) }
     single { DynamicScreenCache() }
+    single {
+        DynamicFeatureFactory(
+            runtime = get(),
+            networkActions = get(),
+            capabilityActions = get(),
+            backgroundActions = get(),
+            navigation = get(),
+            bindingContexts = get(),
+            formRuntime = get(),
+            cache = get(),
+        )
+    }
 
     single { createKtorRealtimeTransport() }
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
