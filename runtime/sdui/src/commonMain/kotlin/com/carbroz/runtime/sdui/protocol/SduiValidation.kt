@@ -19,10 +19,7 @@ sealed interface SduiValidationResult {
     data class Invalid(val violations: List<SduiViolation>) : SduiValidationResult
 }
 
-data class SduiViolation(
-    val path: String,
-    val code: SduiViolationCode,
-)
+data class SduiViolation(val path: String, val code: SduiViolationCode)
 
 enum class SduiViolationCode {
     MissingIdentifier,
@@ -36,16 +33,15 @@ enum class SduiViolationCode {
     CollectionLimitExceeded,
     TotalNodeLimitExceeded,
     UnsupportedRequestMethod,
+    UnsupportedCommandValue,
     MissingEndpoint,
     EndpointTooLong,
     EndpointMustBeRelative,
     InvalidCommandPayload,
 }
 
-/** Strict structural validator for untrusted transport data. */
-class SduiSchemaValidator(
-    private val limits: SduiProtocolLimits = SduiProtocolLimits(),
-) {
+/** Strict structural and generic-command validator for untrusted transport data. */
+class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolLimits()) {
     fun validate(envelope: SduiEnvelopeDto): SduiValidationResult {
         val context = ValidationContext(limits)
         context.identifier(envelope.screen.id, "screen.id")
@@ -56,8 +52,7 @@ class SduiSchemaValidator(
         envelope.requiredDefinitions.forEachIndexed { index, value -> context.type(value, "requiredDefinitions[$index]") }
         envelope.requiredCapabilities.forEachIndexed { index, value -> context.type(value, "requiredCapabilities[$index]") }
         context.template(envelope.screen.template, "screen.template")
-        return if (context.violations.isEmpty()) SduiValidationResult.Valid
-        else SduiValidationResult.Invalid(context.violations.toList())
+        return if (context.violations.isEmpty()) SduiValidationResult.Valid else SduiValidationResult.Invalid(context.violations.toList())
     }
 
     private class ValidationContext(private val limits: SduiProtocolLimits) {
@@ -69,9 +64,17 @@ class SduiSchemaValidator(
             else if (value.length > limits.maxIdentifierLength) violation(path, SduiViolationCode.IdentifierTooLong)
         }
 
+        private fun optionalIdentifier(value: String?, path: String) {
+            value?.let { identifier(it, path) }
+        }
+
         fun type(value: String, path: String) {
             if (value.isBlank()) violation(path, SduiViolationCode.MissingType)
             else if (value.length > limits.maxTypeLength) violation(path, SduiViolationCode.TypeTooLong)
+        }
+
+        private fun optionalType(value: String?, path: String) {
+            value?.let { type(it, path) }
         }
 
         fun bounded(size: Int, max: Int, path: String) {
@@ -87,9 +90,7 @@ class SduiSchemaValidator(
             val seen = mutableSetOf<String>()
             values.forEachIndexed { index, value ->
                 val nodeId = id(value)
-                if (nodeId.isNotBlank() && !seen.add(nodeId)) {
-                    violation("$path[$index].id", SduiViolationCode.DuplicateSiblingIdentifier)
-                }
+                if (nodeId.isNotBlank() && !seen.add(nodeId)) violation("$path[$index].id", SduiViolationCode.DuplicateSiblingIdentifier)
             }
         }
 
@@ -148,33 +149,77 @@ class SduiSchemaValidator(
             when (value) {
                 is RequestCommandDto -> requestCommand(value, path)
                 is CapabilityCommandDto -> capabilityCommand(value, path)
+                is NavigationCommandDto -> navigationCommand(value, path)
+                is PresentationCommandDto -> presentationCommand(value, path)
+                is LocalStateCommandDto -> bounded(value.values.size, limits.maxCommandPayloadFields, "$path.values")
+                is FormCommandDto -> allowed(value.operation, FORM_OPERATIONS, "$path.operation")
+                is BackgroundCommandDto -> backgroundCommand(value, path)
             }
         }
 
         private fun requestCommand(value: RequestCommandDto, path: String) {
-            if (value.method.uppercase() !in REQUEST_METHODS) {
-                violation("$path.method", SduiViolationCode.UnsupportedRequestMethod)
-            }
+            if (value.method.uppercase() !in REQUEST_METHODS) violation("$path.method", SduiViolationCode.UnsupportedRequestMethod)
             when {
                 value.endpoint.isBlank() -> violation("$path.endpoint", SduiViolationCode.MissingEndpoint)
                 value.endpoint.length > limits.maxEndpointLength -> violation("$path.endpoint", SduiViolationCode.EndpointTooLong)
-                !value.endpoint.startsWith("/") || value.endpoint.startsWith("//") || "://" in value.endpoint ->
-                    violation("$path.endpoint", SduiViolationCode.EndpointMustBeRelative)
+                !value.endpoint.startsWith("/") || value.endpoint.startsWith("//") || "://" in value.endpoint -> violation("$path.endpoint", SduiViolationCode.EndpointMustBeRelative)
             }
-            identifier(value.screenId, "$path.screenId")
-            identifier(value.templateId, "$path.templateId")
-            type(value.templateType, "$path.templateType")
-            if (value.payload.size > limits.maxCommandPayloadFields) {
-                violation("$path.payload", SduiViolationCode.InvalidCommandPayload)
+            allowed(value.authentication, REQUEST_AUTHENTICATION, "$path.authentication")
+            allowed(value.responseMode, RESPONSE_MODES, "$path.responseMode")
+            allowed(value.transition, TRANSITIONS, "$path.transition")
+            if (value.responseMode.uppercase() == "SCREEN") {
+                val screenId = value.screenId
+                val templateId = value.templateId
+                val templateType = value.templateType
+                if (screenId == null) violation("$path.screenId", SduiViolationCode.MissingIdentifier) else identifier(screenId, "$path.screenId")
+                if (templateId == null) violation("$path.templateId", SduiViolationCode.MissingIdentifier) else identifier(templateId, "$path.templateId")
+                if (templateType == null) violation("$path.templateType", SduiViolationCode.MissingType) else type(templateType, "$path.templateType")
+            } else {
+                optionalIdentifier(value.screenId, "$path.screenId")
+                optionalIdentifier(value.templateId, "$path.templateId")
+                optionalType(value.templateType, "$path.templateType")
             }
+            optionalIdentifier(value.backStackKey, "$path.backStackKey")
+            bounded(value.payload.size, limits.maxCommandPayloadFields, "$path.payload")
         }
 
         private fun capabilityCommand(value: CapabilityCommandDto, path: String) {
             type(value.capability, "$path.capability")
             type(value.operation, "$path.operation")
-            if (value.arguments.size > limits.maxCommandPayloadFields) {
-                violation("$path.arguments", SduiViolationCode.InvalidCommandPayload)
+            bounded(value.arguments.size, limits.maxCommandPayloadFields, "$path.arguments")
+        }
+
+        private fun navigationCommand(value: NavigationCommandDto, path: String) {
+            allowed(value.operation, NAVIGATION_OPERATIONS, "$path.operation")
+            if (value.operation.uppercase() == "POP_TO") {
+                val target = value.targetNavigationId
+                if (target == null) violation("$path.targetNavigationId", SduiViolationCode.MissingIdentifier)
+                else identifier(target, "$path.targetNavigationId")
             }
+        }
+
+        private fun presentationCommand(value: PresentationCommandDto, path: String) {
+            allowed(value.operation, PRESENTATION_OPERATIONS, "$path.operation")
+            allowed(value.presentationKind, PRESENTATION_KINDS, "$path.presentationKind")
+            identifier(value.id, "$path.id")
+            bounded(value.properties.size, limits.maxCommandPayloadFields, "$path.properties")
+        }
+
+        private fun backgroundCommand(value: BackgroundCommandDto, path: String) {
+            allowed(value.operation, BACKGROUND_OPERATIONS, "$path.operation")
+            identifier(value.id, "$path.id")
+            allowed(value.workKind, BACKGROUND_WORK_KINDS, "$path.workKind")
+            allowed(value.networkRequirement, NETWORK_REQUIREMENTS, "$path.networkRequirement")
+            if (value.earliestStartDelayMillis < 0L) violation("$path.earliestStartDelayMillis", SduiViolationCode.InvalidCommandPayload)
+            bounded(value.input.size, limits.maxCommandPayloadFields, "$path.input")
+            if (value.operation.uppercase() == "START_CONTINUOUS") {
+                if (value.title.isNullOrBlank()) violation("$path.title", SduiViolationCode.InvalidCommandPayload)
+                if (value.description.isNullOrBlank()) violation("$path.description", SduiViolationCode.InvalidCommandPayload)
+            }
+        }
+
+        private fun allowed(value: String, allowed: Set<String>, path: String) {
+            if (value.uppercase() !in allowed) violation(path, SduiViolationCode.UnsupportedCommandValue)
         }
 
         private fun validateExclusiveBranch(hasIntermediate: Boolean, hasElements: Boolean, path: String) {
@@ -190,6 +235,16 @@ class SduiSchemaValidator(
 
         companion object {
             private val REQUEST_METHODS = setOf("GET", "POST", "PUT", "PATCH", "DELETE")
+            private val REQUEST_AUTHENTICATION = setOf("NONE", "SESSION", "OPTIONAL_SESSION")
+            private val RESPONSE_MODES = setOf("SCREEN", "NONE")
+            private val TRANSITIONS = setOf("PUSH", "REPLACE", "RESET", "STAY")
+            private val NAVIGATION_OPERATIONS = setOf("POP", "POP_TO")
+            private val PRESENTATION_OPERATIONS = setOf("SHOW", "DISMISS")
+            private val PRESENTATION_KINDS = setOf("MESSAGE", "DIALOG", "SHEET")
+            private val FORM_OPERATIONS = setOf("VALIDATE", "RESET")
+            private val BACKGROUND_OPERATIONS = setOf("SCHEDULE", "CANCEL", "START_CONTINUOUS", "STOP_CONTINUOUS")
+            private val BACKGROUND_WORK_KINDS = setOf("REFRESH", "PROCESSING")
+            private val NETWORK_REQUIREMENTS = setOf("NOT_REQUIRED", "CONNECTED", "UNMETERED")
         }
     }
 }
