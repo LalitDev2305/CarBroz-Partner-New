@@ -94,8 +94,6 @@ import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.SduiRuntimeFactory
 import com.carbroz.runtime.sdui.compatibility.SduiClientCompatibility
 import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -183,7 +181,7 @@ fun carBrozApplicationModule(
     single<NetworkTransport> { get<KtorNetworkTransport>() }
     single<NetworkAuthorizationProvider> { SessionNetworkAuthorizationProvider(sessionProvider = get()) }
 
-    single<CoroutineScope> { CoroutineScope(SupervisorJob()) }
+    single { SessionRefreshScope() }
     single<TokenRefresher> {
         SingleFlightTokenRefresher(
             delegate = CarBrozTokenRefresher(
@@ -191,7 +189,7 @@ fun carBrozApplicationModule(
                 transport = get(),
                 clock = get(),
             ),
-            scope = get(),
+            scope = get<SessionRefreshScope>().coroutineScope,
         )
     }
     single {
