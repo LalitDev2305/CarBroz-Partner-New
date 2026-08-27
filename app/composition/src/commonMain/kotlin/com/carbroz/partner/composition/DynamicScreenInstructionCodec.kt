@@ -6,6 +6,7 @@ import com.carbroz.runtime.sdui.model.RequestMethod
 import com.carbroz.runtime.sdui.model.ScreenDestination
 import com.carbroz.runtime.sdui.model.ScreenTransition
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -30,13 +31,38 @@ sealed interface DynamicInstructionDecodeResult {
     data class Failure(val code: String) : DynamicInstructionDecodeResult
 }
 
-/** Single transport-to-trusted decoder for every backend-provided dynamic destination. */
+/** Single transport/persistence codec for every backend-provided dynamic destination. */
 class DynamicScreenInstructionCodec(
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     fun decode(element: JsonElement): DynamicInstructionDecodeResult {
         val dto = runCatching { json.decodeFromJsonElement<DynamicScreenInstructionDto>(element) }
             .getOrElse { return DynamicInstructionDecodeResult.Failure("dynamic_instruction_invalid_payload") }
+        return normalize(dto)
+    }
+
+    fun decode(payload: String): DynamicInstructionDecodeResult {
+        val dto = runCatching { json.decodeFromString<DynamicScreenInstructionDto>(payload) }
+            .getOrElse { return DynamicInstructionDecodeResult.Failure("dynamic_instruction_invalid_payload") }
+        return normalize(dto)
+    }
+
+    fun encode(instruction: DynamicScreenInstruction): String = json.encodeToString(
+        DynamicScreenInstructionDto(
+            screenId = instruction.destination.screenId,
+            templateId = instruction.destination.templateId,
+            templateType = instruction.destination.templateType.value,
+            endpoint = instruction.request.endpoint,
+            method = instruction.request.method.name,
+            authentication = instruction.request.authentication.name,
+            transition = instruction.transition.name,
+            backStackKey = instruction.backStackKey,
+            restorePolicy = instruction.restorePolicy.name,
+            payload = instruction.request.payload,
+        ),
+    )
+
+    private fun normalize(dto: DynamicScreenInstructionDto): DynamicInstructionDecodeResult {
         if (dto.screenId.isBlank() || dto.templateId.isBlank() || dto.templateType.isBlank()) {
             return DynamicInstructionDecodeResult.Failure("dynamic_instruction_invalid_identity")
         }
