@@ -15,9 +15,7 @@ data class DynamicScreenInstruction(
     val backStackKey: String = destination.screenId,
     val restorePolicy: DynamicRestorePolicy = DynamicRestorePolicy.CACHE_FIRST,
 ) {
-    init {
-        require(backStackKey.isNotBlank()) { "Dynamic back-stack key must not be blank." }
-    }
+    init { require(backStackKey.isNotBlank()) { "Dynamic back-stack key must not be blank." } }
 }
 
 data class DynamicScreenRequest(
@@ -33,13 +31,14 @@ data class DynamicScreenRequest(
     }
 }
 
+/** CACHE_ONLY is required for destinations acquired through non-idempotent requests. */
 enum class DynamicRestorePolicy {
+    CACHE_ONLY,
     CACHE_FIRST,
     REFRESH,
     NETWORK_ONLY,
 }
 
-/** The single generic application navigation destination for backend-driven screens. */
 data class DynamicDestination(
     val instruction: DynamicScreenInstruction,
 ) : NavigationDestination {
