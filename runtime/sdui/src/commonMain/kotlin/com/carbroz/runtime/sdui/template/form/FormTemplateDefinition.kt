@@ -3,6 +3,7 @@ package com.carbroz.runtime.sdui.template.form
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -10,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.carbroz.foundation.adaptive.ContentLayoutPolicyResolver
 import com.carbroz.foundation.adaptive.LocalAdaptiveEnvironment
+import com.carbroz.foundation.designsystem.CarBrozDesignSystem
 import com.carbroz.runtime.sdui.extension.PropertyDecodeResult
 import com.carbroz.runtime.sdui.extension.TemplateDefinition
 import com.carbroz.runtime.sdui.model.NodeType
@@ -28,6 +30,8 @@ import kotlinx.serialization.json.floatOrNull
 data class FormTemplateProperties(
     override val common: CommonNodeProperties,
     val maxContentWidthDp: Float? = null,
+    val contentHorizontalPaddingDp: Float? = null,
+    val contentVerticalPaddingDp: Float? = null,
 ) : CommonNodePropertyOwner
 
 object FormTemplateDefinition : TemplateDefinition<FormTemplateProperties>, RenderableSduiDefinition {
@@ -38,11 +42,20 @@ object FormTemplateDefinition : TemplateDefinition<FormTemplateProperties>, Rend
             is CommonPropertiesDecodeResult.Success -> decoded.value
             is CommonPropertiesDecodeResult.Failure -> return PropertyDecodeResult.Failure(decoded.reason)
         }
+        fun positiveOrZero(key: String): Float? {
+            val value = (raw[key] as? JsonPrimitive)?.floatOrNull ?: return null
+            if (value < 0f) return Float.NaN
+            return value
+        }
         val maxContentWidth = (raw["maxContentWidth"] as? JsonPrimitive)?.floatOrNull
         if (maxContentWidth != null && maxContentWidth <= 0f) {
             return PropertyDecodeResult.Failure("FORM_TEMPLATE 'maxContentWidth' must be positive")
         }
-        return PropertyDecodeResult.Success(FormTemplateProperties(common, maxContentWidth))
+        val horizontal = positiveOrZero("contentHorizontalPadding")
+        val vertical = positiveOrZero("contentVerticalPadding")
+        if (horizontal?.isNaN() == true) return PropertyDecodeResult.Failure("FORM_TEMPLATE 'contentHorizontalPadding' must be non-negative")
+        if (vertical?.isNaN() == true) return PropertyDecodeResult.Failure("FORM_TEMPLATE 'contentVerticalPadding' must be non-negative")
+        return PropertyDecodeResult.Success(FormTemplateProperties(common, maxContentWidth, horizontal, vertical))
     }
 
     @Composable
@@ -53,13 +66,18 @@ object FormTemplateDefinition : TemplateDefinition<FormTemplateProperties>, Rend
         val environment = LocalAdaptiveEnvironment.current
         val policy = ContentLayoutPolicyResolver.forWidthClass(environment.widthClass)
         val maxWidth = properties.maxContentWidthDp?.dp ?: policy.maxReadableWidth
+        val horizontal = properties.contentHorizontalPaddingDp?.dp ?: policy.horizontalMargin
+        val vertical = properties.contentVerticalPaddingDp?.dp ?: CarBrozDesignSystem.spacing.large
 
         Box(
             modifier = Modifier.fillMaxSize().applyCommonNodeProperties(properties.common),
             contentAlignment = Alignment.TopCenter,
         ) {
             Box(
-                modifier = Modifier.fillMaxWidth().widthIn(max = maxWidth),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = maxWidth)
+                    .padding(horizontal = horizontal, vertical = vertical),
             ) {
                 children()
             }
