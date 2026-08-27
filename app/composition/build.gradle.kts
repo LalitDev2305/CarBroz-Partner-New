@@ -55,6 +55,7 @@ kotlin {
         commonMain.dependencies {
             api(foundationDependency("configuration"))
             implementation(project(":feature:splash"))
+            implementation(project(":feature:dynamic"))
             implementation(foundationDependency("lifecycle"))
             implementation(foundationDependency("time"))
             implementation(foundationDependency("security"))
@@ -70,7 +71,6 @@ kotlin {
             implementation(project(":platform:background"))
             implementation(project(":runtime:action"))
             implementation(project(":runtime:binding"))
-            implementation(project(":runtime:form"))
             implementation(project(":runtime:sdui"))
             implementation(project(":data:network"))
             implementation(project(":data:realtime"))
