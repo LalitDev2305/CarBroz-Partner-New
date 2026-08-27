@@ -24,6 +24,7 @@ kotlin {
             implementation(project(":foundation:configuration"))
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:capabilities"))
+            implementation(project(":foundation:session"))
             implementation(project(":runtime:action"))
             implementation(project(":runtime:binding"))
             implementation(project(":runtime:sdui"))
