@@ -8,60 +8,129 @@ import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
 import com.carbroz.data.network.NetworkResult
 import com.carbroz.feature.dynamic.DynamicInstructionDecodeResult
-import com.carbroz.feature.dynamic.DynamicScreenInstruction
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupTask
 import com.carbroz.runtime.application.startup.StartupTaskResult
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 
-class BootstrapDestinationStore {
-    private var resolved: DynamicScreenInstruction? = null
-    fun resolve(instruction: DynamicScreenInstruction) { resolved = instruction }
-    fun current(): DynamicScreenInstruction? = resolved
-    fun clear() { resolved = null }
-}
-
-@Serializable
-private data class BootstrapResponseDto(val nextScreen: kotlinx.serialization.json.JsonElement)
-
-/** Splash bootstrap is the only static-to-dynamic application handoff. */
+/**
+ * Static-to-dynamic startup handoff.
+ *
+ * This task always asks the server for fresh startup context. Only the versioned global configuration
+ * may be reused from local storage; user/partner/session/policies/nextScreen are never restored from cache.
+ */
 class BootstrapConfigurationStartupTask(
     private val network: NetworkDataSource,
-    private val destinations: BootstrapDestinationStore,
+    private val store: BootstrapStore,
+    private val configurationCache: BootstrapConfigurationCache,
+    private val client: BootstrapClientCapabilities,
     private val instructionCodec: DynamicScreenInstructionCodec = DynamicScreenInstructionCodec(),
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) : StartupTask {
     override val id: String = "bootstrap-configuration"
 
-    override suspend fun execute(): StartupTaskResult = when (
-        val result = network.execute(
-            NetworkRequest(
-                method = NetworkMethod.GET,
-                endpoint = NetworkEndpoint("/api/v1/app"),
-                authentication = NetworkAuthentication.OPTIONAL_SESSION,
-            ),
-        )
-    ) {
-        is NetworkResult.Success -> handleSuccess(result)
-        is NetworkResult.Failure -> StartupTaskResult.Failure(result.error.toStartupFailure())
+    override suspend fun execute(): StartupTaskResult {
+        store.fetching()
+        val cachedConfiguration = configurationCache.read()
+        val headers = buildMap {
+            put(HEADER_APP_VERSION, client.versionName)
+            put(HEADER_BUILD_NUMBER, client.versionCode.toString())
+            put(HEADER_APPLICATION_ID, client.applicationId)
+            put(HEADER_BOOTSTRAP_SCHEMA, client.supportedBootstrapSchemaVersions.last.toString())
+            put(HEADER_SDUI_PROTOCOL, client.supportedSduiProtocolVersions.last.toString())
+            put(HEADER_SDUI_SCHEMA, client.supportedSduiSchemaVersions.last.toString())
+            cachedConfiguration?.version?.let { put(HEADER_CONFIG_VERSION, it) }
+        }
+
+        return when (
+            val result = network.execute(
+                NetworkRequest(
+                    method = NetworkMethod.GET,
+                    endpoint = NetworkEndpoint("/api/v1/app"),
+                    headers = headers,
+                    authentication = NetworkAuthentication.OPTIONAL_SESSION,
+                ),
+            )
+        ) {
+            is NetworkResult.Success -> handleSuccess(result, cachedConfiguration)
+            is NetworkResult.Failure -> StartupTaskResult.Failure(result.error.toStartupFailure())
+        }
     }
 
-    private fun handleSuccess(result: NetworkResult.Success): StartupTaskResult {
+    private suspend fun handleSuccess(
+        result: NetworkResult.Success,
+        cachedConfiguration: BootstrapRemoteConfiguration?,
+    ): StartupTaskResult {
         val response = result.response
         if (response.statusCode !in 200..299) {
             return StartupTaskResult.Failure(
                 StartupFailure.Expected("bootstrap_http_${response.statusCode}", response.statusCode >= 500),
             )
         }
+
         val body = response.body ?: return invalidResponse("bootstrap_missing_body")
         val dto = runCatching { json.decodeFromJsonElement<BootstrapResponseDto>(body) }
             .getOrElse { return invalidResponse("bootstrap_invalid_payload") }
-        return when (val decoded = instructionCodec.decode(dto.nextScreen)) {
+
+        if (dto.meta.bootstrapSchemaVersion !in client.supportedBootstrapSchemaVersions) {
+            return invalidResponse("bootstrap_schema_unsupported")
+        }
+        if (dto.sdui.protocolVersion !in client.supportedSduiProtocolVersions) {
+            return invalidResponse("bootstrap_sdui_protocol_unsupported")
+        }
+        if (dto.sdui.schemaVersion !in client.supportedSduiSchemaVersions) {
+            return invalidResponse("bootstrap_sdui_schema_unsupported")
+        }
+
+        val effectiveConfiguration = when {
+            dto.config.changed -> {
+                val data = dto.config.data ?: return invalidResponse("bootstrap_config_missing_data")
+                BootstrapRemoteConfiguration(dto.config.version, data).also(configurationCache::write)
+            }
+            cachedConfiguration?.version == dto.config.version -> cachedConfiguration
+            else -> return invalidResponse("bootstrap_config_cache_miss")
+        }
+
+        val snapshot = BootstrapSnapshot(
+            meta = dto.meta,
+            configuration = effectiveConfiguration,
+            updatePolicy = dto.updatePolicy,
+            maintenance = dto.maintenance,
+            session = dto.session,
+            user = dto.user,
+            partner = dto.partner,
+            sdui = dto.sdui,
+            featureFlags = dto.featureFlags,
+            capabilities = dto.capabilities,
+            serviceability = dto.serviceability,
+            realtime = dto.realtime,
+            localization = dto.localization,
+            support = dto.support,
+            runtimePolicy = dto.runtimePolicy,
+        )
+
+        if (dto.updatePolicy.mode == BootstrapUpdateMode.REQUIRED) {
+            if (dto.updatePolicy.storeUrl.isNullOrBlank()) {
+                return invalidResponse("bootstrap_required_update_missing_store_url")
+            }
+            store.forceUpdate(snapshot, dto.updatePolicy)
+            return StartupTaskResult.Success
+        }
+
+        if (dto.maintenance.enabled) {
+            store.maintenance(snapshot, dto.maintenance)
+            return StartupTaskResult.Success
+        }
+
+        val nextScreen = dto.nextScreen ?: return invalidResponse("bootstrap_missing_next_screen")
+        return when (val decoded = instructionCodec.decode(nextScreen)) {
             is DynamicInstructionDecodeResult.Success -> {
-                destinations.resolve(decoded.instruction)
+                store.ready(snapshot, decoded.instruction)
                 StartupTaskResult.Success
             }
             is DynamicInstructionDecodeResult.Failure -> invalidResponse("bootstrap_${decoded.code}")
@@ -80,5 +149,44 @@ class BootstrapConfigurationStartupTask(
         )
         NetworkFailure.Transport -> StartupFailure.Expected("bootstrap_transport", true)
         is NetworkFailure.InvalidRequest -> StartupFailure.Expected("bootstrap_invalid_request", false)
+    }
+
+    @Serializable
+    private data class BootstrapResponseDto(
+        val meta: BootstrapMeta,
+        val config: ConfigurationEnvelope,
+        val updatePolicy: BootstrapUpdatePolicy = BootstrapUpdatePolicy(),
+        val maintenance: BootstrapMaintenancePolicy = BootstrapMaintenancePolicy(),
+        val session: BootstrapSessionSnapshot = BootstrapSessionSnapshot(),
+        val user: BootstrapUserSnapshot? = null,
+        val partner: BootstrapPartnerSnapshot? = null,
+        val sdui: BootstrapSduiPolicy,
+        val featureFlags: JsonObject = JsonObject(emptyMap()),
+        val capabilities: JsonObject = JsonObject(emptyMap()),
+        val serviceability: JsonObject = JsonObject(emptyMap()),
+        val realtime: JsonObject = JsonObject(emptyMap()),
+        val localization: JsonObject = JsonObject(emptyMap()),
+        val support: JsonObject = JsonObject(emptyMap()),
+        val runtimePolicy: JsonObject = JsonObject(emptyMap()),
+        val nextScreen: JsonElement? = null,
+    )
+
+    @Serializable
+    private data class ConfigurationEnvelope(
+        val changed: Boolean,
+        val version: String,
+        val data: JsonObject? = null,
+    ) {
+        init { require(version.isNotBlank()) }
+    }
+
+    private companion object {
+        const val HEADER_APP_VERSION = "X-CarBroz-App-Version"
+        const val HEADER_BUILD_NUMBER = "X-CarBroz-Build-Number"
+        const val HEADER_APPLICATION_ID = "X-CarBroz-Application-Id"
+        const val HEADER_BOOTSTRAP_SCHEMA = "X-CarBroz-Bootstrap-Schema"
+        const val HEADER_SDUI_PROTOCOL = "X-CarBroz-Sdui-Protocol"
+        const val HEADER_SDUI_SCHEMA = "X-CarBroz-Sdui-Schema"
+        const val HEADER_CONFIG_VERSION = "X-CarBroz-Config-Version"
     }
 }
