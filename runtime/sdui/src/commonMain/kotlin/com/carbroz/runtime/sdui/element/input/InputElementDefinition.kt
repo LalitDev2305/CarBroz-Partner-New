@@ -15,6 +15,7 @@ import com.carbroz.runtime.sdui.extension.FormFieldContribution
 import com.carbroz.runtime.sdui.extension.FormFieldContributor
 import com.carbroz.runtime.sdui.extension.PropertyDecodeResult
 import com.carbroz.runtime.sdui.model.Element
+import com.carbroz.runtime.sdui.model.NodeProperties
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.properties.CommonNodeProperties
 import com.carbroz.runtime.sdui.properties.CommonNodePropertiesDecoder
@@ -45,12 +46,13 @@ data class InputElementProperties(
     val keyboardType: InputKeyboardType,
 ) : CommonNodePropertyOwner
 
-/** Generic text input. Business meaning is supplied only by server fieldId/data. */
 object InputElementDefinition : ElementDefinition<InputElementProperties>, RenderableSduiDefinition, FormFieldContributor {
     override val type: NodeType = NodeType("INPUT")
 
     override fun decodeProperties(raw: JsonObject): PropertyDecodeResult<InputElementProperties> {
-        val common = when (val decoded = CommonNodePropertiesDecoder.decode(raw)) {
+        val common = when (
+            val decoded = CommonNodePropertiesDecoder.decode(raw, CommonNodeProperties(fillWidth = true))
+        ) {
             is CommonPropertiesDecodeResult.Success -> decoded.value
             is CommonPropertiesDecodeResult.Failure -> return PropertyDecodeResult.Failure(decoded.reason)
         }
@@ -73,7 +75,7 @@ object InputElementDefinition : ElementDefinition<InputElementProperties>, Rende
         )
     }
 
-    override fun formFieldContribution(properties: com.carbroz.runtime.sdui.model.NodeProperties): FormFieldContribution? {
+    override fun formFieldContribution(properties: NodeProperties): FormFieldContribution? {
         val input = properties as? InputElementProperties ?: return null
         return FormFieldContribution(input.fieldId, JsonPrimitive(input.initialValue), input.required)
     }
