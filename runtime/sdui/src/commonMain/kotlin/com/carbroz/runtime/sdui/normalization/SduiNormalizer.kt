@@ -2,6 +2,10 @@ package com.carbroz.runtime.sdui.normalization
 
 import com.carbroz.runtime.sdui.extension.DefinitionKey
 import com.carbroz.runtime.sdui.extension.PropertyDecodeResult
+import com.carbroz.runtime.sdui.model.BackgroundCommand
+import com.carbroz.runtime.sdui.model.BackgroundNetworkRequirement
+import com.carbroz.runtime.sdui.model.BackgroundOperation
+import com.carbroz.runtime.sdui.model.BackgroundWorkKind
 import com.carbroz.runtime.sdui.model.CapabilityCommand
 import com.carbroz.runtime.sdui.model.Command
 import com.carbroz.runtime.sdui.model.Component
@@ -18,8 +22,6 @@ import com.carbroz.runtime.sdui.model.NodePath
 import com.carbroz.runtime.sdui.model.NodeProperties
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.model.PresentationCommand
-import com.carbroz.runtime.sdui.model.PresentationKind
-import com.carbroz.runtime.sdui.model.PresentationOperation
 import com.carbroz.runtime.sdui.model.RequestAuthentication
 import com.carbroz.runtime.sdui.model.RequestCommand
 import com.carbroz.runtime.sdui.model.RequestMethod
@@ -31,6 +33,7 @@ import com.carbroz.runtime.sdui.model.SduiNavigationCommand
 import com.carbroz.runtime.sdui.model.Section
 import com.carbroz.runtime.sdui.model.SectionContent
 import com.carbroz.runtime.sdui.model.Template
+import com.carbroz.runtime.sdui.protocol.BackgroundCommandDto
 import com.carbroz.runtime.sdui.protocol.CapabilityCommandDto
 import com.carbroz.runtime.sdui.protocol.CommandDto
 import com.carbroz.runtime.sdui.protocol.ComponentDto
@@ -59,7 +62,6 @@ sealed interface SduiNormalizationError {
     data class InvalidCommand(val path: String) : SduiNormalizationError
 }
 
-/** Converts already schema-validated transport data into immutable trusted runtime IR. */
 class SduiNormalizer(private val registry: SduiRegistry) {
     fun normalize(envelope: SduiEnvelopeDto): SduiNormalizationResult = try {
         SduiNormalizationResult.Success(normalizeScreen(envelope.screen))
@@ -69,20 +71,13 @@ class SduiNormalizer(private val registry: SduiRegistry) {
 
     private fun normalizeScreen(dto: ScreenDto): Screen {
         val screenId = NodeId(dto.id)
-        val root = NodePath.root(screenId)
-        return Screen(screenId, dto.version, normalizeTemplate(dto.template, root))
+        return Screen(screenId, dto.version, normalizeTemplate(dto.template, NodePath.root(screenId)))
     }
 
     private fun normalizeTemplate(dto: TemplateDto, parentPath: NodePath): Template {
         val id = NodeId(dto.id)
         val path = parentPath.child(id)
-        return Template(
-            id = id,
-            path = path,
-            type = NodeType(dto.type),
-            properties = decodeProperties(NodeKind.TEMPLATE, dto.type, dto.properties, path),
-            components = dto.components.map { normalizeComponent(it, path) },
-        )
+        return Template(id, path, NodeType(dto.type), decodeProperties(NodeKind.TEMPLATE, dto.type, dto.properties, path), dto.components.map { normalizeComponent(it, path) })
     }
 
     private fun normalizeComponent(dto: ComponentDto, parentPath: NodePath): Component {
@@ -111,37 +106,19 @@ class SduiNormalizer(private val registry: SduiRegistry) {
         val id = NodeId(dto.id)
         val path = parentPath.child(id)
         if (dto.elements.isEmpty()) fail(SduiNormalizationError.InvalidStructure(path.toString()))
-        return Group(
-            id = id,
-            path = path,
-            type = NodeType(dto.type),
-            properties = decodeProperties(NodeKind.GROUP, dto.type, dto.properties, path),
-            elements = dto.elements.map { normalizeElement(it, path) },
-        )
+        return Group(id, path, NodeType(dto.type), decodeProperties(NodeKind.GROUP, dto.type, dto.properties, path), dto.elements.map { normalizeElement(it, path) })
     }
 
     private fun normalizeElement(dto: ElementDto, parentPath: NodePath): Element {
         val id = NodeId(dto.id)
         val path = parentPath.child(id)
-        return Element(
-            id = id,
-            path = path,
-            type = NodeType(dto.type),
-            properties = decodeProperties(NodeKind.ELEMENT, dto.type, dto.properties, path),
-            command = dto.command?.let { normalizeCommand(it, "$path/command") },
-        )
+        return Element(id, path, NodeType(dto.type), decodeProperties(NodeKind.ELEMENT, dto.type, dto.properties, path), dto.command?.let { normalizeCommand(it, "$path/command") })
     }
 
-    private fun decodeProperties(
-        kind: NodeKind,
-        typeValue: String,
-        raw: kotlinx.serialization.json.JsonObject,
-        path: NodePath,
-    ): NodeProperties {
+    private fun decodeProperties(kind: NodeKind, typeValue: String, raw: kotlinx.serialization.json.JsonObject, path: NodePath): NodeProperties {
         val type = NodeType(typeValue)
         val key = DefinitionKey(kind, type)
-        val definition = registry.find(kind, type)
-            ?: fail(SduiNormalizationError.UnsupportedDefinition(path.toString(), key))
+        val definition = registry.find(kind, type) ?: fail(SduiNormalizationError.UnsupportedDefinition(path.toString(), key))
         return when (val result = definition.decodeProperties(raw)) {
             is PropertyDecodeResult.Success -> result.properties
             is PropertyDecodeResult.Failure -> fail(SduiNormalizationError.InvalidProperties(path.toString(), result.reason))
@@ -155,21 +132,27 @@ class SduiNormalizer(private val registry: SduiRegistry) {
             if (dto.operation.isBlank()) fail(SduiNormalizationError.InvalidCommand("$path/operation"))
             CapabilityCommand(dto.capability, dto.operation, dto.arguments.toMap())
         }
-        is NavigationCommandDto -> {
-            val operation = enumValue<NavigationOperation>(dto.operation, "$path/operation")
-            SduiNavigationCommand(operation, dto.targetNavigationId)
-        }
+        is NavigationCommandDto -> SduiNavigationCommand(enumValue(dto.operation, "$path/operation"), dto.targetNavigationId)
         is PresentationCommandDto -> {
             if (dto.id.isBlank()) fail(SduiNormalizationError.InvalidCommand("$path/id"))
-            PresentationCommand(
-                operation = enumValue(dto.operation, "$path/operation"),
-                presentationKind = enumValue(dto.presentationKind, "$path/presentationKind"),
-                id = dto.id,
-                properties = dto.properties.toMap(),
-            )
+            PresentationCommand(enumValue(dto.operation, "$path/operation"), enumValue(dto.presentationKind, "$path/presentationKind"), dto.id, dto.properties.toMap())
         }
         is LocalStateCommandDto -> LocalStateCommand(dto.values.toMap())
         is FormCommandDto -> FormCommand(enumValue<FormOperation>(dto.operation, "$path/operation"))
+        is BackgroundCommandDto -> {
+            if (dto.id.isBlank()) fail(SduiNormalizationError.InvalidCommand("$path/id"))
+            BackgroundCommand(
+                operation = enumValue<BackgroundOperation>(dto.operation, "$path/operation"),
+                id = dto.id,
+                workKind = enumValue<BackgroundWorkKind>(dto.workKind, "$path/workKind"),
+                earliestStartDelayMillis = dto.earliestStartDelayMillis,
+                networkRequirement = enumValue<BackgroundNetworkRequirement>(dto.networkRequirement, "$path/networkRequirement"),
+                requiresCharging = dto.requiresCharging,
+                title = dto.title,
+                description = dto.description,
+                input = dto.input.toMap(),
+            )
+        }
     }
 
     private fun normalizeRequest(dto: RequestCommandDto, path: String): RequestCommand {
@@ -178,32 +161,16 @@ class SduiNormalizer(private val registry: SduiRegistry) {
         val responseMode = enumValue<RequestResponseMode>(dto.responseMode, "$path/responseMode")
         val transition = enumValue<ScreenTransition>(dto.transition, "$path/transition")
         val destination = if (responseMode == RequestResponseMode.SCREEN) {
-            val screenId = dto.screenId?.takeIf { it.isNotBlank() }
-                ?: fail(SduiNormalizationError.InvalidCommand("$path/screenId"))
-            val templateId = dto.templateId?.takeIf { it.isNotBlank() }
-                ?: fail(SduiNormalizationError.InvalidCommand("$path/templateId"))
-            val templateType = dto.templateType?.takeIf { it.isNotBlank() }
-                ?: fail(SduiNormalizationError.InvalidCommand("$path/templateType"))
+            val screenId = dto.screenId?.takeIf { it.isNotBlank() } ?: fail(SduiNormalizationError.InvalidCommand("$path/screenId"))
+            val templateId = dto.templateId?.takeIf { it.isNotBlank() } ?: fail(SduiNormalizationError.InvalidCommand("$path/templateId"))
+            val templateType = dto.templateType?.takeIf { it.isNotBlank() } ?: fail(SduiNormalizationError.InvalidCommand("$path/templateType"))
             ScreenDestination(screenId, templateId, NodeType(templateType))
-        } else {
-            null
-        }
-        return RequestCommand(
-            method = method,
-            endpoint = dto.endpoint,
-            destination = destination,
-            payload = dto.payload.toMap(),
-            authentication = authentication,
-            responseMode = responseMode,
-            transition = transition,
-            backStackKey = dto.backStackKey,
-            validateForm = dto.validateForm,
-        )
+        } else null
+        return RequestCommand(method, dto.endpoint, destination, dto.payload.toMap(), authentication, responseMode, transition, dto.backStackKey, dto.validateForm)
     }
 
     private inline fun <reified T : Enum<T>> enumValue(value: String, path: String): T =
-        enumValues<T>().firstOrNull { it.name == value.uppercase() }
-            ?: fail(SduiNormalizationError.InvalidCommand(path))
+        enumValues<T>().firstOrNull { it.name == value.uppercase() } ?: fail(SduiNormalizationError.InvalidCommand(path))
 
     private fun fail(error: SduiNormalizationError): Nothing = throw NormalizationFailure(error)
     private class NormalizationFailure(val error: SduiNormalizationError) : RuntimeException()
