@@ -2,6 +2,7 @@ package com.carbroz.runtime.sdui.protocol
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 @Serializable
@@ -67,4 +68,18 @@ data class BackgroundCommandDto(
     val title: String? = null,
     val description: String? = null,
     val input: JsonObject = JsonObject(emptyMap()),
+) : CommandDto
+
+@Serializable
+@SerialName("SEQUENCE")
+data class SequenceCommandDto(
+    val commands: List<CommandDto>,
+) : CommandDto
+
+@Serializable
+@SerialName("CONDITIONAL")
+data class ConditionalCommandDto(
+    val condition: JsonElement,
+    val whenTrue: CommandDto,
+    val whenFalse: CommandDto? = null,
 ) : CommandDto
