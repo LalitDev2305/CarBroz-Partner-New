@@ -139,10 +139,7 @@ fun carBrozApplicationModule(
 
     single<CarBrozDatabaseProvider> { databaseProvider }
     single<CarBrozDatabase> { get<CarBrozDatabaseProvider>().get() }
-    single<DatabaseHealthCheck> {
-        RoomDatabaseHealthCheck(database = get(), observability = get(), clock = get())
-    }
-
+    single<DatabaseHealthCheck> { RoomDatabaseHealthCheck(database = get(), observability = get(), clock = get()) }
     single<PreferenceStoreProvider> { preferenceStoreProvider }
     single<PreferenceStore> { get<PreferenceStoreProvider>().get() }
 
@@ -150,16 +147,10 @@ fun carBrozApplicationModule(
     single { CapabilityActionExecutor(registry = get()) }
 
     single { BackgroundTaskHandlerRegistry(backgroundTaskHandlers) }
-    single {
-        BackgroundTaskRunner(
-            registry = get(),
-            observability = get(),
-            clock = get(),
-            correlationIdProvider = get(),
-        )
-    }
+    single { BackgroundTaskRunner(registry = get(), observability = get(), clock = get(), correlationIdProvider = get()) }
     if (backgroundScheduler != null) single<BackgroundScheduler> { backgroundScheduler }
     if (continuousExecutionController != null) single<ContinuousExecutionController> { continuousExecutionController }
+    single { BackgroundActionExecutor(backgroundScheduler, continuousExecutionController) }
 
     single { ApplicationConnectivity() }
     single<NetworkConnectivityObserver> { get<ApplicationConnectivity>() }
@@ -189,15 +180,18 @@ fun carBrozApplicationModule(
     single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
     single { NetworkActionExecutor(dataSource = get()) }
 
+    single { DynamicScreenInstructionCodec() }
     single { BootstrapDestinationStore() }
-    single { BootstrapConfigurationStartupTask(network = get(), destinations = get()) }
+    single { BootstrapConfigurationStartupTask(network = get(), destinations = get(), instructionCodec = get()) }
 
     single { createDynamicSduiRuntime(configuration = get()) }
     single<DynamicBindingContextFactory> {
         DefaultDynamicBindingContextFactory(sessionProvider = get(), configurationProvider = get())
     }
-    single<DynamicFormStoreFactory> { NoDynamicFormStoreFactory }
+    single<DynamicFormStoreFactory> { CoreDynamicFormStoreFactory }
     single { DynamicScreenCache() }
+    single { DynamicRealtimeEventDecoder(instructionCodec = get()) }
+    single { DynamicRealtimeCoordinator(decoder = get()) }
 
     single { createKtorRealtimeTransport() }
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
@@ -206,14 +200,20 @@ fun carBrozApplicationModule(
 
     single<OutboxStore> { RoomOutboxStore(database = get()) }
     single<SyncConflictResolver> { KeepQueuedSyncConflictResolver }
-    single<SyncCoordinator> {
-        DefaultSyncCoordinator(outbox = get(), network = get(), clock = get(), conflictResolver = get())
-    }
+    single<SyncCoordinator> { DefaultSyncCoordinator(outbox = get(), network = get(), clock = get(), conflictResolver = get()) }
+    single { SyncActivationPolicy() }
 
     single { NavigationStore(NavigationState(listOf(SplashDestination))) }
     single { DefaultAppLifecycle() } bind AppLifecycleController::class
     single<AppLifecycle> { get<AppLifecycleController>() }
-    single { SyncActivationCoordinator(lifecycle = get(), connectivity = get(), syncCoordinator = get()) }
+    single {
+        SyncActivationCoordinator(
+            lifecycle = get(),
+            connectivity = get(),
+            syncCoordinator = get(),
+            policy = get(),
+        )
+    }
 
     single {
         StartupCoordinator(
@@ -240,26 +240,24 @@ internal fun initializeCarBrozDependencyInjection(
     mainThreadDispatcher: MainThreadDispatcher? = null,
 ) {
     if (KoinPlatform.getKoinOrNull() != null) return
-
     val application = startKoin {
         allowOverride(false)
         modules(
             carBrozApplicationModule(
-                configuration = configuration,
-                secureStorage = secureStorage,
-                databaseProvider = databaseProvider,
-                preferenceStoreProvider = preferenceStoreProvider,
-                capabilityProviders = capabilityProviders,
-                backgroundScheduler = backgroundScheduler,
-                continuousExecutionController = continuousExecutionController,
-                backgroundTaskHandlers = backgroundTaskHandlers,
-                observabilitySinks = observabilitySinks,
-                resourceDiagnostics = resourceDiagnostics,
-                mainThreadDispatcher = mainThreadDispatcher,
+                configuration,
+                secureStorage,
+                databaseProvider,
+                preferenceStoreProvider,
+                capabilityProviders,
+                backgroundScheduler,
+                continuousExecutionController,
+                backgroundTaskHandlers,
+                observabilitySinks,
+                resourceDiagnostics,
+                mainThreadDispatcher,
             ),
         )
     }
-
     if (resourceDiagnostics != null) application.koin.get<ResourceDiagnosticsReporter>().sample()
     if (mainThreadDispatcher != null) application.koin.get<MainThreadResponsivenessMonitor>().start()
 }
