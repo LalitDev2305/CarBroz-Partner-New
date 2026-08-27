@@ -5,13 +5,14 @@ import com.carbroz.data.network.NetworkRequest
 import com.carbroz.data.network.NetworkResponse
 import com.carbroz.data.network.NetworkResult
 import com.carbroz.foundation.capabilities.CapabilityRegistry
-import com.carbroz.foundation.configuration.AppConfiguration
-import com.carbroz.foundation.configuration.AppEnvironment
-import com.carbroz.foundation.configuration.BuildInformation
 import com.carbroz.foundation.navigation.NavigationState
 import com.carbroz.foundation.navigation.NavigationStore
+import com.carbroz.runtime.action.ActionPreparerFactory
 import com.carbroz.runtime.binding.BindingContext
 import com.carbroz.runtime.sdui.SduiPipelineResult
+import com.carbroz.runtime.sdui.SduiRuntime
+import com.carbroz.runtime.sdui.SduiRuntimeFactory
+import com.carbroz.runtime.sdui.compatibility.SduiClientCompatibility
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.model.RequestAuthentication
 import com.carbroz.runtime.sdui.model.RequestMethod
@@ -31,8 +32,8 @@ import kotlin.test.assertNull
 @OptIn(ExperimentalCoroutinesApi::class)
 class DynamicFeatureStoreTest {
     @Test
-    fun `dynamic runtime processes arbitrary screen through canonical pipeline`() {
-        val runtime = createDynamicSduiRuntime(testConfiguration())
+    fun `dynamic feature processes arbitrary screen through canonical SDUI runtime`() {
+        val runtime = createSduiRuntime()
         val result = runtime.pipeline.process(VALID_SCREEN)
         val success = assertIs<SduiPipelineResult.Success>(result)
         assertEquals("screen-a", success.screen.id.value)
@@ -44,7 +45,7 @@ class DynamicFeatureStoreTest {
         val network = QueueNetworkDataSource(
             NetworkResult.Success(NetworkResponse(200, body = Json.parseToJsonElement(VALID_SCREEN))),
         )
-        val runtime = createDynamicSduiRuntime(testConfiguration())
+        val runtime = createSduiRuntime()
         val store = createStore(network, runtime)
 
         store.show(destination())
@@ -57,11 +58,11 @@ class DynamicFeatureStoreTest {
     }
 
     @Test
-    fun `malformed network screen fails closed at canonical pipeline`() = runTest {
+    fun `malformed network screen fails closed at canonical SDUI runtime`() = runTest {
         val network = QueueNetworkDataSource(
             NetworkResult.Success(NetworkResponse(200, body = Json.parseToJsonElement("{\"unexpected\":true}"))),
         )
-        val runtime = createDynamicSduiRuntime(testConfiguration())
+        val runtime = createSduiRuntime()
         val store = createStore(network, runtime)
 
         store.show(destination())
@@ -74,13 +75,13 @@ class DynamicFeatureStoreTest {
 
     private fun kotlinx.coroutines.test.TestScope.createStore(
         network: NetworkDataSource,
-        runtime: DynamicSduiRuntime,
+        runtime: SduiRuntime,
     ): DynamicFeatureStore {
         val root = destination()
         return DynamicFeatureStore(
             scope = this,
-            runtime = runtime,
-            actionPreparer = runtime.actions,
+            sduiRuntime = runtime,
+            actionPreparer = ActionPreparerFactory.createCore(),
             networkActions = NetworkActionExecutor(network),
             capabilityActions = CapabilityActionExecutor(CapabilityRegistry.builder().build()),
             navigation = NavigationStore(NavigationState(listOf(root))),
@@ -89,6 +90,14 @@ class DynamicFeatureStoreTest {
             backgroundActions = BackgroundActionExecutor(null, null),
         )
     }
+
+    private fun createSduiRuntime(): SduiRuntime = SduiRuntimeFactory.createCore(
+        SduiClientCompatibility(
+            clientVersion = 1,
+            supportedProtocolVersions = 1..1,
+            supportedSchemaVersions = 1..1,
+        ),
+    )
 
     private fun destination() = DynamicDestination(
         DynamicScreenInstruction(
@@ -108,12 +117,6 @@ class DynamicFeatureStoreTest {
     }
 
     private companion object {
-        fun testConfiguration() = AppConfiguration(
-            environment = AppEnvironment.Development,
-            apiBaseUrl = "https://development.invalid",
-            buildInformation = BuildInformation("1.0", 1, "com.carbroz.test"),
-        )
-
         const val VALID_SCREEN = """
             {
               "protocolVersion": 1,
