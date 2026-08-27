@@ -54,5 +54,5 @@ private fun EdgeInsetsDp.toPaddingValues() = androidx.compose.foundation.layout.
 private fun parseHexColor(value: String): Color {
     val hex = value.removePrefix("#")
     val argb = if (hex.length == 6) "FF$hex" else hex
-    return Color(argb.toULong(16).toLong())
+    return Color(argb.toULong(16))
 }
