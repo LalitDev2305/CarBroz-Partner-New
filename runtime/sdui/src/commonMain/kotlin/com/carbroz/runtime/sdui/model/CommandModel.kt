@@ -101,3 +101,31 @@ data class FormCommand(val operation: FormOperation) : Command {
     override val kind: CommandKind = KIND
     companion object { val KIND = CommandKind("FORM") }
 }
+
+enum class BackgroundOperation { SCHEDULE, CANCEL, START_CONTINUOUS, STOP_CONTINUOUS }
+enum class BackgroundWorkKind { REFRESH, PROCESSING }
+enum class BackgroundNetworkRequirement { NOT_REQUIRED, CONNECTED, UNMETERED }
+
+data class BackgroundCommand(
+    val operation: BackgroundOperation,
+    val id: String,
+    val workKind: BackgroundWorkKind = BackgroundWorkKind.PROCESSING,
+    val earliestStartDelayMillis: Long = 0L,
+    val networkRequirement: BackgroundNetworkRequirement = BackgroundNetworkRequirement.NOT_REQUIRED,
+    val requiresCharging: Boolean = false,
+    val title: String? = null,
+    val description: String? = null,
+    val input: Map<String, JsonElement> = emptyMap(),
+) : Command {
+    init {
+        require(id.isNotBlank()) { "Background command id must not be blank" }
+        require(earliestStartDelayMillis >= 0L) { "Background delay must be non-negative" }
+        if (operation == BackgroundOperation.START_CONTINUOUS) {
+            require(!title.isNullOrBlank() && !description.isNullOrBlank()) {
+                "Continuous execution requires title and description"
+            }
+        }
+    }
+    override val kind: CommandKind = KIND
+    companion object { val KIND = CommandKind("BACKGROUND") }
+}
