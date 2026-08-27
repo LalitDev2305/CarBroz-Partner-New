@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidKmpLibrary)
+    alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kover)
@@ -20,14 +21,15 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            // SplashStore publicly implements Store, so consumers compiling
-            // against SplashStore must also see the Store supertype.
             api(project(":foundation:architecture"))
             implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:design-system"))
             implementation(project(":runtime:application"))
+            implementation(project(":data:network"))
+            implementation(project(":feature:dynamic"))
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
