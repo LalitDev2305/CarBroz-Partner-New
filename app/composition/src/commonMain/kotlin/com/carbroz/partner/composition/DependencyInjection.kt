@@ -79,7 +79,6 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import org.koin.mp.KoinPlatform
 
-/** Canonical application composition module for validated configuration and platform infrastructure. */
 fun carBrozApplicationModule(
     configuration: AppConfiguration,
     secureStorage: SecureStorage,
@@ -127,14 +126,7 @@ fun carBrozApplicationModule(
     if (mainThreadDispatcher != null) {
         single { MainThreadResponsivenessMonitor(dispatcher = mainThreadDispatcher, observability = get()) }
     }
-    single {
-        AnalyticsTracker(
-            policy = AnalyticsPolicy(
-                enabled = false,
-                allowedEventNames = emptySet(),
-            ),
-        )
-    }
+    single { AnalyticsTracker(AnalyticsPolicy(enabled = false, allowedEventNames = emptySet())) }
 
     single<Clock> { SystemClock }
     single<SecureStorage> { secureStorage }
@@ -148,11 +140,7 @@ fun carBrozApplicationModule(
     single<CarBrozDatabaseProvider> { databaseProvider }
     single<CarBrozDatabase> { get<CarBrozDatabaseProvider>().get() }
     single<DatabaseHealthCheck> {
-        RoomDatabaseHealthCheck(
-            database = get(),
-            observability = get(),
-            clock = get(),
-        )
+        RoomDatabaseHealthCheck(database = get(), observability = get(), clock = get())
     }
 
     single<PreferenceStoreProvider> { preferenceStoreProvider }
@@ -200,10 +188,16 @@ fun carBrozApplicationModule(
     }
     single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
     single { NetworkActionExecutor(dataSource = get()) }
+
     single { BootstrapDestinationStore() }
     single { BootstrapConfigurationStartupTask(network = get(), destinations = get()) }
 
     single { createDynamicSduiRuntime(configuration = get()) }
+    single<DynamicBindingContextFactory> {
+        DefaultDynamicBindingContextFactory(sessionProvider = get(), configurationProvider = get())
+    }
+    single<DynamicFormStoreFactory> { NoDynamicFormStoreFactory }
+    single { DynamicScreenCache() }
 
     single { createKtorRealtimeTransport() }
     single<RealtimeTransport> { get<KtorRealtimeTransport>() }
@@ -213,26 +207,17 @@ fun carBrozApplicationModule(
     single<OutboxStore> { RoomOutboxStore(database = get()) }
     single<SyncConflictResolver> { KeepQueuedSyncConflictResolver }
     single<SyncCoordinator> {
-        DefaultSyncCoordinator(
-            outbox = get(),
-            network = get(),
-            clock = get(),
-            conflictResolver = get(),
-        )
+        DefaultSyncCoordinator(outbox = get(), network = get(), clock = get(), conflictResolver = get())
     }
 
     single { NavigationStore(NavigationState(listOf(SplashDestination))) }
-
     single { DefaultAppLifecycle() } bind AppLifecycleController::class
     single<AppLifecycle> { get<AppLifecycleController>() }
     single { SyncActivationCoordinator(lifecycle = get(), connectivity = get(), syncCoordinator = get()) }
 
     single {
         StartupCoordinator(
-            tasks = listOf(
-                get<SessionRestoreStartupTask>(),
-                get<BootstrapConfigurationStartupTask>(),
-            ),
+            tasks = listOf(get<SessionRestoreStartupTask>(), get<BootstrapConfigurationStartupTask>()),
             observability = get(),
             clock = get(),
             correlationIdProvider = get(),
@@ -241,7 +226,6 @@ fun carBrozApplicationModule(
     single<ApplicationRuntime> { DefaultApplicationRuntime(startupCoordinator = get()) }
 }
 
-/** Starts the single process-wide dependency graph after configuration/storage validation. */
 internal fun initializeCarBrozDependencyInjection(
     configuration: AppConfiguration,
     secureStorage: SecureStorage,
@@ -276,10 +260,6 @@ internal fun initializeCarBrozDependencyInjection(
         )
     }
 
-    if (resourceDiagnostics != null) {
-        application.koin.get<ResourceDiagnosticsReporter>().sample()
-    }
-    if (mainThreadDispatcher != null) {
-        application.koin.get<MainThreadResponsivenessMonitor>().start()
-    }
+    if (resourceDiagnostics != null) application.koin.get<ResourceDiagnosticsReporter>().sample()
+    if (mainThreadDispatcher != null) application.koin.get<MainThreadResponsivenessMonitor>().start()
 }
