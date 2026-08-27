@@ -13,14 +13,19 @@ enum class StackCrossAxisAlignment { START, CENTER, END, STRETCH }
 data class StackContainerProperties(
     override val common: CommonNodeProperties,
     val axis: StackAxis = StackAxis.VERTICAL,
-    val spacingDp: Float = 0f,
+    val spacingDp: Float = 16f,
     val mainAxisAlignment: StackMainAxisAlignment = StackMainAxisAlignment.START,
     val crossAxisAlignment: StackCrossAxisAlignment = StackCrossAxisAlignment.START,
 ) : CommonNodePropertyOwner
 
 object StackContainerPropertiesDecoder {
     fun decode(raw: JsonObject): PropertyDecodeResult<StackContainerProperties> {
-        val common = when (val result = CommonNodePropertiesDecoder.decode(raw)) {
+        val common = when (
+            val result = CommonNodePropertiesDecoder.decode(
+                raw,
+                defaults = CommonNodeProperties(fillWidth = true),
+            )
+        ) {
             is CommonPropertiesDecodeResult.Success -> result.value
             is CommonPropertiesDecodeResult.Failure -> return PropertyDecodeResult.Failure(result.reason)
         }
@@ -30,7 +35,7 @@ object StackContainerPropertiesDecoder {
             ?: return PropertyDecodeResult.Failure("STACK 'mainAxisAlignment' is unsupported")
         val cross = enumValue<StackCrossAxisAlignment>(raw, "crossAxisAlignment", StackCrossAxisAlignment.START)
             ?: return PropertyDecodeResult.Failure("STACK 'crossAxisAlignment' is unsupported")
-        val spacing = (raw["spacing"] as? JsonPrimitive)?.floatOrNull ?: 0f
+        val spacing = (raw["spacing"] as? JsonPrimitive)?.floatOrNull ?: 16f
         if (spacing < 0f) return PropertyDecodeResult.Failure("STACK 'spacing' must be non-negative")
         return PropertyDecodeResult.Success(StackContainerProperties(common, axis, spacing, main, cross))
     }
