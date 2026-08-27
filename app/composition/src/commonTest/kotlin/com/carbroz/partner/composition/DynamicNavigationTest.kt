@@ -1,5 +1,10 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.feature.dynamic.DynamicDestination
+import com.carbroz.feature.dynamic.DynamicRestorePolicy
+import com.carbroz.feature.dynamic.DynamicScreenInstruction
+import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
+import com.carbroz.feature.dynamic.DynamicScreenRequest
 import com.carbroz.foundation.navigation.RestoredDestination
 import com.carbroz.runtime.sdui.model.NodeType
 import com.carbroz.runtime.sdui.model.RequestMethod
@@ -8,25 +13,12 @@ import com.carbroz.runtime.sdui.model.ScreenTransition
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 class DynamicNavigationTest {
     @Test
-    fun dynamicDestinationHasStableBusinessAgnosticIdentity() {
-        val instruction = instruction()
-        assertEquals("dynamic:instance-9:screen-1:template-7", DynamicDestination(instruction).navigationId)
-    }
-
-    @Test
-    fun dynamicRequestRejectsAbsoluteOrProtocolRelativeEndpoint() {
-        assertFailsWith<IllegalArgumentException> { DynamicScreenRequest(RequestMethod.GET, "https://example.com/screen") }
-        assertFailsWith<IllegalArgumentException> { DynamicScreenRequest(RequestMethod.GET, "//example.com/screen") }
-    }
-
-    @Test
-    fun safeDynamicDestinationRoundTripsThroughFoundationRestorationContract() {
+    fun safeDynamicDestinationRoundTripsThroughProcessRestorationContract() {
         val persistence = DynamicNavigationPersistence()
         val original = DynamicDestination(instruction())
         val persisted = persistence.persist(original) ?: error("destination must be persistable")
@@ -45,7 +37,6 @@ class DynamicNavigationTest {
                 restorePolicy = DynamicRestorePolicy.CACHE_ONLY,
             ),
         )
-
         assertNull(persistence.persist(destination))
     }
 
@@ -53,7 +44,6 @@ class DynamicNavigationTest {
     fun restorationFailsClosedWhenIdentityDoesNotMatchPayload() {
         val persistence = DynamicNavigationPersistence()
         val payload = DynamicScreenInstructionCodec().encode(instruction())
-
         assertNull(
             persistence.restore(
                 RestoredDestination(
@@ -74,7 +64,6 @@ class DynamicNavigationTest {
                 payload = DynamicScreenInstructionCodec().encode(instruction()),
             ),
         )
-
         assertEquals(expected, codec.decode(codec.encode(expected)))
     }
 
