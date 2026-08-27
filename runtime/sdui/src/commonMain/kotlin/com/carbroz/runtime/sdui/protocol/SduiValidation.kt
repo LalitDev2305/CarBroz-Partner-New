@@ -12,6 +12,8 @@ data class SduiProtocolLimits(
     val maxGroupsPerSection: Int = 256,
     val maxElementsPerContainer: Int = 256,
     val maxTotalNodes: Int = 4_096,
+    val maxCommandDepth: Int = 8,
+    val maxSequenceCommands: Int = 32,
 )
 
 sealed interface SduiValidationResult {
@@ -38,9 +40,10 @@ enum class SduiViolationCode {
     EndpointTooLong,
     EndpointMustBeRelative,
     InvalidCommandPayload,
+    CommandDepthExceeded,
 }
 
-/** Strict structural and generic-command validator for untrusted transport data. */
+/** Strict validator for the typed flexible hierarchy and generic command protocol. */
 class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolLimits()) {
     fun validate(envelope: SduiEnvelopeDto): SduiValidationResult {
         val context = ValidationContext(limits)
@@ -52,7 +55,8 @@ class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolL
         envelope.requiredDefinitions.forEachIndexed { index, value -> context.type(value, "requiredDefinitions[$index]") }
         envelope.requiredCapabilities.forEachIndexed { index, value -> context.type(value, "requiredCapabilities[$index]") }
         context.template(envelope.screen.template, "screen.template")
-        return if (context.violations.isEmpty()) SduiValidationResult.Valid else SduiValidationResult.Invalid(context.violations.toList())
+        return if (context.violations.isEmpty()) SduiValidationResult.Valid
+        else SduiValidationResult.Invalid(context.violations.toList())
     }
 
     private class ValidationContext(private val limits: SduiProtocolLimits) {
@@ -64,18 +68,14 @@ class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolL
             else if (value.length > limits.maxIdentifierLength) violation(path, SduiViolationCode.IdentifierTooLong)
         }
 
-        private fun optionalIdentifier(value: String?, path: String) {
-            value?.let { identifier(it, path) }
-        }
+        private fun optionalIdentifier(value: String?, path: String) { value?.let { identifier(it, path) } }
 
         fun type(value: String, path: String) {
             if (value.isBlank()) violation(path, SduiViolationCode.MissingType)
             else if (value.length > limits.maxTypeLength) violation(path, SduiViolationCode.TypeTooLong)
         }
 
-        private fun optionalType(value: String?, path: String) {
-            value?.let { type(it, path) }
-        }
+        private fun optionalType(value: String?, path: String) { value?.let { type(it, path) } }
 
         fun bounded(size: Int, max: Int, path: String) {
             if (size > max) violation(path, SduiViolationCode.CollectionLimitExceeded)
@@ -90,7 +90,9 @@ class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolL
             val seen = mutableSetOf<String>()
             values.forEachIndexed { index, value ->
                 val nodeId = id(value)
-                if (nodeId.isNotBlank() && !seen.add(nodeId)) violation("$path[$index].id", SduiViolationCode.DuplicateSiblingIdentifier)
+                if (nodeId.isNotBlank() && !seen.add(nodeId)) {
+                    violation("$path[$index].id", SduiViolationCode.DuplicateSiblingIdentifier)
+                }
             }
         }
 
@@ -142,10 +144,14 @@ class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolL
             count(path)
             identifier(value.id, "$path.id")
             type(value.type, "$path.type")
-            value.command?.let { command(it, "$path.command") }
+            value.command?.let { command(it, "$path.command", depth = 0) }
         }
 
-        private fun command(value: CommandDto, path: String) {
+        private fun command(value: CommandDto, path: String, depth: Int) {
+            if (depth > limits.maxCommandDepth) {
+                violation(path, SduiViolationCode.CommandDepthExceeded)
+                return
+            }
             when (value) {
                 is RequestCommandDto -> requestCommand(value, path)
                 is CapabilityCommandDto -> capabilityCommand(value, path)
@@ -154,6 +160,15 @@ class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolL
                 is LocalStateCommandDto -> bounded(value.values.size, limits.maxCommandPayloadFields, "$path.values")
                 is FormCommandDto -> allowed(value.operation, FORM_OPERATIONS, "$path.operation")
                 is BackgroundCommandDto -> backgroundCommand(value, path)
+                is SequenceCommandDto -> {
+                    if (value.commands.isEmpty()) violation(path, SduiViolationCode.InvalidCommandPayload)
+                    bounded(value.commands.size, limits.maxSequenceCommands, "$path.commands")
+                    value.commands.forEachIndexed { index, child -> command(child, "$path.commands[$index]", depth + 1) }
+                }
+                is ConditionalCommandDto -> {
+                    command(value.whenTrue, "$path.whenTrue", depth + 1)
+                    value.whenFalse?.let { command(it, "$path.whenFalse", depth + 1) }
+                }
             }
         }
 
@@ -162,7 +177,8 @@ class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolL
             when {
                 value.endpoint.isBlank() -> violation("$path.endpoint", SduiViolationCode.MissingEndpoint)
                 value.endpoint.length > limits.maxEndpointLength -> violation("$path.endpoint", SduiViolationCode.EndpointTooLong)
-                !value.endpoint.startsWith("/") || value.endpoint.startsWith("//") || "://" in value.endpoint -> violation("$path.endpoint", SduiViolationCode.EndpointMustBeRelative)
+                !value.endpoint.startsWith("/") || value.endpoint.startsWith("//") || "://" in value.endpoint ->
+                    violation("$path.endpoint", SduiViolationCode.EndpointMustBeRelative)
             }
             allowed(value.authentication, REQUEST_AUTHENTICATION, "$path.authentication")
             allowed(value.responseMode, RESPONSE_MODES, "$path.responseMode")
@@ -222,6 +238,7 @@ class SduiSchemaValidator(private val limits: SduiProtocolLimits = SduiProtocolL
             if (value.uppercase() !in allowed) violation(path, SduiViolationCode.UnsupportedCommandValue)
         }
 
+        /** Component = Sections XOR Elements; Section = Groups XOR Elements. Each sibling chooses independently. */
         private fun validateExclusiveBranch(hasIntermediate: Boolean, hasElements: Boolean, path: String) {
             when {
                 hasIntermediate && hasElements -> violation(path, SduiViolationCode.ConflictingBranchContent)
