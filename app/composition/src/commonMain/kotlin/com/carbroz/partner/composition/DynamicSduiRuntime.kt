@@ -10,12 +10,13 @@ import com.carbroz.runtime.sdui.compatibility.SduiCompatibilityPolicy
 import com.carbroz.runtime.sdui.normalization.SduiNormalizer
 import com.carbroz.runtime.sdui.protocol.SduiDecoder
 import com.carbroz.runtime.sdui.protocol.SduiSchemaValidator
-import com.carbroz.runtime.sdui.registry.CoreSduiDefinitions
-import com.carbroz.runtime.sdui.registry.SduiRegistryBuilder
+import com.carbroz.runtime.sdui.registry.SduiRegistry
+import com.carbroz.runtime.sdui.registry.SduiRegistryFactory
 import com.carbroz.runtime.sdui.rendering.SduiRendererDispatcher
 
 /** Immutable application wiring for every backend-driven SDUI screen. */
 data class DynamicSduiRuntime(
+    val registry: SduiRegistry,
     val pipeline: SduiPipeline,
     val decoder: SduiDecoder,
     val validator: SduiSchemaValidator,
@@ -25,7 +26,7 @@ data class DynamicSduiRuntime(
 )
 
 internal fun createDynamicSduiRuntime(configuration: AppConfiguration): DynamicSduiRuntime {
-    val registry = SduiRegistryBuilder().apply { registerAll(CoreSduiDefinitions.all) }.build()
+    val registry = SduiRegistryFactory.createCore()
     val decoder = SduiDecoder()
     val validator = SduiSchemaValidator()
     val normalizer = SduiNormalizer(registry)
@@ -43,5 +44,13 @@ internal fun createDynamicSduiRuntime(configuration: AppConfiguration): DynamicS
         normalizer = normalizer,
     )
     val actionRegistry = ActionRegistry.builder().registerAll(CoreActionDefinitions.all).build()
-    return DynamicSduiRuntime(pipeline, decoder, validator, normalizer, SduiRendererDispatcher(registry), ActionPreparer(actionRegistry))
+    return DynamicSduiRuntime(
+        registry = registry,
+        pipeline = pipeline,
+        decoder = decoder,
+        validator = validator,
+        normalizer = normalizer,
+        renderer = SduiRendererDispatcher(registry),
+        actions = ActionPreparer(actionRegistry),
+    )
 }
