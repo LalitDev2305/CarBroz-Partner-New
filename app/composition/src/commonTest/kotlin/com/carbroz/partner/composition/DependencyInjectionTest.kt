@@ -25,8 +25,10 @@ import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.feature.dynamic.NetworkActionExecutor
+import com.carbroz.feature.splash.BootstrapClientCapabilities
+import com.carbroz.feature.splash.BootstrapConfigurationCache
 import com.carbroz.feature.splash.BootstrapConfigurationStartupTask
-import com.carbroz.feature.splash.BootstrapDestinationStore
+import com.carbroz.feature.splash.BootstrapStore
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.BuildInformation
@@ -130,7 +132,10 @@ class DependencyInjectionTest {
             koin.get<FormTemplateRuntimeFactory>()
             koin.get<DynamicScreenCache>()
             koin.get<DynamicFeatureFactory>()
-            koin.get<BootstrapDestinationStore>()
+            koin.get<BootstrapStore>()
+            koin.get<BootstrapConfigurationCache>()
+            val client = koin.get<BootstrapClientCapabilities>()
+            assertEquals(configuration.buildInformation.versionCode, client.versionCode)
             koin.get<BootstrapConfigurationStartupTask>()
 
             assertSame(realtimeTransport, koin.get<RealtimeTransport>())
