@@ -15,13 +15,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.carbroz.runtime.sdui.rendering.DynamicScreenHost
+import com.carbroz.runtime.sdui.SduiRuntime
+import com.carbroz.runtime.sdui.rendering.SduiScreenRenderer
 import kotlinx.serialization.json.JsonPrimitive
 
 @Composable
 fun DynamicScreen(
     state: DynamicScreenState,
-    runtime: DynamicSduiRuntime,
+    sduiRuntime: SduiRuntime,
     store: DynamicFeatureStore,
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -36,9 +37,9 @@ fun DynamicScreen(
                 Text(state.failure.toString(), style = MaterialTheme.typography.bodySmall)
                 Button(onClick = store::retry) { Text("Retry") }
             }
-            state.screen != null -> DynamicScreenHost(
+            state.screen != null -> SduiScreenRenderer(
                 screen = state.screen,
-                dispatcher = runtime.renderer,
+                dispatcher = sduiRuntime.renderer,
                 onCommand = store::onCommand,
                 onRenderFailure = { store.onRenderFailure(it.toString()) },
                 values = store.renderValues,
