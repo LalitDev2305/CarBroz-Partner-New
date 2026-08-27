@@ -33,7 +33,9 @@ object ButtonElementDefinition : ElementDefinition<ButtonElementProperties>, Ren
     override val type: NodeType = NodeType("BUTTON")
 
     override fun decodeProperties(raw: JsonObject): PropertyDecodeResult<ButtonElementProperties> {
-        val common = when (val decoded = CommonNodePropertiesDecoder.decode(raw)) {
+        val common = when (
+            val decoded = CommonNodePropertiesDecoder.decode(raw, CommonNodeProperties(fillWidth = true))
+        ) {
             is CommonPropertiesDecodeResult.Success -> decoded.value
             is CommonPropertiesDecodeResult.Failure -> return PropertyDecodeResult.Failure(decoded.reason)
         }
