@@ -40,9 +40,7 @@ import com.carbroz.feature.dynamic.DynamicBindingContextFactory
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
-import com.carbroz.feature.dynamic.DynamicSduiRuntime
 import com.carbroz.feature.dynamic.NetworkActionExecutor
-import com.carbroz.feature.dynamic.createDynamicSduiRuntime
 import com.carbroz.feature.splash.BootstrapConfigurationStartupTask
 import com.carbroz.feature.splash.BootstrapDestinationStore
 import com.carbroz.feature.splash.SplashDestination
@@ -83,9 +81,13 @@ import com.carbroz.platform.background.BackgroundTaskHandler
 import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
 import com.carbroz.platform.background.BackgroundTaskRunner
 import com.carbroz.platform.background.ContinuousExecutionController
+import com.carbroz.runtime.action.ActionPreparerFactory
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.DefaultApplicationRuntime
 import com.carbroz.runtime.application.startup.StartupCoordinator
+import com.carbroz.runtime.sdui.SduiRuntime
+import com.carbroz.runtime.sdui.SduiRuntimeFactory
+import com.carbroz.runtime.sdui.compatibility.SduiClientCompatibility
 import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
@@ -197,15 +199,27 @@ fun carBrozApplicationModule(
     single { BootstrapDestinationStore() }
     single { BootstrapConfigurationStartupTask(network = get(), destinations = get(), instructionCodec = get()) }
 
-    single { createDynamicSduiRuntime(configuration = get()) }
+    single<SduiRuntime> {
+        SduiRuntimeFactory.createCore(
+            SduiClientCompatibility(
+                clientVersion = configuration.buildInformation.versionCode
+                    .coerceIn(1L, Int.MAX_VALUE.toLong())
+                    .toInt(),
+                supportedProtocolVersions = 1..1,
+                supportedSchemaVersions = 1..1,
+            ),
+        )
+    }
+    single { ActionPreparerFactory.createCore() }
     single<DynamicBindingContextFactory> {
         DefaultDynamicBindingContextFactory(sessionProvider = get(), configurationProvider = get())
     }
-    single { FormTemplateRuntimeFactory(get<DynamicSduiRuntime>().registry) }
+    single { FormTemplateRuntimeFactory(get<SduiRuntime>().registry) }
     single { DynamicScreenCache() }
     single {
         DynamicFeatureFactory(
-            runtime = get(),
+            sduiRuntime = get(),
+            actionPreparer = get(),
             networkActions = get(),
             capabilityActions = get(),
             backgroundActions = get(),
