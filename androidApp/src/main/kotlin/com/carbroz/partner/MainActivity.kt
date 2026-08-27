@@ -42,6 +42,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        const val NAVIGATION_PROCESS_STATE_KEY = "carbroz.dynamic.navigation.process_state"
+        const val NAVIGATION_PROCESS_STATE_KEY = "carbroz.navigation.process_state"
     }
 }
