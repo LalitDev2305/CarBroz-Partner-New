@@ -22,6 +22,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(project(":foundation:configuration"))
+            implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:capabilities"))
             implementation(project(":foundation:session"))
