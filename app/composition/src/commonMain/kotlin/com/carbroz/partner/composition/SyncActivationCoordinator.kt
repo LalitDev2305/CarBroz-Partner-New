@@ -12,34 +12,34 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-/**
- * Application-level activation policy for foreground sync.
- *
- * Sync semantics remain owned by data:sync; this coordinator only translates application lifecycle
- * and semantic connectivity transitions into sync triggers. Failures are isolated so long-lived
- * observation survives an individual synchronization failure.
- */
+/** Offline writes are operation-specific; automatic sync stays disabled until product policy enables it. */
+data class SyncActivationPolicy(
+    val foregroundEnabled: Boolean = false,
+    val connectivityRestoredEnabled: Boolean = false,
+)
+
 internal class SyncActivationCoordinator(
     private val lifecycle: AppLifecycle,
     private val connectivity: NetworkConnectivityObserver,
     private val syncCoordinator: SyncCoordinator,
+    private val policy: SyncActivationPolicy = SyncActivationPolicy(),
 ) {
     fun start(scope: CoroutineScope): Job = scope.launch {
-        launch {
-            lifecycle.state.collect { state ->
-                if (state == AppLifecycleState.Foreground) {
-                    synchronizeSafely(SyncTrigger.FOREGROUND)
+        if (policy.foregroundEnabled) {
+            launch {
+                lifecycle.state.collect { state ->
+                    if (state == AppLifecycleState.Foreground) synchronizeSafely(SyncTrigger.FOREGROUND)
                 }
             }
         }
 
-        launch {
-            var previous = connectivity.state.value
-            connectivity.state.collect { current ->
-                val restored = current == NetworkConnectivity.ONLINE && previous != NetworkConnectivity.ONLINE
-                previous = current
-                if (restored) {
-                    synchronizeSafely(SyncTrigger.CONNECTIVITY_RESTORED)
+        if (policy.connectivityRestoredEnabled) {
+            launch {
+                var previous = connectivity.state.value
+                connectivity.state.collect { current ->
+                    val restored = current == NetworkConnectivity.ONLINE && previous != NetworkConnectivity.ONLINE
+                    previous = current
+                    if (restored) synchronizeSafely(SyncTrigger.CONNECTIVITY_RESTORED)
                 }
             }
         }
@@ -55,7 +55,7 @@ internal class SyncActivationCoordinator(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (_: Throwable) {
-            // Activation observation is long-lived; one failed attempt must not terminate it.
+            // Long-lived activation observation must survive one failed synchronization attempt.
         }
     }
 }
