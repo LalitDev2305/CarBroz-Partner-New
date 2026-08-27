@@ -64,6 +64,25 @@ class DynamicNavigationTest {
         )
     }
 
+    @Test
+    fun processStateCodecRoundTripsSemanticRestorationData() {
+        val codec = DynamicNavigationProcessStateCodec()
+        val expected = listOf(
+            RestoredDestination("splash"),
+            RestoredDestination(
+                navigationId = "dynamic:instance-9:screen-1:template-7",
+                payload = DynamicScreenInstructionCodec().encode(instruction()),
+            ),
+        )
+
+        assertEquals(expected, codec.decode(codec.encode(expected)))
+    }
+
+    @Test
+    fun malformedProcessStateFailsClosedBeforeDestinationRestoration() {
+        assertNull(DynamicNavigationProcessStateCodec().decode("not-json"))
+    }
+
     private fun instruction() = DynamicScreenInstruction(
         destination = ScreenDestination("screen-1", "template-7", NodeType("FORM")),
         request = DynamicScreenRequest(RequestMethod.GET, "/api/v1/screen/next", JsonObject(emptyMap())),
