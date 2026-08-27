@@ -48,18 +48,14 @@ object InputElementDefinition : ElementDefinition<InputElementProperties>, Rende
     @Composable
     override fun RenderElement(node: Element, context: SduiRenderContext): Boolean {
         val properties = node.properties as? InputElementProperties ?: return false
-        var value by remember(node.path, properties.initialValue) { mutableStateOf(properties.initialValue) }
+        val restored = (context.values.resolve(node.path, properties.fieldId) as? JsonPrimitive)?.contentOrNull
+            ?: properties.initialValue
+        var value by remember(node.path, restored) { mutableStateOf(restored) }
         OutlinedTextField(
             value = value,
             onValueChange = {
                 value = it
-                context.events.emit(
-                    SduiRenderEvent.ValueChanged(
-                        path = node.path,
-                        value = it,
-                        fieldId = properties.fieldId,
-                    ),
-                )
+                context.events.emit(SduiRenderEvent.ValueChanged(node.path, it, properties.fieldId))
             },
             modifier = if (properties.fillWidth) Modifier.fillMaxWidth() else Modifier,
             label = properties.label?.let { { Text(it) } },
