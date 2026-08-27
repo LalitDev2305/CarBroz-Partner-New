@@ -5,7 +5,6 @@ import com.carbroz.runtime.binding.BindingContext
 import com.carbroz.runtime.binding.BindingResolutionError
 import com.carbroz.runtime.binding.BindingResolutionResult
 import com.carbroz.runtime.binding.BindingResolver
-import com.carbroz.runtime.form.FormStore
 import com.carbroz.runtime.sdui.model.BackgroundNetworkRequirement
 import com.carbroz.runtime.sdui.model.BackgroundOperation
 import com.carbroz.runtime.sdui.model.BackgroundWorkKind
@@ -21,6 +20,7 @@ import com.carbroz.runtime.sdui.model.RequestResponseMode
 import com.carbroz.runtime.sdui.model.ScreenDestination
 import com.carbroz.runtime.sdui.model.ScreenTransition
 import com.carbroz.runtime.sdui.model.SequenceCommand
+import com.carbroz.runtime.sdui.template.form.runtime.FormStore
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
