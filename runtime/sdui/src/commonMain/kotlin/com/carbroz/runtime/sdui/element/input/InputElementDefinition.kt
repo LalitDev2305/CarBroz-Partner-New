@@ -53,7 +53,13 @@ object InputElementDefinition : ElementDefinition<InputElementProperties>, Rende
             value = value,
             onValueChange = {
                 value = it
-                context.events.emit(SduiRenderEvent.ValueChanged(node.path, it))
+                context.events.emit(
+                    SduiRenderEvent.ValueChanged(
+                        path = node.path,
+                        value = it,
+                        fieldId = properties.fieldId,
+                    ),
+                )
             },
             modifier = if (properties.fillWidth) Modifier.fillMaxWidth() else Modifier,
             label = properties.label?.let { { Text(it) } },
