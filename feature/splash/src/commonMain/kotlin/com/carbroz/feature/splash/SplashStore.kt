@@ -15,27 +15,38 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
- * Static splash state owner.
+ * Static splash presentation owner.
  *
- * The runtime remains the canonical owner of bootstrap state. This store only
- * adapts runtime + lifecycle state into presentation state and translates UI
- * intents into bootstrap commands.
+ * [ApplicationRuntime] remains the owner of startup execution and [BootstrapStore] remains the owner of
+ * the validated bootstrap outcome. This store only combines those states for native Splash presentation
+ * and translates UI intents into startup commands.
  */
 class SplashStore(
     private val runtime: ApplicationRuntime,
+    private val bootstrap: BootstrapStore,
     parentScope: CoroutineScope,
 ) : Store<SplashIntent, SplashState> {
     private val parentJob = parentScope.coroutineContext[Job]
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentJob))
-    private val mutableState = MutableStateFlow(SplashState(runtimeState = runtime.state.value))
+    private val mutableState = MutableStateFlow(
+        SplashState(
+            runtimeState = runtime.state.value,
+            bootstrapState = bootstrap.state.value,
+        ),
+    )
     override val state: StateFlow<SplashState> = mutableState.asStateFlow()
 
-    private var bootstrapJob: Job? = null
+    private var startupJob: Job? = null
 
     init {
         scope.launch {
             runtime.state.collectLatest { runtimeState ->
                 mutableState.value = mutableState.value.copy(runtimeState = runtimeState)
+            }
+        }
+        scope.launch {
+            bootstrap.state.collectLatest { bootstrapState ->
+                mutableState.value = mutableState.value.copy(bootstrapState = bootstrapState)
             }
         }
     }
@@ -49,15 +60,15 @@ class SplashStore(
     }
 
     fun close() {
-        bootstrapJob?.cancel()
+        startupJob?.cancel()
         scope.cancel()
     }
 
     private fun onLifecycleChanged(state: AppLifecycleState) {
         mutableState.value = mutableState.value.copy(lifecycleState = state)
         if (state == AppLifecycleState.Background) {
-            bootstrapJob?.cancel()
-            bootstrapJob = null
+            startupJob?.cancel()
+            startupJob = null
         } else if (state == AppLifecycleState.Foreground && runtime.state.value == ApplicationRuntimeState.Idle) {
             startIfAllowed(retry = false)
         }
@@ -65,10 +76,15 @@ class SplashStore(
 
     private fun startIfAllowed(retry: Boolean) {
         if (mutableState.value.lifecycleState == AppLifecycleState.Background) return
-        if (bootstrapJob?.isActive == true) return
+        if (startupJob?.isActive == true) return
 
-        bootstrapJob = scope.launch {
-            if (retry) runtime.retry() else runtime.start()
+        startupJob = scope.launch {
+            if (retry) {
+                bootstrap.reset()
+                runtime.retry()
+            } else {
+                runtime.start()
+            }
         }
     }
 }
