@@ -15,7 +15,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 
-/** Transport SPI. Ktor belongs behind this interface, not in runtime:action. */
 fun interface NetworkTransport {
     suspend fun execute(request: TransportRequest): NetworkResult
 }
@@ -79,16 +78,12 @@ class NetworkExecutor(
         }
     }
 
-    private suspend fun executeWithCachePolicy(
-        request: NetworkRequest,
-        context: NetworkRequestContext,
-    ): NetworkResult {
+    private suspend fun executeWithCachePolicy(request: NetworkRequest, context: NetworkRequestContext): NetworkResult {
         val key = request.cacheKey()
         return when (val policy = request.cachePolicy) {
             NetworkCachePolicy.NetworkOnly -> executeWithPolicy(request, context)
-            is NetworkCachePolicy.CacheFirst -> {
+            is NetworkCachePolicy.CacheFirst ->
                 responseCache.freshResult(key, policy.maxAgeMillis) ?: executeAndCache(request, context, key)
-            }
             is NetworkCachePolicy.NetworkFirst -> {
                 val networkResult = executeAndCache(request, context, key)
                 if (networkResult is NetworkResult.Success) networkResult
@@ -106,11 +101,8 @@ class NetworkExecutor(
         val success = result as? NetworkResult.Success ?: return result
         if (!success.response.disallowsStorage()) {
             responseCache.put(
-                key = key,
-                entry = NetworkCacheEntry(
-                    response = success.response,
-                    storedAtEpochMillis = clock.nowEpochMilliseconds(),
-                ),
+                key,
+                NetworkCacheEntry(success.response, clock.nowEpochMilliseconds()),
             )
         }
         return result
@@ -125,10 +117,7 @@ class NetworkExecutor(
         return if (age <= maxAgeMillis) NetworkResult.Success(entry.response) else null
     }
 
-    private suspend fun executeWithPolicy(
-        request: NetworkRequest,
-        context: NetworkRequestContext,
-    ): NetworkResult {
+    private suspend fun executeWithPolicy(request: NetworkRequest, context: NetworkRequestContext): NetworkResult {
         val transportRequest = try {
             buildTransportRequest(request)
         } catch (error: IllegalArgumentException) {
@@ -161,9 +150,15 @@ class NetworkExecutor(
         val headers = buildMap<String, String> {
             putAll(headerPolicy.merge(headerProvider.headers(), request.headers))
             request.idempotencyKey?.let { key -> put(IDEMPOTENCY_HEADER, key) }
-            if (request.authentication == NetworkAuthentication.SESSION) {
-                val authorization = authorizationProvider.authorizationHeader() ?: return null
-                put(AUTHORIZATION_HEADER, authorization)
+            when (request.authentication) {
+                NetworkAuthentication.NONE -> Unit
+                NetworkAuthentication.SESSION -> {
+                    val authorization = authorizationProvider.authorizationHeader() ?: return null
+                    put(AUTHORIZATION_HEADER, authorization)
+                }
+                NetworkAuthentication.OPTIONAL_SESSION -> {
+                    authorizationProvider.authorizationHeader()?.let { put(AUTHORIZATION_HEADER, it) }
+                }
             }
         }
 
@@ -195,10 +190,7 @@ class NetworkExecutor(
         return null
     }
 
-    private fun NetworkRequest.cacheKey(): NetworkCacheKey = NetworkCacheKey(
-        endpoint = endpoint,
-        headers = headers,
-    )
+    private fun NetworkRequest.cacheKey(): NetworkCacheKey = NetworkCacheKey(endpoint = endpoint, headers = headers)
 
     private fun NetworkResponse.disallowsStorage(): Boolean = headers.entries.any { (name, value) ->
         name.equals(CACHE_CONTROL_HEADER, ignoreCase = true) &&
@@ -206,7 +198,7 @@ class NetworkExecutor(
     }
 
     private fun NetworkRequest.shouldAttemptAuthenticationRecovery(result: NetworkResult): Boolean {
-        if (authentication != NetworkAuthentication.SESSION) return false
+        if (authentication == NetworkAuthentication.NONE) return false
         val http = (result as? NetworkResult.Failure)?.error as? NetworkFailure.Http ?: return false
         if (http.statusCode != 401) return false
         return !method.requiresIdempotencyKeyForRetry() || idempotencyKey != null
@@ -257,9 +249,7 @@ class NetworkExecutor(
     }
 
     private fun NetworkRequestContext.correlationId(): CorrelationId = CorrelationId(requestId.value)
-
-    private fun elapsedSince(startedAt: Long): Long =
-        (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L)
+    private fun elapsedSince(startedAt: Long): Long = (clock.nowEpochMilliseconds() - startedAt).coerceAtLeast(0L)
 
     private fun NetworkOutcome.metricName(): String = when (this) {
         is NetworkOutcome.Success -> "success"
