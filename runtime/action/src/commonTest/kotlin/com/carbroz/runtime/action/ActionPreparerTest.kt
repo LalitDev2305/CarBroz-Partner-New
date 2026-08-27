@@ -3,12 +3,6 @@ package com.carbroz.runtime.action
 import com.carbroz.runtime.binding.BindingContext
 import com.carbroz.runtime.binding.BindingNamespace
 import com.carbroz.runtime.binding.BindingResolutionError
-import com.carbroz.runtime.form.FormFieldDefinition
-import com.carbroz.runtime.form.FormFieldId
-import com.carbroz.runtime.form.FormStore
-import com.carbroz.runtime.form.FormValidationError
-import com.carbroz.runtime.form.FormValidator
-import com.carbroz.runtime.form.asBindingValueSource
 import com.carbroz.runtime.sdui.model.BackgroundCommand
 import com.carbroz.runtime.sdui.model.BackgroundOperation
 import com.carbroz.runtime.sdui.model.Command
@@ -23,6 +17,12 @@ import com.carbroz.runtime.sdui.model.RequestResponseMode
 import com.carbroz.runtime.sdui.model.ScreenDestination
 import com.carbroz.runtime.sdui.model.SduiNavigationCommand
 import com.carbroz.runtime.sdui.model.SequenceCommand
+import com.carbroz.runtime.sdui.template.form.runtime.FormFieldDefinition
+import com.carbroz.runtime.sdui.template.form.runtime.FormFieldId
+import com.carbroz.runtime.sdui.template.form.runtime.FormStore
+import com.carbroz.runtime.sdui.template.form.runtime.FormValidationError
+import com.carbroz.runtime.sdui.template.form.runtime.FormValidator
+import com.carbroz.runtime.sdui.template.form.runtime.asBindingValueSource
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
