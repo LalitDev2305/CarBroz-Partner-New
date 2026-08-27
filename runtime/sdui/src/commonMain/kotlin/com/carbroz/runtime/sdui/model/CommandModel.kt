@@ -5,13 +5,10 @@ import kotlinx.serialization.json.JsonElement
 @kotlin.jvm.JvmInline
 value class CommandKind(val value: String)
 
-/** Trusted semantic command marker. Concrete command families remain extensible. */
-interface Command {
-    val kind: CommandKind
-}
+interface Command { val kind: CommandKind }
 
 enum class RequestMethod { GET, POST, PUT, PATCH, DELETE }
-enum class RequestAuthentication { NONE, SESSION }
+enum class RequestAuthentication { NONE, SESSION, OPTIONAL_SESSION }
 enum class RequestResponseMode { SCREEN, NONE }
 enum class ScreenTransition { PUSH, REPLACE, RESET, STAY }
 
@@ -46,12 +43,8 @@ data class RequestCommand(
         }
         require(backStackKey == null || backStackKey.isNotBlank()) { "Back-stack key must not be blank" }
     }
-
     override val kind: CommandKind = KIND
-
-    companion object {
-        val KIND: CommandKind = CommandKind("REQUEST")
-    }
+    companion object { val KIND = CommandKind("REQUEST") }
 }
 
 data class CapabilityCommand(
@@ -63,12 +56,8 @@ data class CapabilityCommand(
         require(capability.isNotBlank()) { "Capability command capability must not be blank" }
         require(operation.isNotBlank()) { "Capability command operation must not be blank" }
     }
-
     override val kind: CommandKind = KIND
-
-    companion object {
-        val KIND: CommandKind = CommandKind("CAPABILITY")
-    }
+    companion object { val KIND = CommandKind("CAPABILITY") }
 }
 
 enum class NavigationOperation { POP, POP_TO }
@@ -82,12 +71,8 @@ data class SduiNavigationCommand(
             "POP_TO requires targetNavigationId"
         }
     }
-
     override val kind: CommandKind = KIND
-
-    companion object {
-        val KIND: CommandKind = CommandKind("NAVIGATION")
-    }
+    companion object { val KIND = CommandKind("NAVIGATION") }
 }
 
 enum class PresentationKind { MESSAGE, DIALOG, SHEET }
@@ -99,39 +84,20 @@ data class PresentationCommand(
     val id: String,
     val properties: Map<String, JsonElement> = emptyMap(),
 ) : Command {
-    init {
-        require(id.isNotBlank()) { "Presentation id must not be blank" }
-    }
-
+    init { require(id.isNotBlank()) { "Presentation id must not be blank" } }
     override val kind: CommandKind = KIND
-
-    companion object {
-        val KIND: CommandKind = CommandKind("PRESENTATION")
-    }
+    companion object { val KIND = CommandKind("PRESENTATION") }
 }
 
-data class LocalStateCommand(
-    val values: Map<String, JsonElement>,
-) : Command {
-    init {
-        require(values.keys.all { it.isNotBlank() }) { "Local-state keys must not be blank" }
-    }
-
+data class LocalStateCommand(val values: Map<String, JsonElement>) : Command {
+    init { require(values.keys.all { it.isNotBlank() }) { "Local-state keys must not be blank" } }
     override val kind: CommandKind = KIND
-
-    companion object {
-        val KIND: CommandKind = CommandKind("LOCAL_STATE")
-    }
+    companion object { val KIND = CommandKind("LOCAL_STATE") }
 }
 
 enum class FormOperation { VALIDATE, RESET }
 
-data class FormCommand(
-    val operation: FormOperation,
-) : Command {
+data class FormCommand(val operation: FormOperation) : Command {
     override val kind: CommandKind = KIND
-
-    companion object {
-        val KIND: CommandKind = CommandKind("FORM")
-    }
+    companion object { val KIND = CommandKind("FORM") }
 }
