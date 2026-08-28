@@ -96,10 +96,19 @@ class BootstrapConfigurationStartupTask(
             else -> return invalidResponse("bootstrap_config_cache_miss")
         }
 
+        val updateRequiredByBuild = dto.updatePolicy.minimumSupportedBuild
+            ?.let { client.versionCode < it }
+            ?: false
+        val effectiveUpdatePolicy = if (updateRequiredByBuild && dto.updatePolicy.mode != BootstrapUpdateMode.REQUIRED) {
+            dto.updatePolicy.copy(mode = BootstrapUpdateMode.REQUIRED)
+        } else {
+            dto.updatePolicy
+        }
+
         val snapshot = BootstrapSnapshot(
             meta = dto.meta,
             configuration = effectiveConfiguration,
-            updatePolicy = dto.updatePolicy,
+            updatePolicy = effectiveUpdatePolicy,
             maintenance = dto.maintenance,
             session = dto.session,
             user = dto.user,
@@ -114,11 +123,11 @@ class BootstrapConfigurationStartupTask(
             runtimePolicy = dto.runtimePolicy,
         )
 
-        if (dto.updatePolicy.mode == BootstrapUpdateMode.REQUIRED) {
-            if (dto.updatePolicy.storeUrl.isNullOrBlank()) {
+        if (effectiveUpdatePolicy.mode == BootstrapUpdateMode.REQUIRED) {
+            if (effectiveUpdatePolicy.storeUrl.isNullOrBlank()) {
                 return invalidResponse("bootstrap_required_update_missing_store_url")
             }
-            store.forceUpdate(snapshot, dto.updatePolicy)
+            store.forceUpdate(snapshot, effectiveUpdatePolicy)
             return StartupTaskResult.Failure(
                 StartupFailure.Expected("bootstrap_update_required", recoverable = false),
             )
