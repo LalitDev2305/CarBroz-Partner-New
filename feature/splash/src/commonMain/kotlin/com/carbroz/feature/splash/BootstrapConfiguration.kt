@@ -119,12 +119,16 @@ class BootstrapConfigurationStartupTask(
                 return invalidResponse("bootstrap_required_update_missing_store_url")
             }
             store.forceUpdate(snapshot, dto.updatePolicy)
-            return StartupTaskResult.Success
+            return StartupTaskResult.Failure(
+                StartupFailure.Expected("bootstrap_update_required", recoverable = false),
+            )
         }
 
         if (dto.maintenance.enabled) {
             store.maintenance(snapshot, dto.maintenance)
-            return StartupTaskResult.Success
+            return StartupTaskResult.Failure(
+                StartupFailure.Expected("bootstrap_maintenance", recoverable = true),
+            )
         }
 
         val nextScreen = dto.nextScreen ?: return invalidResponse("bootstrap_missing_next_screen")
