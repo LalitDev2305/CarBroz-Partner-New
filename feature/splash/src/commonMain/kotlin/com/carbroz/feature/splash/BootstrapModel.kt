@@ -38,7 +38,12 @@ data class BootstrapMeta(
     val requestId: String? = null,
     val serverTimeEpochMilliseconds: Long,
     val bootstrapSchemaVersion: Int,
-)
+) {
+    init {
+        require(serverTimeEpochMilliseconds >= 0L)
+        require(bootstrapSchemaVersion > 0)
+    }
+}
 
 @Serializable
 data class BootstrapRemoteConfiguration(
@@ -56,7 +61,15 @@ data class BootstrapUpdatePolicy(
     val storeUrl: String? = null,
     val minimumSupportedBuild: Long? = null,
     val latestBuild: Long? = null,
-)
+) {
+    init {
+        require(minimumSupportedBuild == null || minimumSupportedBuild >= 0L)
+        require(latestBuild == null || latestBuild >= 0L)
+        require(
+            minimumSupportedBuild == null || latestBuild == null || latestBuild >= minimumSupportedBuild,
+        )
+    }
+}
 
 @Serializable
 data class BootstrapMaintenancePolicy(
@@ -66,14 +79,21 @@ data class BootstrapMaintenancePolicy(
     val message: String? = null,
     val retryAfterSeconds: Long? = null,
     val supportAllowed: Boolean = true,
-)
+) {
+    init {
+        require(scope.isNotBlank())
+        require(retryAfterSeconds == null || retryAfterSeconds >= 0L)
+    }
+}
 
 @Serializable
 data class BootstrapSessionSnapshot(
     val authenticated: Boolean = false,
     val sessionId: String? = null,
     val expiresAtEpochMilliseconds: Long? = null,
-)
+) {
+    init { require(expiresAtEpochMilliseconds == null || expiresAtEpochMilliseconds >= 0L) }
+}
 
 @Serializable
 data class BootstrapUserSnapshot(
@@ -83,7 +103,9 @@ data class BootstrapUserSnapshot(
     val email: String? = null,
     val avatarUrl: String? = null,
     val status: String? = null,
-)
+) {
+    init { require(id.isNotBlank()) }
+}
 
 @Serializable
 data class BootstrapPartnerSnapshot(
@@ -94,13 +116,20 @@ data class BootstrapPartnerSnapshot(
     val verificationStatus: String? = null,
     val accountStatus: String? = null,
     val availabilityStatus: String? = null,
-)
+) {
+    init { require(partnerId.isNotBlank()) }
+}
 
 @Serializable
 data class BootstrapSduiPolicy(
     val protocolVersion: Int,
     val schemaVersion: Int,
-)
+) {
+    init {
+        require(protocolVersion > 0)
+        require(schemaVersion > 0)
+    }
+}
 
 /**
  * Effective startup context for the current launch.
