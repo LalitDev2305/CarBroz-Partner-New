@@ -63,6 +63,10 @@ class BootstrapConfigurationTest {
         assertEquals(NetworkAuthentication.OPTIONAL_SESSION, capturedRequest?.authentication)
         assertEquals("1.2.3", capturedRequest?.headers?.get("X-CarBroz-App-Version"))
         assertEquals("123", capturedRequest?.headers?.get("X-CarBroz-Build-Number"))
+        assertEquals("com.carbroz.partner", capturedRequest?.headers?.get("X-CarBroz-Application-Id"))
+        assertEquals("1", capturedRequest?.headers?.get("X-CarBroz-Bootstrap-Schema"))
+        assertEquals("1", capturedRequest?.headers?.get("X-CarBroz-Sdui-Protocol"))
+        assertEquals("1", capturedRequest?.headers?.get("X-CarBroz-Sdui-Schema"))
     }
 
     @Test
@@ -94,7 +98,7 @@ class BootstrapConfigurationTest {
     }
 
     @Test
-    fun `required update blocks dynamic destination`() = runTest {
+    fun `required update blocks dynamic destination with non recoverable runtime result`() = runTest {
         val store = BootstrapStore()
         val task = task(
             network = NetworkDataSource {
@@ -107,14 +111,38 @@ class BootstrapConfigurationTest {
             store = store,
         )
 
-        assertEquals(StartupTaskResult.Success, task.execute())
+        val failure = assertIs<StartupTaskResult.Failure>(task.execute())
+        val reason = assertIs<StartupFailure.Expected>(failure.reason)
+        assertEquals("bootstrap_update_required", reason.code)
+        assertEquals(false, reason.recoverable)
         val blocked = assertIs<BootstrapState.ForceUpdate>(store.state.value)
         assertEquals(BootstrapUpdateMode.REQUIRED, blocked.policy.mode)
         assertNull(store.currentInstruction())
     }
 
     @Test
-    fun `maintenance blocks dynamic destination`() = runTest {
+    fun `minimum supported build enforces required update even when mode is none`() = runTest {
+        val store = BootstrapStore()
+        val task = task(
+            network = NetworkDataSource {
+                successfulBootstrapResponse(
+                    updateMode = "NONE",
+                    storeUrl = "https://play.google.com/store/apps/details?id=com.carbroz.partner",
+                    minimumSupportedBuild = 124,
+                    includeNextScreen = false,
+                )
+            },
+            store = store,
+        )
+
+        val failure = assertIs<StartupTaskResult.Failure>(task.execute())
+        assertEquals("bootstrap_update_required", assertIs<StartupFailure.Expected>(failure.reason).code)
+        val blocked = assertIs<BootstrapState.ForceUpdate>(store.state.value)
+        assertEquals(BootstrapUpdateMode.REQUIRED, blocked.policy.mode)
+    }
+
+    @Test
+    fun `maintenance blocks dynamic destination with recoverable runtime result`() = runTest {
         val store = BootstrapStore()
         val task = task(
             network = NetworkDataSource {
@@ -123,7 +151,10 @@ class BootstrapConfigurationTest {
             store = store,
         )
 
-        assertEquals(StartupTaskResult.Success, task.execute())
+        val failure = assertIs<StartupTaskResult.Failure>(task.execute())
+        val reason = assertIs<StartupFailure.Expected>(failure.reason)
+        assertEquals("bootstrap_maintenance", reason.code)
+        assertEquals(true, reason.recoverable)
         assertIs<BootstrapState.Maintenance>(store.state.value)
         assertNull(store.currentInstruction())
     }
@@ -217,6 +248,7 @@ class BootstrapConfigurationTest {
         configData: JsonObject? = buildJsonObject { put("partnerMode", "enabled") },
         updateMode: String = "NONE",
         storeUrl: String? = null,
+        minimumSupportedBuild: Long? = null,
         maintenance: Boolean = false,
         includeNextScreen: Boolean = true,
         userName: String = "Partner",
@@ -239,6 +271,7 @@ class BootstrapConfigurationTest {
                     put("mode", updateMode)
                     put("title", "Update CarBroz Partner")
                     if (storeUrl != null) put("storeUrl", storeUrl)
+                    if (minimumSupportedBuild != null) put("minimumSupportedBuild", minimumSupportedBuild)
                 })
                 put("maintenance", buildJsonObject {
                     put("enabled", maintenance)
