@@ -22,17 +22,18 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":foundation:architecture"))
+            api(project(":foundation:lifecycle"))
+            api(project(":foundation:navigation"))
+            api(project(":runtime:application"))
+            api(project(":data:network"))
+            api(project(":data:preferences"))
             // Splash's public bootstrap handoff exposes DynamicScreenInstruction/Codec types.
             api(project(":feature:dynamic"))
-            // PreferenceBackedBootstrapConfigurationCache is a public adapter over this typed store.
-            api(project(":data:preferences"))
-            implementation(project(":foundation:lifecycle"))
-            implementation(project(":foundation:navigation"))
+            // Bootstrap/Splash public contracts expose StateFlow, CoroutineScope and JsonObject/Json.
+            api(libs.kotlinx.coroutines.core)
+            api(libs.kotlinx.serialization.json)
+
             implementation(project(":foundation:design-system"))
-            implementation(project(":runtime:application"))
-            implementation(project(":data:network"))
-            implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.kotlinx.serialization.json)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
