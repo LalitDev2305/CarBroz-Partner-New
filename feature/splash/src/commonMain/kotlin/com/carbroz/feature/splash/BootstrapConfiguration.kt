@@ -12,6 +12,7 @@ import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupTask
 import com.carbroz.runtime.application.startup.StartupTaskResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -36,7 +37,7 @@ class BootstrapConfigurationStartupTask(
 
     override suspend fun execute(): StartupTaskResult {
         store.fetching()
-        val cachedConfiguration = configurationCache.read()
+        val cachedConfiguration = readCachedConfiguration()
         val headers = buildMap {
             put(HEADER_APP_VERSION, client.versionName)
             put(HEADER_BUILD_NUMBER, client.versionCode.toString())
@@ -90,7 +91,9 @@ class BootstrapConfigurationStartupTask(
         val effectiveConfiguration = when {
             dto.config.changed -> {
                 val data = dto.config.data ?: return invalidResponse("bootstrap_config_missing_data")
-                BootstrapRemoteConfiguration(dto.config.version, data).also(configurationCache::write)
+                BootstrapRemoteConfiguration(dto.config.version, data).also { configuration ->
+                    writeCachedConfiguration(configuration)
+                }
             }
             cachedConfiguration?.version == dto.config.version -> cachedConfiguration
             else -> return invalidResponse("bootstrap_config_cache_miss")
@@ -147,6 +150,26 @@ class BootstrapConfigurationStartupTask(
                 StartupTaskResult.Success
             }
             is DynamicInstructionDecodeResult.Failure -> invalidResponse("bootstrap_${decoded.code}")
+        }
+    }
+
+    /** Cache is a startup optimization. Storage defects never own application availability. */
+    private suspend fun readCachedConfiguration(): BootstrapRemoteConfiguration? = try {
+        configurationCache.read()
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (_: Throwable) {
+        null
+    }
+
+    /** Fresh server configuration remains valid even when local persistence is temporarily unavailable. */
+    private suspend fun writeCachedConfiguration(configuration: BootstrapRemoteConfiguration) {
+        try {
+            configurationCache.write(configuration)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            // Best-effort cache only. A later launch will simply request the complete configuration again.
         }
     }
 
