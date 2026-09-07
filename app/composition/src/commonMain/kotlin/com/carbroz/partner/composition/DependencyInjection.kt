@@ -204,7 +204,12 @@ fun carBrozApplicationModule(
             tokenRefresher = get(),
         )
     }
-    single<NetworkAuthenticationRecovery> { SessionNetworkAuthenticationRecovery(coordinator = get()) }
+    single<NetworkAuthenticationRecovery> {
+        SessionNetworkAuthenticationRecovery(
+            coordinator = get(),
+            sessionStore = get(),
+        )
+    }
 
     single<NetworkResponseCache> { InMemoryNetworkResponseCache() }
     single<NetworkRequestIdProvider> {
