@@ -1,5 +1,12 @@
 package com.carbroz.foundation.configuration
 
+/** Semantic client platform supplied explicitly by the platform/application composition boundary. */
+enum class ClientPlatform {
+    ANDROID,
+    IOS,
+    DESKTOP,
+}
+
 /**
  * Immutable product-neutral runtime configuration.
  *
@@ -9,6 +16,7 @@ package com.carbroz.foundation.configuration
 data class AppConfiguration(
     val environment: AppEnvironment,
     val apiBaseUrl: String,
+    val clientPlatform: ClientPlatform = ClientPlatform.ANDROID,
     val buildInformation: BuildInformation,
 )
 
