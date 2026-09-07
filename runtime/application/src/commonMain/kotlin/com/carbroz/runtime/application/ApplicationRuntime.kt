@@ -1,7 +1,11 @@
 package com.carbroz.runtime.application
 
+import com.carbroz.runtime.application.startup.StartupBlocker
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import com.carbroz.runtime.application.startup.StartupFailure
+import com.carbroz.runtime.application.startup.StartupNotice
+import com.carbroz.runtime.application.startup.StartupPayload
+import com.carbroz.runtime.application.startup.StartupResolution
 import com.carbroz.runtime.application.startup.StartupResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,24 +14,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * Read-only application bootstrap state exposed to UI and navigation layers.
- *
- * The runtime is the single canonical owner of application startup state. UI
- * consumers observe [state] and request [start] or [retry]; they never mutate
- * bootstrap state directly.
- */
+/** Single canonical owner of application startup state. */
 interface ApplicationRuntime {
     val state: StateFlow<ApplicationRuntimeState>
-
-    /** Performs the initial bootstrap if the runtime has not already started. */
     suspend fun start(): ApplicationRuntimeState
-
-    /** Retries a previously failed bootstrap only when the failure is recoverable. */
     suspend fun retry(): ApplicationRuntimeState
 }
 
-/** Stable product-neutral states for application bootstrap. */
+/** Product-neutral startup lifecycle exposed to presentation/composition. */
 sealed interface ApplicationRuntimeState {
     data object Idle : ApplicationRuntimeState
 
@@ -36,6 +30,13 @@ sealed interface ApplicationRuntimeState {
     ) : ApplicationRuntimeState
 
     data class Ready(
+        val payload: StartupPayload,
+        val notices: List<StartupNotice>,
+        val attempt: UInt,
+    ) : ApplicationRuntimeState
+
+    data class Blocked(
+        val blocker: StartupBlocker,
         val attempt: UInt,
     ) : ApplicationRuntimeState
 
@@ -46,16 +47,7 @@ sealed interface ApplicationRuntimeState {
     ) : ApplicationRuntimeState
 }
 
-/**
- * Default serialized [ApplicationRuntime] implementation.
- *
- * A mutex guarantees that concurrent startup/retry callers cannot execute the
- * bootstrap pipeline more than once at the same time. The coordinator remains
- * stateless; this class alone owns observable startup lifecycle state.
- *
- * Cancellation never leaves the runtime stranded in [ApplicationRuntimeState.Starting].
- * The previous stable state is restored before cancellation is propagated.
- */
+/** Serialized runtime implementation; no parallel bootstrap state is maintained elsewhere. */
 class DefaultApplicationRuntime(
     private val startupCoordinator: StartupCoordinator,
 ) : ApplicationRuntime {
@@ -66,26 +58,23 @@ class DefaultApplicationRuntime(
 
     override suspend fun start(): ApplicationRuntimeState = operationMutex.withLock {
         when (val current = mutableState.value) {
-            ApplicationRuntimeState.Idle -> executeAttempt(
-                attempt = 1u,
-                fallbackState = current,
-            )
-
+            ApplicationRuntimeState.Idle -> executeAttempt(1u, current)
             else -> current
         }
     }
 
     override suspend fun retry(): ApplicationRuntimeState = operationMutex.withLock {
         when (val current = mutableState.value) {
-            is ApplicationRuntimeState.Failed -> {
-                if (current.failure.recoverable) {
-                    executeAttempt(
-                        attempt = current.attempt + 1u,
-                        fallbackState = current,
-                    )
-                } else {
-                    current
-                }
+            is ApplicationRuntimeState.Failed -> if (current.failure.recoverable) {
+                executeAttempt(current.attempt + 1u, current)
+            } else {
+                current
+            }
+
+            is ApplicationRuntimeState.Blocked -> if (current.blocker.retryable) {
+                executeAttempt(current.attempt + 1u, current)
+            } else {
+                current
             }
 
             else -> current
@@ -100,7 +89,7 @@ class DefaultApplicationRuntime(
 
         val next = try {
             when (val result = startupCoordinator.run()) {
-                StartupResult.Ready -> ApplicationRuntimeState.Ready(attempt)
+                is StartupResult.Resolved -> result.resolution.toRuntimeState(attempt)
                 is StartupResult.Failed -> ApplicationRuntimeState.Failed(
                     taskId = result.taskId,
                     failure = result.failure,
@@ -114,5 +103,18 @@ class DefaultApplicationRuntime(
 
         mutableState.value = next
         return next
+    }
+
+    private fun StartupResolution.toRuntimeState(attempt: UInt): ApplicationRuntimeState = when (this) {
+        is StartupResolution.Ready -> ApplicationRuntimeState.Ready(
+            payload = payload,
+            notices = notices,
+            attempt = attempt,
+        )
+
+        is StartupResolution.Blocked -> ApplicationRuntimeState.Blocked(
+            blocker = blocker,
+            attempt = attempt,
+        )
     }
 }
