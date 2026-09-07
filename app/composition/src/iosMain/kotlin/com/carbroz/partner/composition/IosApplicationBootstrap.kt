@@ -4,6 +4,7 @@ import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.IosCarBrozDatabaseBuilderProvider
 import com.carbroz.data.preferences.IosPreferenceStoreProvider
 import com.carbroz.data.securestorage.KeychainSecureStorage
+import com.carbroz.foundation.configuration.ClientPlatform
 import com.carbroz.foundation.observability.IosMainThreadDispatcher
 import com.carbroz.foundation.observability.IosPlatformDiagnosticSink
 import com.carbroz.foundation.observability.IosResourceDiagnostics
@@ -25,6 +26,7 @@ fun initializeCarBrozIosApplication(
     val configuration = createCarBrozAppConfiguration(
         environment = environment,
         apiBaseUrl = apiBaseUrl,
+        clientPlatform = ClientPlatform.IOS,
         versionName = versionName,
         versionCode = versionCode,
         applicationId = applicationId,
