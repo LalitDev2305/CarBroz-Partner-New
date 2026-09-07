@@ -15,6 +15,7 @@ import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.NetworkEnvironment
 import com.carbroz.data.network.NetworkEnvironmentProvider
 import com.carbroz.data.network.NetworkExecutor
+import com.carbroz.data.network.NetworkHeaderProvider
 import com.carbroz.data.network.NetworkRequestId
 import com.carbroz.data.network.NetworkRequestIdProvider
 import com.carbroz.data.network.NetworkResponseCache
@@ -43,11 +44,6 @@ import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.feature.dynamic.NetworkActionExecutor
-import com.carbroz.feature.splash.BootstrapClientCapabilities
-import com.carbroz.feature.splash.BootstrapConfigurationCache
-import com.carbroz.feature.splash.BootstrapConfigurationStartupTask
-import com.carbroz.feature.splash.BootstrapStore
-import com.carbroz.feature.splash.PreferenceBackedBootstrapConfigurationCache
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.analytics.AnalyticsPolicy
 import com.carbroz.foundation.analytics.AnalyticsTracker
@@ -84,6 +80,11 @@ import com.carbroz.foundation.session.TokenExpiryPolicy
 import com.carbroz.foundation.session.TokenRefresher
 import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
+import com.carbroz.partner.startup.ClientMetadataHeaderProvider
+import com.carbroz.partner.startup.PartnerBootstrapClient
+import com.carbroz.partner.startup.PartnerBootstrapPolicyEvaluator
+import com.carbroz.partner.startup.PartnerBootstrapStartupTask
+import com.carbroz.partner.startup.SessionRestoreStartupTask
 import com.carbroz.platform.background.BackgroundScheduler
 import com.carbroz.platform.background.BackgroundTaskHandler
 import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
@@ -183,6 +184,7 @@ fun carBrozApplicationModule(
     single { createKtorNetworkTransport() }
     single<NetworkTransport> { get<KtorNetworkTransport>() }
     single<NetworkAuthorizationProvider> { SessionNetworkAuthorizationProvider(sessionProvider = get()) }
+    single<NetworkHeaderProvider> { ClientMetadataHeaderProvider(configurationProvider = get()) }
 
     single { SessionRefreshScope() }
     single<TokenRefresher> {
@@ -213,6 +215,7 @@ fun carBrozApplicationModule(
         NetworkExecutor(
             environment = get(),
             transport = get(),
+            headerProvider = get(),
             authorizationProvider = get(),
             authenticationRecovery = get(),
             connectivityProvider = get(),
@@ -226,22 +229,13 @@ fun carBrozApplicationModule(
     single { NetworkActionExecutor(dataSource = get()) }
 
     single { DynamicScreenInstructionCodec() }
-    single { BootstrapStore() }
-    single<BootstrapConfigurationCache> { PreferenceBackedBootstrapConfigurationCache(preferences = get()) }
+    single { PartnerBootstrapClient(network = get()) }
+    single { PartnerBootstrapPolicyEvaluator(instructionCodec = get()) }
     single {
-        BootstrapClientCapabilities(
-            versionName = configuration.buildInformation.versionName,
-            versionCode = configuration.buildInformation.versionCode,
-            applicationId = configuration.buildInformation.applicationId,
-        )
-    }
-    single {
-        BootstrapConfigurationStartupTask(
-            network = get(),
-            store = get(),
-            configurationCache = get(),
+        PartnerBootstrapStartupTask(
             client = get(),
-            instructionCodec = get(),
+            policyEvaluator = get(),
+            sessionProvider = get(),
         )
     }
 
@@ -283,7 +277,9 @@ fun carBrozApplicationModule(
 
     single<OutboxStore> { RoomOutboxStore(database = get()) }
     single<SyncConflictResolver> { KeepQueuedSyncConflictResolver }
-    single<SyncCoordinator> { DefaultSyncCoordinator(outbox = get(), network = get(), clock = get(), conflictResolver = get()) }
+    single<SyncCoordinator> {
+        DefaultSyncCoordinator(outbox = get(), network = get(), clock = get(), conflictResolver = get())
+    }
     single { SyncActivationPolicy() }
 
     single { NavigationStore(NavigationState(listOf(SplashDestination))) }
@@ -300,7 +296,7 @@ fun carBrozApplicationModule(
 
     single {
         StartupCoordinator(
-            tasks = listOf(get<SessionRestoreStartupTask>(), get<BootstrapConfigurationStartupTask>()),
+            tasks = listOf(get<SessionRestoreStartupTask>(), get<PartnerBootstrapStartupTask>()),
             observability = get(),
             clock = get(),
             correlationIdProvider = get(),
