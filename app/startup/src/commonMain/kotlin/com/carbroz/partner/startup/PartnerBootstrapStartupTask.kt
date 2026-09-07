@@ -41,7 +41,7 @@ class PartnerBootstrapStartupTask(
         PartnerBootstrapClientFailure.Transport -> StartupFailure.Expected("bootstrap_transport", true)
         is PartnerBootstrapClientFailure.Http -> StartupFailure.Expected(
             code = "bootstrap_http_$statusCode",
-            recoverable = statusCode == 408 || statusCode == 429 || statusCode in 500..599,
+            recoverable = statusCode == 401 || statusCode == 408 || statusCode == 429 || statusCode in 500..599,
         )
         is PartnerBootstrapClientFailure.InvalidPayload -> StartupFailure.Expected(code, false)
     }
