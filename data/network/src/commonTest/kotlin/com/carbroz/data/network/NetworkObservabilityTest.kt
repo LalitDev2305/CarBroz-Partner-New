@@ -91,7 +91,7 @@ class NetworkObservabilityTest {
             authorizationProvider = NetworkAuthorizationProvider { "Bearer $token" },
             authenticationRecovery = NetworkAuthenticationRecovery {
                 token = "new-token"
-                true
+                NetworkAuthenticationRecoveryResult.Recovered
             },
         )
 
@@ -124,7 +124,9 @@ class NetworkObservabilityTest {
             },
             events = events,
             authorizationProvider = NetworkAuthorizationProvider { "Bearer secret-token" },
-            authenticationRecovery = NetworkAuthenticationRecovery { false },
+            authenticationRecovery = NetworkAuthenticationRecovery {
+                NetworkAuthenticationRecoveryResult.Unavailable
+            },
         )
 
         val result = executor.execute(
