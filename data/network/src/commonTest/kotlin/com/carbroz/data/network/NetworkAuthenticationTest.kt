@@ -103,7 +103,7 @@ class NetworkAuthenticationTest {
         )
 
         assertIs<NetworkResult.Success>(executor.execute(optionalSessionGet()))
-        assertEquals(listOf("Bearer old-token", null), seenAuthorization)
+        assertEquals<List<String?>>(listOf("Bearer old-token", null), seenAuthorization)
     }
 
     @Test
