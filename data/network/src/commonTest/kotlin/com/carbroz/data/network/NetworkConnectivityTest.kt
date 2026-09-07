@@ -106,7 +106,7 @@ class NetworkConnectivityTest {
             authorizationProvider = NetworkAuthorizationProvider { "Bearer token" },
             authenticationRecovery = NetworkAuthenticationRecovery {
                 recoveryCalls += 1
-                true
+                NetworkAuthenticationRecoveryResult.Recovered
             },
             connectivityProvider = NetworkConnectivityProvider { NetworkConnectivity.OFFLINE },
         )
