@@ -15,16 +15,7 @@ import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
 import kotlinx.coroutines.CancellationException
 
-/**
- * Executes startup tasks sequentially in their declared order.
- *
- * Startup stops at the first failure. Expected failures are returned by tasks;
- * unexpected task exceptions are converted into a stable runtime failure while
- * coroutine cancellation is always propagated to the caller.
- *
- * Task identifiers must be unique so diagnostics and retry policy address one
- * unambiguous bootstrap step.
- */
+/** Executes startup tasks sequentially until one task resolves the final outcome or fails. */
 class StartupCoordinator(
     private val tasks: List<StartupTask>,
     private val observability: Observability = NoOpObservability,
@@ -34,6 +25,7 @@ class StartupCoordinator(
     },
 ) {
     init {
+        require(tasks.isNotEmpty()) { "Startup requires at least one task." }
         require(tasks.map(StartupTask::id).distinct().size == tasks.size) {
             "Startup task ids must be unique."
         }
@@ -42,14 +34,7 @@ class StartupCoordinator(
     suspend fun run(): StartupResult {
         val startupStartedAt = clock.nowEpochMilliseconds()
         val correlationId = correlationIdProvider.next("startup")
-        observability.log(
-            LogEvent(
-                level = LogLevel.INFO,
-                category = CATEGORY,
-                message = "startup_started",
-                correlationId = correlationId,
-            ),
-        )
+        observability.log(LogEvent(LogLevel.INFO, CATEGORY, "startup_started", correlationId))
 
         tasks.forEach { task ->
             val taskStartedAt = clock.nowEpochMilliseconds()
@@ -71,13 +56,13 @@ class StartupCoordinator(
                 throw cancellation
             } catch (failure: Throwable) {
                 observability.crash(
-                    event = CrashEvent(
+                    CrashEvent(
                         category = CATEGORY,
                         message = "startup_task_unexpected_failure",
                         correlationId = correlationId,
                         attributes = mapOf("task_id" to DiagnosticAttribute(task.id)),
                     ),
-                    throwable = failure,
+                    failure,
                 )
                 recordTaskCompletion(task.id, taskStartedAt, correlationId, "unexpected_failure", TraceOutcome.FAILURE)
                 recordStartupTrace(startupStartedAt, correlationId, TraceOutcome.FAILURE)
@@ -85,13 +70,20 @@ class StartupCoordinator(
             }
 
             when (result) {
-                StartupTaskResult.Success -> recordTaskCompletion(
+                StartupTaskResult.Continue -> recordTaskCompletion(
                     task.id,
                     taskStartedAt,
                     correlationId,
-                    "success",
+                    "continue",
                     TraceOutcome.SUCCESS,
                 )
+
+                is StartupTaskResult.Resolved -> {
+                    recordTaskCompletion(task.id, taskStartedAt, correlationId, "resolved", TraceOutcome.SUCCESS)
+                    recordResolved(startupStartedAt, correlationId, result.resolution)
+                    return StartupResult.Resolved(result.resolution)
+                }
+
                 is StartupTaskResult.Failure -> {
                     recordTaskCompletion(task.id, taskStartedAt, correlationId, "failure", TraceOutcome.FAILURE)
                     observability.log(
@@ -112,31 +104,41 @@ class StartupCoordinator(
             }
         }
 
-        val totalDuration = elapsedSince(startupStartedAt)
-        observability.performance(
-            PerformanceMetric(
-                name = "startup.total",
-                durationMillis = totalDuration,
+        observability.log(
+            LogEvent(
+                level = LogLevel.ERROR,
+                category = CATEGORY,
+                message = "startup_missing_resolution",
                 correlationId = correlationId,
             ),
         )
-        observability.trace(
-            TraceSpan(
-                name = "startup.total",
-                correlationId = correlationId,
-                durationMillis = totalDuration,
-                outcome = TraceOutcome.SUCCESS,
-            ),
+        recordStartupTrace(startupStartedAt, correlationId, TraceOutcome.FAILURE)
+        return StartupResult.Failed(
+            taskId = COORDINATOR_TASK_ID,
+            failure = StartupFailure.Expected("startup_missing_resolution", recoverable = false),
         )
+    }
+
+    private fun recordResolved(
+        startedAt: Long,
+        correlationId: CorrelationId,
+        resolution: StartupResolution,
+    ) {
+        val totalDuration = elapsedSince(startedAt)
+        val message = when (resolution) {
+            is StartupResolution.Ready -> "startup_ready"
+            is StartupResolution.Blocked -> "startup_blocked"
+        }
+        observability.performance(PerformanceMetric("startup.total", totalDuration, correlationId))
+        observability.trace(TraceSpan("startup.total", correlationId, totalDuration, TraceOutcome.SUCCESS))
         observability.log(
             LogEvent(
                 level = LogLevel.INFO,
                 category = CATEGORY,
-                message = "startup_ready",
+                message = message,
                 correlationId = correlationId,
             ),
         )
-        return StartupResult.Ready
     }
 
     private fun recordTaskCompletion(
@@ -151,23 +153,8 @@ class StartupCoordinator(
             "task_id" to DiagnosticAttribute(taskId),
             "outcome" to DiagnosticAttribute(outcome),
         )
-        observability.performance(
-            PerformanceMetric(
-                name = "startup.task",
-                durationMillis = duration,
-                correlationId = correlationId,
-                attributes = attributes,
-            ),
-        )
-        observability.trace(
-            TraceSpan(
-                name = "startup.task",
-                correlationId = correlationId,
-                durationMillis = duration,
-                outcome = traceOutcome,
-                attributes = attributes,
-            ),
-        )
+        observability.performance(PerformanceMetric("startup.task", duration, correlationId, attributes))
+        observability.trace(TraceSpan("startup.task", correlationId, duration, traceOutcome, attributes))
     }
 
     private fun recordStartupTrace(startedAt: Long, correlationId: CorrelationId, outcome: TraceOutcome) {
@@ -186,12 +173,12 @@ class StartupCoordinator(
 
     private companion object {
         const val CATEGORY = "startup"
+        const val COORDINATOR_TASK_ID = "startup.coordinator"
     }
 }
 
-/** Aggregate outcome of application startup. */
 sealed interface StartupResult {
-    data object Ready : StartupResult
+    data class Resolved(val resolution: StartupResolution) : StartupResult
 
     data class Failed(
         val taskId: String,
