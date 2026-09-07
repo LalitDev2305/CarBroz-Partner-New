@@ -130,7 +130,14 @@ class StartupCoordinator(
             is StartupResolution.Blocked -> "startup_blocked"
         }
         observability.performance(PerformanceMetric("startup.total", totalDuration, correlationId))
-        observability.trace(TraceSpan("startup.total", correlationId, totalDuration, TraceOutcome.SUCCESS))
+        observability.trace(
+            TraceSpan(
+                name = "startup.total",
+                correlationId = correlationId,
+                durationMillis = totalDuration,
+                outcome = TraceOutcome.SUCCESS,
+            ),
+        )
         observability.log(
             LogEvent(
                 level = LogLevel.INFO,
@@ -154,7 +161,15 @@ class StartupCoordinator(
             "outcome" to DiagnosticAttribute(outcome),
         )
         observability.performance(PerformanceMetric("startup.task", duration, correlationId, attributes))
-        observability.trace(TraceSpan("startup.task", correlationId, duration, traceOutcome, attributes))
+        observability.trace(
+            TraceSpan(
+                name = "startup.task",
+                correlationId = correlationId,
+                durationMillis = duration,
+                outcome = traceOutcome,
+                attributes = attributes,
+            ),
+        )
     }
 
     private fun recordStartupTrace(startedAt: Long, correlationId: CorrelationId, outcome: TraceOutcome) {
