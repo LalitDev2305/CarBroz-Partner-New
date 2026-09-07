@@ -1,6 +1,7 @@
 package com.carbroz.partner.startup
 
 import com.carbroz.data.network.NetworkDataSource
+import com.carbroz.data.network.NetworkFailure
 import com.carbroz.data.network.NetworkResponse
 import com.carbroz.data.network.NetworkResult
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
@@ -35,6 +36,42 @@ class PartnerBootstrapStartupTaskTest {
             ),
             task.execute(),
         )
+    }
+
+    @Test
+    fun `unresolved bootstrap 401 remains recoverable for a later startup retry`() = runTest {
+        val client = PartnerBootstrapClient(
+            NetworkDataSource { NetworkResult.Failure(NetworkFailure.Http(401)) },
+        )
+        val task = PartnerBootstrapStartupTask(
+            client = client,
+            policyEvaluator = PartnerBootstrapPolicyEvaluator(DynamicScreenInstructionCodec()),
+            sessionProvider = SessionProvider { SessionState.SignedOut },
+        )
+
+        assertEquals(
+            StartupTaskResult.Failure(
+                StartupFailure.Expected("bootstrap_http_401", recoverable = true),
+            ),
+            task.execute(),
+        )
+    }
+
+    @Test
+    fun `non recoverable client contract failure stays non recoverable`() = runTest {
+        val client = PartnerBootstrapClient(
+            NetworkDataSource {
+                NetworkResult.Success(NetworkResponse(statusCode = 200, body = buildJsonObject { put("success", true) }))
+            },
+        )
+        val task = PartnerBootstrapStartupTask(
+            client = client,
+            policyEvaluator = PartnerBootstrapPolicyEvaluator(DynamicScreenInstructionCodec()),
+            sessionProvider = SessionProvider { SessionState.SignedOut },
+        )
+
+        val failure = assertIs<StartupTaskResult.Failure>(task.execute())
+        assertEquals(false, failure.reason.recoverable)
     }
 
     private fun task(
