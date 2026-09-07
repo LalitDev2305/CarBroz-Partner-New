@@ -59,9 +59,21 @@ class NetworkExecutor(
             if (!request.shouldAttemptAuthenticationRecovery(firstResult)) return finish(context, firstResult, startedAt)
 
             observer.observe(NetworkObservation.AuthenticationRecoveryStarted(context))
-            val recovered = authenticationRecovery.recover()
-            observer.observe(NetworkObservation.AuthenticationRecoveryFinished(context, recovered))
-            if (!recovered) return finish(context, firstResult, startedAt)
+            val recovery = authenticationRecovery.recover()
+            observer.observe(
+                NetworkObservation.AuthenticationRecoveryFinished(
+                    context = context,
+                    recovered = recovery != NetworkAuthenticationRecoveryResult.Unavailable,
+                ),
+            )
+
+            val shouldRetry = when (recovery) {
+                NetworkAuthenticationRecoveryResult.Recovered -> true
+                NetworkAuthenticationRecoveryResult.SessionInvalidated ->
+                    request.authentication == NetworkAuthentication.OPTIONAL_SESSION
+                NetworkAuthenticationRecoveryResult.Unavailable -> false
+            }
+            if (!shouldRetry) return finish(context, firstResult, startedAt)
 
             finish(context, executeWithCachePolicy(request, context), startedAt)
         } catch (cancellation: CancellationException) {
