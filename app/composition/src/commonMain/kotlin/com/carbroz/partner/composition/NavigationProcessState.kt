@@ -51,12 +51,16 @@ object NavigationProcessStateBridge {
             ?.let(persistence::restoreStack)
             ?.stateOrNull()
 
-        val compatible = restored
-            ?.backStack
-            ?.firstOrNull()
+        if (restored == null) {
+            navigationStore().dispatch(NavigationCommand.ResetTo(freshRoot))
+            return
+        }
+
+        val compatible = restored.backStack
+            .firstOrNull()
             ?.navigationId == freshRoot.navigationId
 
-        if (compatible && restored != null) {
+        if (compatible) {
             navigationStore().restore(restored)
         } else {
             navigationStore().dispatch(NavigationCommand.ResetTo(freshRoot))
