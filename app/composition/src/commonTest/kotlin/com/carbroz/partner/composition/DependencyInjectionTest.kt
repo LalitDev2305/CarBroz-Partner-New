@@ -8,6 +8,7 @@ import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.NetworkEnvironment
 import com.carbroz.data.network.NetworkEnvironmentProvider
 import com.carbroz.data.network.NetworkExecutor
+import com.carbroz.data.network.NetworkHeaderProvider
 import com.carbroz.data.network.NetworkResponseCache
 import com.carbroz.data.network.NetworkTransport
 import com.carbroz.data.network.SessionNetworkAuthorizationProvider
@@ -25,13 +26,10 @@ import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.feature.dynamic.NetworkActionExecutor
-import com.carbroz.feature.splash.BootstrapClientCapabilities
-import com.carbroz.feature.splash.BootstrapConfigurationCache
-import com.carbroz.feature.splash.BootstrapConfigurationStartupTask
-import com.carbroz.feature.splash.BootstrapStore
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.BuildInformation
+import com.carbroz.foundation.configuration.ClientPlatform
 import com.carbroz.foundation.configuration.ConfigurationProvider
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleController
@@ -42,6 +40,11 @@ import com.carbroz.foundation.session.SessionProvider
 import com.carbroz.foundation.session.SessionSnapshotCodec
 import com.carbroz.foundation.session.SessionStore
 import com.carbroz.foundation.session.TokenExpiryPolicy
+import com.carbroz.partner.startup.ClientMetadataHeaderProvider
+import com.carbroz.partner.startup.PartnerBootstrapClient
+import com.carbroz.partner.startup.PartnerBootstrapPolicyEvaluator
+import com.carbroz.partner.startup.PartnerBootstrapStartupTask
+import com.carbroz.partner.startup.SessionRestoreStartupTask
 import com.carbroz.platform.background.BackgroundExecutionResult
 import com.carbroz.platform.background.BackgroundScheduleResult
 import com.carbroz.platform.background.BackgroundScheduler
@@ -75,6 +78,7 @@ class DependencyInjectionTest {
     private val configuration = AppConfiguration(
         environment = AppEnvironment.Development,
         apiBaseUrl = "https://development.invalid",
+        clientPlatform = ClientPlatform.ANDROID,
         buildInformation = BuildInformation(
             versionName = "1.0.0-dev",
             versionCode = 1L,
@@ -118,6 +122,7 @@ class DependencyInjectionTest {
             assertEquals(networkEnvironmentProvider.get(), networkEnvironment)
             assertSame(ktorTransport, koin.get<NetworkTransport>())
             assertIs<SessionNetworkAuthorizationProvider>(authorizationProvider)
+            assertIs<ClientMetadataHeaderProvider>(koin.get<NetworkHeaderProvider>())
             koin.get<NetworkResponseCache>()
             koin.get<NetworkExecutor>()
             koin.get<NetworkDataSource>()
@@ -132,11 +137,10 @@ class DependencyInjectionTest {
             koin.get<FormTemplateRuntimeFactory>()
             koin.get<DynamicScreenCache>()
             koin.get<DynamicFeatureFactory>()
-            koin.get<BootstrapStore>()
-            koin.get<BootstrapConfigurationCache>()
-            val client = koin.get<BootstrapClientCapabilities>()
-            assertEquals(configuration.buildInformation.versionCode, client.versionCode)
-            koin.get<BootstrapConfigurationStartupTask>()
+
+            koin.get<PartnerBootstrapClient>()
+            koin.get<PartnerBootstrapPolicyEvaluator>()
+            koin.get<PartnerBootstrapStartupTask>()
 
             assertSame(realtimeTransport, koin.get<RealtimeTransport>())
             koin.get<RealtimeStream>()
