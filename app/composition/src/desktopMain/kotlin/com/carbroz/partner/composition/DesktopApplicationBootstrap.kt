@@ -4,6 +4,7 @@ import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.database.DesktopCarBrozDatabaseBuilderProvider
 import com.carbroz.data.preferences.DesktopPreferenceStoreProvider
 import com.carbroz.data.securestorage.EphemeralDesktopSecureStorage
+import com.carbroz.foundation.configuration.ClientPlatform
 import com.carbroz.foundation.observability.DesktopMainThreadDispatcher
 import com.carbroz.foundation.observability.DesktopPlatformDiagnosticSink
 import com.carbroz.foundation.observability.DesktopResourceDiagnostics
@@ -26,6 +27,7 @@ fun initializeCarBrozDesktopApplication(
     val configuration = createCarBrozAppConfiguration(
         environment = environment,
         apiBaseUrl = apiBaseUrl,
+        clientPlatform = ClientPlatform.DESKTOP,
         versionName = versionName,
         versionCode = versionCode,
         applicationId = applicationId,
