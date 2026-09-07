@@ -24,6 +24,7 @@ kotlin {
             implementation(project(":foundation:configuration"))
             implementation(project(":foundation:session"))
             implementation(project(":feature:dynamic"))
+            implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
