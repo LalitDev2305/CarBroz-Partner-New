@@ -6,6 +6,8 @@ import com.carbroz.runtime.application.ApplicationRuntimeState
 import com.carbroz.runtime.application.startup.StartupBlocker
 import com.carbroz.runtime.application.startup.StartupFailure
 import com.carbroz.runtime.application.startup.StartupPayload
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -14,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class SplashStoreTest {
     @Test
@@ -27,6 +30,23 @@ class SplashStoreTest {
         runCurrent()
 
         assertEquals(1, runtime.startCalls)
+        assertIs<ApplicationRuntimeState.Starting>(runtime.state.value)
+        store.close()
+    }
+
+    @Test
+    fun `background cancels active startup work`() = runTest {
+        val runtime = BlockingRuntime()
+        val store = SplashStore(runtime, backgroundScope)
+
+        store.dispatch(SplashIntent.LifecycleChanged(AppLifecycleState.Foreground))
+        runCurrent()
+        assertTrue(runtime.started)
+
+        store.dispatch(SplashIntent.LifecycleChanged(AppLifecycleState.Background))
+        runCurrent()
+
+        assertTrue(runtime.cancelled)
         store.close()
     }
 
@@ -96,6 +116,26 @@ class SplashStoreTest {
     }
 
     @Test
+    fun `retry is ignored while backgrounded`() = runTest {
+        val runtime = FakeRuntime()
+        val store = SplashStore(runtime, backgroundScope)
+        runtime.publish(
+            ApplicationRuntimeState.Failed(
+                taskId = "partner.bootstrap",
+                failure = StartupFailure.Expected("bootstrap_timeout", recoverable = true),
+                attempt = 1u,
+            ),
+        )
+        runCurrent()
+        store.dispatch(SplashIntent.LifecycleChanged(AppLifecycleState.Background))
+        store.dispatch(SplashIntent.RetryClicked)
+        runCurrent()
+
+        assertEquals(0, runtime.retryCalls)
+        store.close()
+    }
+
+    @Test
     fun `runtime failure is mapped to presentation error without leaking failure type`() = runTest {
         val runtime = FakeRuntime()
         val store = SplashStore(runtime, backgroundScope)
@@ -109,7 +149,7 @@ class SplashStoreTest {
         runCurrent()
 
         val error = assertIs<SplashState.Error>(store.state.value)
-        assertEquals(true, error.retryEnabled)
+        assertTrue(error.retryEnabled)
         store.close()
     }
 
@@ -121,7 +161,9 @@ class SplashStoreTest {
 
         override suspend fun start(): ApplicationRuntimeState {
             startCalls += 1
-            return mutableState.value
+            val next = ApplicationRuntimeState.Starting(1u)
+            mutableState.value = next
+            return next
         }
 
         override suspend fun retry(): ApplicationRuntimeState {
@@ -132,6 +174,26 @@ class SplashStoreTest {
         fun publish(state: ApplicationRuntimeState) {
             mutableState.value = state
         }
+    }
+
+    private class BlockingRuntime : ApplicationRuntime {
+        private val mutableState = MutableStateFlow<ApplicationRuntimeState>(ApplicationRuntimeState.Idle)
+        override val state: StateFlow<ApplicationRuntimeState> = mutableState
+        var started: Boolean = false
+        var cancelled: Boolean = false
+
+        override suspend fun start(): ApplicationRuntimeState {
+            started = true
+            mutableState.value = ApplicationRuntimeState.Starting(1u)
+            return try {
+                awaitCancellation()
+            } catch (cancellation: CancellationException) {
+                cancelled = true
+                throw cancellation
+            }
+        }
+
+        override suspend fun retry(): ApplicationRuntimeState = mutableState.value
     }
 
     private data object TestPayload : StartupPayload
