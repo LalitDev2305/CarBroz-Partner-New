@@ -1,6 +1,7 @@
 package com.carbroz.feature.dynamic
 
 import com.carbroz.foundation.navigation.NavigationDestination
+import com.carbroz.runtime.application.startup.StartupPayload
 import com.carbroz.runtime.sdui.model.RequestAuthentication
 import com.carbroz.runtime.sdui.model.RequestMethod
 import com.carbroz.runtime.sdui.model.ScreenDestination
@@ -14,7 +15,7 @@ data class DynamicScreenInstruction(
     val transition: ScreenTransition = ScreenTransition.RESET,
     val backStackKey: String = destination.screenId,
     val restorePolicy: DynamicRestorePolicy = DynamicRestorePolicy.CACHE_FIRST,
-) {
+) : StartupPayload {
     init { require(backStackKey.isNotBlank()) { "Dynamic back-stack key must not be blank." } }
 }
 
