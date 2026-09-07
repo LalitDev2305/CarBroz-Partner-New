@@ -26,18 +26,13 @@ data class NetworkEnvironment(
     fun resolve(endpoint: NetworkEndpoint): String = baseUrl + endpoint.value
 }
 
-/**
- * Adapts the canonical application configuration into the network-owned origin model.
- * Configuration remains owned by foundation:configuration; networking does not duplicate
- * environment selection or endpoint values.
- */
+/** Adapts canonical application configuration into the network-owned origin model. */
 class NetworkEnvironmentProvider(
     private val configurationProvider: ConfigurationProvider,
 ) {
     fun get(): NetworkEnvironment = configurationProvider.get().toNetworkEnvironment()
 }
 
-/** Creates a network environment only from configuration accepted by the canonical validator. */
 fun AppConfiguration.toNetworkEnvironment(): NetworkEnvironment {
     val validation = ConfigurationValidator.validate(this)
     require(validation is ConfigurationValidationResult.Valid) {
@@ -57,7 +52,7 @@ object EmptyNetworkHeaderProvider : NetworkHeaderProvider {
     override suspend fun headers(): Map<String, String> = emptyMap()
 }
 
-/** Prevents dynamic commands from overriding or injecting transport-owned HTTP headers. */
+/** Prevents request/dynamic commands from overriding transport- or provider-owned HTTP headers. */
 class NetworkHeaderPolicy(
     private val reservedNames: Set<String> = setOf(
         "authorization",
@@ -73,8 +68,12 @@ class NetworkHeaderPolicy(
         validateHeaders(transportHeaders)
         validateHeaders(requestHeaders)
 
-        val forbidden = requestHeaders.keys.firstOrNull { it.lowercase() in reservedNames }
-        require(forbidden == null) { "Request cannot override reserved header: $forbidden" }
+        val providerOwnedNames = transportHeaders.keys.map(String::lowercase).toSet()
+        val forbidden = requestHeaders.keys.firstOrNull { name ->
+            val normalized = name.lowercase()
+            normalized in reservedNames || normalized in providerOwnedNames
+        }
+        require(forbidden == null) { "Request cannot override transport-owned header: $forbidden" }
         return transportHeaders + requestHeaders
     }
 
