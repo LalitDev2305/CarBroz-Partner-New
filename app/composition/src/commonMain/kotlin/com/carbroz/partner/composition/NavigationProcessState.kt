@@ -5,6 +5,7 @@ import com.carbroz.feature.dynamic.DynamicInstructionDecodeResult
 import com.carbroz.feature.dynamic.DynamicRestorePolicy
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.feature.splash.SplashDestination
+import com.carbroz.foundation.navigation.NavigationCommand
 import com.carbroz.foundation.navigation.NavigationDestination
 import com.carbroz.foundation.navigation.NavigationDestinationRestorer
 import com.carbroz.foundation.navigation.NavigationRestorationPolicy
@@ -20,28 +21,51 @@ import org.koin.core.Koin
 import org.koin.mp.KoinPlatform
 
 /**
- * Platform-facing process-state bridge. Navigation mechanics remain in foundation:navigation;
- * composition only maps application destination payloads to that generic restoration contract.
+ * Platform-facing process-state bridge.
+ *
+ * Saved navigation is captured during host restoration but never applied before fresh startup. After
+ * bootstrap resolves the current server-authoritative root, a compatible saved stack may be restored.
  */
 object NavigationProcessStateBridge {
     private val persistence = ApplicationNavigationPersistence()
     private val codec = NavigationProcessStateCodec()
+    private var pendingEncodedState: String? = null
 
     fun save(): String? {
         val persisted = persistence.persist(navigationStore().state.value)
         return persisted.takeIf { it.isNotEmpty() }?.let(codec::encode)
     }
 
-    /** Restores navigation as a side effect without leaking foundation result types to platform hosts. */
+    /** Captures platform process state. NavigationStore intentionally remains rooted at Splash. */
     fun restore(encodedState: String?) {
-        if (encodedState.isNullOrBlank()) return
-        val persisted = codec.decode(encodedState).orEmpty()
-        val result = persistence.restoreStack(persisted)
-        val state = when (result) {
-            is NavigationRestorationResult.Restored -> result.state
-            is NavigationRestorationResult.Fallback -> result.state
+        pendingEncodedState = encodedState?.takeIf(String::isNotBlank)
+    }
+
+    /** Applies a saved stack only when its root exactly matches the fresh bootstrap root. */
+    fun applyAfterBootstrap(freshRoot: DynamicDestination) {
+        val encoded = pendingEncodedState
+        pendingEncodedState = null
+
+        val restored = encoded
+            ?.let(codec::decode)
+            ?.let(persistence::restoreStack)
+            ?.stateOrNull()
+
+        val compatible = restored
+            ?.backStack
+            ?.firstOrNull()
+            ?.navigationId == freshRoot.navigationId
+
+        if (compatible && restored != null) {
+            navigationStore().restore(restored)
+        } else {
+            navigationStore().dispatch(NavigationCommand.ResetTo(freshRoot))
         }
-        navigationStore().restore(state)
+    }
+
+    private fun NavigationRestorationResult.stateOrNull(): NavigationState = when (this) {
+        is NavigationRestorationResult.Restored -> state
+        is NavigationRestorationResult.Fallback -> state
     }
 
     private fun navigationStore(): NavigationStore = koin().get()
