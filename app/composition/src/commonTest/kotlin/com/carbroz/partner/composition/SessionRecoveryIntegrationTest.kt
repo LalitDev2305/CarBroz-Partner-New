@@ -85,7 +85,7 @@ class SessionRecoveryIntegrationTest {
             environment = NetworkEnvironment("https://api.carbroz.example"),
             transport = transport,
             authorizationProvider = SessionNetworkAuthorizationProvider(store),
-            authenticationRecovery = SessionNetworkAuthenticationRecovery(coordinator),
+            authenticationRecovery = SessionNetworkAuthenticationRecovery(coordinator, store),
         )
 
         val result = executor.execute(
@@ -111,7 +111,7 @@ class SessionRecoveryIntegrationTest {
     }
 
     @Test
-    fun rejectedRefreshFailsClosedAndLeavesExistingSessionUntouched() = runTest {
+    fun rejectedRefreshInvalidatesCanonicalSessionAndDoesNotReplayProtectedRequest() = runTest {
         val clock = Clock { 1_000L }
         val store = SessionStore(InMemorySessionPersistence())
         val oldTokens = tokens("old-access", "refresh-token", expiresAt = 2_000L)
@@ -144,7 +144,7 @@ class SessionRecoveryIntegrationTest {
             environment = NetworkEnvironment("https://api.carbroz.example"),
             transport = transport,
             authorizationProvider = SessionNetworkAuthorizationProvider(store),
-            authenticationRecovery = SessionNetworkAuthenticationRecovery(coordinator),
+            authenticationRecovery = SessionNetworkAuthenticationRecovery(coordinator, store),
         )
 
         val failure = assertIs<NetworkResult.Failure>(
@@ -160,8 +160,7 @@ class SessionRecoveryIntegrationTest {
         assertEquals(NetworkFailure.Http(401), failure.error)
         assertEquals(1, protectedCalls)
         assertEquals(1, refreshCalls)
-        val current = assertIs<SessionState.Authenticated>(store.current())
-        assertEquals(oldTokens, current.tokens)
+        assertEquals(SessionState.SignedOut, store.current())
     }
 
     private fun tokens(access: String, refresh: String, expiresAt: Long) = AuthTokens(
