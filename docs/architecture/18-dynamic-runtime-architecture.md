@@ -8,19 +8,23 @@ Splash is the only currently known static application screen. Every screen after
 
 Feature ownership is explicit:
 
-- `feature:splash` owns static Splash behavior and the `/api/v1/app` bootstrap/configuration acquisition that hands the app into the backend-driven world.
+- `feature:splash` owns static Splash presentation only: UI state, user/lifecycle intents and one-shot effects. It does not own networking, bootstrap DTOs, caching, session persistence, headers or startup policy.
+- `app:startup` owns Partner-specific startup orchestration: session restoration task, Partner bootstrap transport contract, client-metadata header provider and pure bootstrap policy evaluation.
+- `runtime:application` is the single canonical owner of startup lifecycle state and ordered startup task execution.
 - `feature:dynamic` is the single feature for every backend-driven screen. It owns dynamic destination/request contracts, screen loading/error/retry lifecycle, runtime screen cache, action-result orchestration, external/realtime screen events and the Compose Dynamic feature UI.
 - `foundation:navigation` is the sole navigation mechanics owner: back-stack state, commands, restoration policy and the canonical `Navigation3Host` presentation adapter.
 - `runtime:sdui` is the reusable SDUI engine used by `feature:dynamic`; it owns protocol validation, normalization, definitions, registries, `SduiRuntime` assembly and normalized-screen rendering through `SduiScreenRenderer`. It does not own feature lifecycle or navigation.
 - `runtime:action` is the sole generic semantic-action preparation owner, including `ActionPreparerFactory`; it does not execute network/platform feature effects itself.
-- `app:composition` is a composition root only. It assembles process dependencies, maps navigation destinations to feature content and owns the application-specific transient process-state adapter. It must not implement another navigation, dynamic-screen, SDUI, action or networking engine.
+- `app:composition` is a composition root only. It assembles process dependencies, maps navigation destinations to feature content, consumes feature effects and owns the application-specific transient process-state adapter. It must not implement another startup store, navigation, dynamic-screen, SDUI, action or networking engine.
 - Android/Desktop/iOS hosts remain thin platform entry points.
 
 Canonical runtime loop:
 
-`Splash -> startup/session restore -> Splash-owned /api/v1/app bootstrap -> validated DynamicScreenInstruction -> DynamicDestination -> foundation:navigation -> feature:dynamic -> trusted screen request -> runtime:sdui decode -> schema validation -> compatibility -> normalization -> runtime IR -> render -> semantic command -> runtime:action preparation -> binding/form resolution -> feature effect adapter -> local effect or navigation command -> foundation:navigation -> same feature:dynamic -> repeat`.
+`Splash -> common lifecycle Foreground -> ApplicationRuntime -> session restore -> app:startup Partner bootstrap -> GET /api/v1/partner/bootstrap through canonical networking -> validated DynamicScreenInstruction -> SplashEffect.Navigate -> deferred restoration check -> DynamicDestination -> foundation:navigation -> feature:dynamic -> trusted screen request -> runtime:sdui decode -> schema validation -> compatibility -> normalization -> runtime IR -> render -> semantic command -> runtime:action preparation -> binding/form resolution -> feature effect adapter -> local effect or navigation command -> foundation:navigation -> same feature:dynamic -> repeat`.
 
 The backend chooses the next screen. The client owns validation, trusted execution, rendering, lifecycle, navigation mechanics, security and restoration safety.
+
+The detailed Splash/startup contract is frozen in `feature/splash/README.md`; this addendum must remain consistent with it.
 
 ## 2. Dynamic screen identity
 
@@ -160,19 +164,36 @@ Screen transitions are framework-neutral: `PUSH`, `REPLACE`, `RESET`, `STAY`. `f
 
 Generic whole-stack restoration mechanics and fail-closed fallback policy belong to `foundation:navigation`. Missing/malformed/unknown/unsafe entries restore no prefix and navigation falls back atomically to Splash. `CACHE_ONLY` destinations are not persisted because replay could repeat a non-idempotent request.
 
-`NavigationProcessStateBridge` remains in `app:composition` because persistence has to map application-specific Splash/Dynamic destinations to the generic restoration contract and integrate with platform-owned transient saved-state. Its public platform-facing API is side-effect oriented (`save`/`restore`) and must not leak `NavigationRestorationResult` or other foundation implementation details to Android/Desktop/iOS hosts.
+`NavigationProcessStateBridge` remains in `app:composition` because persistence has to map application-specific Splash/Dynamic destinations to the generic restoration contract and integrate with platform-owned transient saved-state. The platform-facing `restore(encodedState)` operation only captures pending state; it must never mutate `NavigationStore` before startup resolves.
+
+After fresh bootstrap produces the server-authoritative root, `applyAfterBootstrap(freshRoot)` may restore a saved stack only when its restored root `navigationId` exactly matches the fresh root. Otherwise the saved state is discarded and navigation is atomically reset to the fresh bootstrap destination.
 
 The bridge serializes only semantic restored destinations and must never write arbitrary dynamic-instruction payloads to durable preferences.
 
 ## 11. Startup and dynamic feature handoff
 
-`SplashStore` starts the generic `ApplicationRuntime`. Startup restores session first and then executes the Splash-owned `BootstrapConfigurationStartupTask`. Bootstrap calls `/api/v1/app` with optional-session authentication, validates/normalizes the returned dynamic instruction and places it in `BootstrapDestinationStore`.
+`SplashStore` is presentation-only. It observes the common lifecycle and the single `ApplicationRuntime` state, maps those values to Splash presentation state and emits typed effects. It does not call the bootstrap endpoint, persist config or hold a second bootstrap state.
 
-When Splash startup becomes ready, `app:composition` performs only the cross-feature handoff:
+`ApplicationRuntime` owns the canonical startup lifecycle. `StartupCoordinator` executes `SessionRestoreStartupTask` first and `PartnerBootstrapStartupTask` second. Session restoration returns `Continue`; Partner bootstrap is the final resolver.
 
-`SplashDestination -> NavigationCommand.ResetTo(DynamicDestination(bootstrapInstruction))`.
+`PartnerBootstrapStartupTask` lives in `app:startup` and is deliberately thin:
 
-`foundation:navigation` performs the stack mutation and `Navigation3Host` maps the resulting semantic destination to feature content. From that point every backend-driven screen is handled by the same `feature:dynamic` feature.
+`PartnerBootstrapClient -> PartnerBootstrapPolicyEvaluator -> StartupTaskResult`.
+
+`PartnerBootstrapClient` calls `GET /api/v1/partner/bootstrap` through the canonical `NetworkDataSource` with `OPTIONAL_SESSION`. It does not manually attach client metadata or Authorization headers. `ClientMetadataHeaderProvider` supplies platform/app/build metadata through the canonical network header extension point; session infrastructure owns Authorization and authentication recovery.
+
+`PartnerBootstrapPolicyEvaluator` purely converts the typed response to one of:
+
+- Ready with the validated existing `DynamicScreenInstruction` payload;
+- Required Update blocker;
+- Maintenance blocker;
+- invalid-contract failure.
+
+Required Update and Maintenance are valid blocked startup outcomes, not technical failures. Optional Update is a non-blocking Ready notice.
+
+When the runtime becomes Ready, `SplashStore` emits one `SplashEffect.Navigate` per startup attempt. `app:composition` consumes that effect, converts the already-validated instruction to `DynamicDestination`, and delegates to `NavigationProcessStateBridge.applyAfterBootstrap(...)` so saved process state cannot bypass fresh startup.
+
+`foundation:navigation` performs the actual stack mutation and `Navigation3Host` maps the resulting semantic destination to feature content. From that point every backend-driven screen is handled by the same `feature:dynamic` feature.
 
 `CarBrozApp` must not construct or operate the Dynamic store from individual SDUI/network/action/form dependencies. It receives one `DynamicFeatureFactory` and delegates a `DynamicDestination` to `DynamicFeature`.
 
@@ -208,6 +229,9 @@ The runtime is considered extensible only when these remain true:
 10. `foundation:navigation` remains the only back-stack/navigation mechanics owner.
 11. `runtime:sdui` remains the only generic SDUI runtime/rendering owner.
 12. `runtime:action` remains the only generic semantic-action preparation owner.
+13. `runtime:application` remains the only startup-state owner; no `BootstrapStore`/`BootstrapDestinationStore` may reappear.
+14. `feature:splash` remains presentation-only and may not depend on `data:network` or `data:preferences`.
+15. Partner-specific startup transport/policy remains in `app:startup`, not in neutral foundation/runtime modules.
 
 ## 14. Prohibited regressions
 
@@ -215,6 +239,8 @@ Do not reintroduce:
 
 - `ReferenceDestination`, `ReferenceSduiStore`, `REFERENCE_SCREEN_ENDPOINT` or bootstrap `Reference` routes;
 - `LoginDestination`, `OtpDestination`, `DashboardDestination` or equivalent business-flow destinations;
+- `BootstrapStore`, `BootstrapDestinationStore`, `BootstrapConfigurationStartupTask`, the old `/api/v1/app` startup path or a Splash-owned remote-config cache;
+- networking, session persistence, bootstrap DTO decoding or client-metadata header construction inside `feature:splash`;
 - a fixed `Template -> Component -> Section -> Group -> Element` requirement;
 - dummy Section/Group nodes;
 - unsafe `Node(children: List<Node>)` hierarchies;
@@ -232,5 +258,6 @@ Do not reintroduce:
 - raw platform navigation/background/capability types in SDUI wire payloads;
 - mutation of canonical normalized server `Screen` objects for transient state;
 - automatic replay of non-idempotent requests during restoration or realtime refresh;
+- applying saved dynamic navigation before fresh session/bootstrap validation;
 - durable storage of arbitrary dynamic-instruction payloads;
 - duplicate bootstrap/action dynamic-screen contracts.
