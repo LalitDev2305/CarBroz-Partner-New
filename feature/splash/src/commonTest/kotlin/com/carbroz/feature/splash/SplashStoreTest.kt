@@ -64,7 +64,7 @@ class SplashStoreTest {
         runCurrent()
 
         assertEquals(SplashState.Ready, store.state.value)
-        assertEquals(listOf(SplashEffect.Navigate(TestPayload)), effects)
+        assertEquals(listOf<SplashEffect>(SplashEffect.Navigate(TestPayload)), effects)
         collector.cancel()
         store.close()
     }
@@ -88,7 +88,7 @@ class SplashStoreTest {
         runCurrent()
 
         assertIs<SplashState.RequiredUpdate>(store.state.value)
-        assertEquals(listOf(SplashEffect.OpenUpdateUri("https://example.com/update")), effects)
+        assertEquals(listOf<SplashEffect>(SplashEffect.OpenUpdateUri("https://example.com/update")), effects)
         collector.cancel()
         store.close()
     }
