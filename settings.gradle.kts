@@ -35,6 +35,7 @@ rootProject.name = "CarBroz-Partner"
 include(":androidApp")
 include(":desktopApp")
 include(":app:composition")
+include(":app:startup")
 include(":feature:splash")
 include(":feature:dynamic")
 include(":foundation:architecture")
