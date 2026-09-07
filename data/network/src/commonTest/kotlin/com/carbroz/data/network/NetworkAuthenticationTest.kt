@@ -84,7 +84,7 @@ class NetworkAuthenticationTest {
     }
 
     @Test
-    fun optional session retries as guest only after canonical session invalidation() = runTest {
+    fun optionalSessionRetriesAsGuestOnlyAfterCanonicalSessionInvalidation() = runTest {
         var token: String? = "old-token"
         var attempts = 0
         val seenAuthorization = mutableListOf<String?>()
@@ -107,7 +107,7 @@ class NetworkAuthenticationTest {
     }
 
     @Test
-    fun required session does not replay as guest after session invalidation() = runTest {
+    fun requiredSessionDoesNotReplayAsGuestAfterSessionInvalidation() = runTest {
         var attempts = 0
         val executor = executor(
             transport = NetworkTransport { attempts += 1; NetworkResult.Failure(NetworkFailure.Http(401)) },
