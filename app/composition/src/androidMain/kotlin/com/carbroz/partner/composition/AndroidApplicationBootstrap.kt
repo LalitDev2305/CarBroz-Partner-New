@@ -5,6 +5,7 @@ import com.carbroz.data.database.AndroidCarBrozDatabaseBuilderProvider
 import com.carbroz.data.database.CarBrozDatabaseFactory
 import com.carbroz.data.preferences.AndroidPreferenceStoreProvider
 import com.carbroz.data.securestorage.AndroidKeystoreSecureStorage
+import com.carbroz.foundation.configuration.ClientPlatform
 import com.carbroz.foundation.observability.AndroidMainThreadDispatcher
 import com.carbroz.foundation.observability.AndroidPlatformDiagnosticSink
 import com.carbroz.foundation.observability.AndroidResourceDiagnostics
@@ -25,6 +26,7 @@ fun initializeCarBrozAndroidApplication(
     val configuration = createCarBrozAppConfiguration(
         environment = environment,
         apiBaseUrl = apiBaseUrl,
+        clientPlatform = ClientPlatform.ANDROID,
         versionName = versionName,
         versionCode = versionCode,
         applicationId = applicationId,
