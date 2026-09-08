@@ -25,6 +25,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
+            implementation(project(":foundation:security"))
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
         }
