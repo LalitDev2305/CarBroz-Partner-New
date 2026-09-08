@@ -3,10 +3,12 @@ name: Foundation CI
 on:
   pull_request:
     branches:
-      - architecture/bootstrap
+      - development
+      - main
   push:
     branches:
-      - architecture/foundation-v2
+      - development
+      - main
   workflow_dispatch:
 
 concurrency:
