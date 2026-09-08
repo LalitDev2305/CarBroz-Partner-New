@@ -42,6 +42,7 @@ fun initializeCarBrozAndroidApplication(
                 trace = diagnosticSink,
                 responsiveness = diagnosticSink,
                 resource = diagnosticSink,
+                diagnostic = diagnosticSink,
             )
         },
         resourceDiagnostics = { AndroidResourceDiagnostics() },
