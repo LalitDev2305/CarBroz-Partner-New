@@ -54,7 +54,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(foundationDependency("configuration"))
-            implementation(project(":app:startup"))
+            implementation(project(":data:bootstrap"))
             implementation(project(":feature:splash"))
             implementation(project(":feature:dynamic"))
             implementation(foundationDependency("lifecycle"))
