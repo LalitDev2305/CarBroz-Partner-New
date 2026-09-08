@@ -1,9 +1,11 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.bootstrap.RemoteBootstrapRepository
 import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.database.DatabaseHealthCheck
 import com.carbroz.data.database.RoomDatabaseHealthCheck
+import com.carbroz.data.network.ConfigurationNetworkHeaderProvider
 import com.carbroz.data.network.ExecutorNetworkDataSource
 import com.carbroz.data.network.InMemoryNetworkResponseCache
 import com.carbroz.data.network.KtorNetworkTransport
@@ -43,6 +45,7 @@ import com.carbroz.feature.dynamic.DynamicBindingContextFactory
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
+import com.carbroz.feature.dynamic.DynamicStartupPayloadDecoder
 import com.carbroz.feature.dynamic.NetworkActionExecutor
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.analytics.AnalyticsPolicy
@@ -80,11 +83,6 @@ import com.carbroz.foundation.session.TokenExpiryPolicy
 import com.carbroz.foundation.session.TokenRefresher
 import com.carbroz.foundation.time.Clock
 import com.carbroz.foundation.time.SystemClock
-import com.carbroz.partner.startup.ClientMetadataHeaderProvider
-import com.carbroz.partner.startup.PartnerBootstrapClient
-import com.carbroz.partner.startup.PartnerBootstrapPolicyEvaluator
-import com.carbroz.partner.startup.PartnerBootstrapStartupTask
-import com.carbroz.partner.startup.SessionRestoreStartupTask
 import com.carbroz.platform.background.BackgroundScheduler
 import com.carbroz.platform.background.BackgroundTaskHandler
 import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
@@ -93,6 +91,11 @@ import com.carbroz.platform.background.ContinuousExecutionController
 import com.carbroz.runtime.action.ActionPreparerFactory
 import com.carbroz.runtime.application.ApplicationRuntime
 import com.carbroz.runtime.application.DefaultApplicationRuntime
+import com.carbroz.runtime.application.bootstrap.BootstrapRepository
+import com.carbroz.runtime.application.bootstrap.ResolveBootstrapUseCase
+import com.carbroz.runtime.application.bootstrap.StartupPayloadDecoder
+import com.carbroz.runtime.application.startup.BootstrapStartupTask
+import com.carbroz.runtime.application.startup.SessionRestoreStartupTask
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.SduiRuntimeFactory
@@ -184,7 +187,7 @@ fun carBrozApplicationModule(
     single { createKtorNetworkTransport() }
     single<NetworkTransport> { get<KtorNetworkTransport>() }
     single<NetworkAuthorizationProvider> { SessionNetworkAuthorizationProvider(sessionProvider = get()) }
-    single<NetworkHeaderProvider> { ClientMetadataHeaderProvider(configurationProvider = get()) }
+    single<NetworkHeaderProvider> { ConfigurationNetworkHeaderProvider(configurationProvider = get()) }
 
     single { SessionRefreshScope() }
     single<TokenRefresher> {
@@ -234,15 +237,16 @@ fun carBrozApplicationModule(
     single { NetworkActionExecutor(dataSource = get()) }
 
     single { DynamicScreenInstructionCodec() }
-    single { PartnerBootstrapClient(network = get()) }
-    single { PartnerBootstrapPolicyEvaluator(instructionCodec = get()) }
+    single<StartupPayloadDecoder> { DynamicStartupPayloadDecoder(codec = get()) }
+    single<BootstrapRepository> { RemoteBootstrapRepository(network = get()) }
     single {
-        PartnerBootstrapStartupTask(
-            client = get(),
-            policyEvaluator = get(),
+        ResolveBootstrapUseCase(
+            repository = get(),
             sessionProvider = get(),
+            payloadDecoder = get(),
         )
     }
+    single { BootstrapStartupTask(resolveBootstrap = get()) }
 
     single<SduiRuntime> {
         SduiRuntimeFactory.createCore(
@@ -301,7 +305,7 @@ fun carBrozApplicationModule(
 
     single {
         StartupCoordinator(
-            tasks = listOf(get<SessionRestoreStartupTask>(), get<PartnerBootstrapStartupTask>()),
+            tasks = listOf(get<SessionRestoreStartupTask>(), get<BootstrapStartupTask>()),
             observability = get(),
             clock = get(),
             correlationIdProvider = get(),
