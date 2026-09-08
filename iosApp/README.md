@@ -19,6 +19,20 @@ Reusable application architecture, business rules, navigation state, SDUI runtim
 
 The Xcode target runs `:app:composition:embedAndSignAppleFrameworkForXcode` before compiling the Swift host so the framework matches the active Xcode SDK, architecture and configuration.
 
+## Environment model
+
+The native host preserves the same explicit three-environment model as the shared configuration layer and Android host:
+
+| Xcode configuration | CarBroz environment | Default API base URL | Bundle identifier | Kotlin framework type |
+| --- | --- | --- | --- | --- |
+| `Debug` | `development` | `https://development.invalid` | `com.carbroz.partner` | auto-detected Debug |
+| `Staging` | `staging` | `https://staging.invalid` | `com.carbroz.partner.staging` | explicit `Release` |
+| `Release` | `production` | `https://production.invalid` | `com.carbroz.partner` | auto-detected Release |
+
+`CarBrozEnvironment` and `CarBrozApiBaseUrl` are read from `Info.plist` build settings. `CarBrozPartnerApp` passes those values, bundle version/build number and bundle identifier into the common application bootstrap. No environment selection or backend URL is re-decided in shared startup/Splash code.
+
+`Staging` sets `KOTLIN_FRAMEWORK_BUILD_TYPE=Release` because custom Xcode configuration names are not automatically classifiable by the Kotlin Multiplatform direct-integration task.
+
 ## Background execution
 
 Semantic scheduling and continuous-execution contracts live in `:platform:background`. The iOS adapter uses `BGTaskScheduler` and reads `BGTaskSchedulerPermittedIdentifiers` from this target's `Info.plist`; identifiers must be added there at the same time as their corresponding `BackgroundTaskHandler` is registered in the canonical Koin composition graph. Arbitrary transient task payloads are intentionally unsupported on iOS: handlers reconstruct work from durable application state.
@@ -29,10 +43,13 @@ Generic unlimited continuous execution is not available on iOS. Operations that 
 
 Product splash/startup UI is owned by shared Compose Multiplatform code. The iOS host does not define a branded/product splash screen. Any OS-mandated launch presentation must remain minimal and non-product-specific; the first intentional product screen is rendered by shared Compose code.
 
+The Swift host forwards the initial active scene state as well as later active/background transitions into the common lifecycle bridge. Duplicate foreground delivery is intentionally harmless because the shared Splash/runtime path is idempotent.
+
 ## Identity and platform baseline
 
 - Product: `CarBroz Partner`
-- Bundle identifier: `com.carbroz.partner`
+- Production bundle identifier: `com.carbroz.partner`
+- Staging bundle identifier: `com.carbroz.partner.staging`
 - Deployment target: iOS 15.0
 - Devices: iPhone and iPad
 - Shared framework: `CarBrozShared`
@@ -49,11 +66,28 @@ Windows cannot execute Xcode, Swift compilation, simulator runtime tests, signin
 
 ## Required macOS gate
 
-On macOS with Xcode installed:
+On macOS with Xcode installed, verify both native host configurations used before production release:
 
 ```bash
 ./gradlew :app:composition:compileKotlinIosArm64 :app:composition:compileKotlinIosSimulatorArm64
-xcodebuild -project iosApp/CarBrozPartner.xcodeproj -scheme CarBrozPartner -sdk iphonesimulator -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16' build
+
+xcodebuild \
+  -project iosApp/CarBrozPartner.xcodeproj \
+  -scheme CarBrozPartner \
+  -sdk iphonesimulator \
+  -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+
+xcodebuild \
+  -project iosApp/CarBrozPartner.xcodeproj \
+  -scheme CarBrozPartner \
+  -sdk iphonesimulator \
+  -configuration Staging \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO \
+  build
 ```
 
-A valid Apple Development Team must be selected in Xcode before physical-device/archive signing. iOS-specific capabilities must include their Kotlin/native adapter tests where possible and Xcode simulator/device verification.
+CI executes these unsigned simulator builds after the shared Kotlin/Native and published-foundation gates. A valid Apple Development Team is still required for physical-device/archive signing. iOS-specific capabilities must include their Kotlin/native adapter tests where possible and Xcode simulator/device verification.
