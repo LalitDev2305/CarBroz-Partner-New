@@ -18,20 +18,30 @@ class SessionStore(
 
     override suspend fun current(): SessionState = mutex.withLock { state }
 
+    /**
+     * Restores the canonical persisted session.
+     *
+     * Malformed or unsupported snapshots are invalid local authentication state. The session
+     * layer clears them atomically before publishing [SessionState.SignedOut], keeping repair
+     * policy inside the canonical session owner rather than leaking it into application startup.
+     */
     suspend fun restore(): SessionTransitionResult = mutex.withLock {
         when (val restored = persistence.restore()) {
-            SessionRestoreResult.NoSession -> {
-                state = SessionState.SignedOut
-                SessionTransitionResult.Success(state)
-            }
+            SessionRestoreResult.NoSession -> publishSignedOut()
 
             is SessionRestoreResult.Restored -> {
                 state = restored.session
                 SessionTransitionResult.Success(state)
             }
 
-            is SessionRestoreResult.Rejected ->
-                SessionTransitionResult.Failed(SessionTransitionFailure.RestoreRejected(restored.reason))
+            is SessionRestoreResult.Rejected -> when (restored.reason) {
+                SessionRestoreFailure.MalformedSnapshot,
+                SessionRestoreFailure.UnsupportedSnapshotVersion,
+                -> clearInvalidSnapshot()
+
+                SessionRestoreFailure.StorageUnavailable ->
+                    SessionTransitionResult.Failed(SessionTransitionFailure.RestoreRejected(restored.reason))
+            }
         }
     }
 
@@ -60,14 +70,22 @@ class SessionStore(
 
     suspend fun signOut(): SessionTransitionResult = mutex.withLock {
         when (val result = persistence.clear()) {
-            SessionPersistenceResult.Success -> {
-                state = SessionState.SignedOut
-                SessionTransitionResult.Success(state)
-            }
+            SessionPersistenceResult.Success -> publishSignedOut()
 
             is SessionPersistenceResult.Failed ->
                 SessionTransitionResult.Failed(SessionTransitionFailure.Persistence(result.reason))
         }
+    }
+
+    private suspend fun clearInvalidSnapshot(): SessionTransitionResult = when (val result = persistence.clear()) {
+        SessionPersistenceResult.Success -> publishSignedOut()
+        is SessionPersistenceResult.Failed ->
+            SessionTransitionResult.Failed(SessionTransitionFailure.Persistence(result.reason))
+    }
+
+    private fun publishSignedOut(): SessionTransitionResult {
+        state = SessionState.SignedOut
+        return SessionTransitionResult.Success(state)
     }
 
     private suspend fun persistAndPublish(
