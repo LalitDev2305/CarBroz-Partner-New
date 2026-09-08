@@ -82,6 +82,26 @@ jobs:
           :app:composition:linkDebugFrameworkIosSimulatorArm64
           --warning-mode all
           --stacktrace
+      - name: Build native iOS Debug host
+        run: |
+          xcodebuild \
+            -project iosApp/CarBrozPartner.xcodeproj \
+            -scheme CarBrozPartner \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Build native iOS Staging host
+        run: |
+          xcodebuild \
+            -project iosApp/CarBrozPartner.xcodeproj \
+            -scheme CarBrozPartner \
+            -sdk iphonesimulator \
+            -configuration Staging \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
       - name: Publish neutral foundation for iOS artifact-boundary verification
         run: >-
           ./gradlew
