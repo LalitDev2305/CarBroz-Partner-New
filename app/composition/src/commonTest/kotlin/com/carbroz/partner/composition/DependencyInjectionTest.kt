@@ -1,7 +1,9 @@
 package com.carbroz.partner.composition
 
+import com.carbroz.data.bootstrap.RemoteBootstrapRepository
 import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
+import com.carbroz.data.network.ConfigurationNetworkHeaderProvider
 import com.carbroz.data.network.KtorNetworkTransport
 import com.carbroz.data.network.NetworkAuthorizationProvider
 import com.carbroz.data.network.NetworkDataSource
@@ -25,6 +27,7 @@ import com.carbroz.feature.dynamic.DynamicBindingContextFactory
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
+import com.carbroz.feature.dynamic.DynamicStartupPayloadDecoder
 import com.carbroz.feature.dynamic.NetworkActionExecutor
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
@@ -40,11 +43,6 @@ import com.carbroz.foundation.session.SessionProvider
 import com.carbroz.foundation.session.SessionSnapshotCodec
 import com.carbroz.foundation.session.SessionStore
 import com.carbroz.foundation.session.TokenExpiryPolicy
-import com.carbroz.partner.startup.ClientMetadataHeaderProvider
-import com.carbroz.partner.startup.PartnerBootstrapClient
-import com.carbroz.partner.startup.PartnerBootstrapPolicyEvaluator
-import com.carbroz.partner.startup.PartnerBootstrapStartupTask
-import com.carbroz.partner.startup.SessionRestoreStartupTask
 import com.carbroz.platform.background.BackgroundExecutionResult
 import com.carbroz.platform.background.BackgroundScheduleResult
 import com.carbroz.platform.background.BackgroundScheduler
@@ -60,6 +58,11 @@ import com.carbroz.platform.background.ContinuousExecutionStartResult
 import com.carbroz.platform.background.ContinuousExecutionState
 import com.carbroz.runtime.action.ActionPreparer
 import com.carbroz.runtime.application.ApplicationRuntime
+import com.carbroz.runtime.application.bootstrap.BootstrapRepository
+import com.carbroz.runtime.application.bootstrap.ResolveBootstrapUseCase
+import com.carbroz.runtime.application.bootstrap.StartupPayloadDecoder
+import com.carbroz.runtime.application.startup.BootstrapStartupTask
+import com.carbroz.runtime.application.startup.SessionRestoreStartupTask
 import com.carbroz.runtime.application.startup.StartupCoordinator
 import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
@@ -87,7 +90,7 @@ class DependencyInjectionTest {
     )
 
     @Test
-    fun applicationModuleResolvesCanonicalRuntimeSessionNetworkRealtimeAndFeatureGraph() {
+    fun applicationModuleResolvesCanonicalRuntimeSessionNetworkBootstrapRealtimeAndFeatureGraph() {
         val secureStorage = FakeSecureStorage()
         val databaseProvider = FailingDatabaseProvider()
         val preferenceStore = FakePreferenceStore()
@@ -104,6 +107,9 @@ class DependencyInjectionTest {
             val networkEnvironment = koin.get<NetworkEnvironment>()
             val ktorTransport = koin.get<KtorNetworkTransport>()
             val authorizationProvider = koin.get<NetworkAuthorizationProvider>()
+            val networkDataSource = koin.get<NetworkDataSource>()
+            val bootstrapRepository = koin.get<BootstrapRepository>()
+            val payloadDecoder = koin.get<StartupPayloadDecoder>()
             val realtimeTransport = koin.get<KtorRealtimeTransport>()
 
             assertSame(controller, koin.get<AppLifecycle>())
@@ -114,6 +120,7 @@ class DependencyInjectionTest {
             assertSame(preferenceProvider, koin.get<PreferenceStoreProvider>())
             assertSame(preferenceStore, koin.get<PreferenceStore>())
             assertSame(sessionStore, koin.get<SessionProvider>())
+            assertSame(sessionStore, koin.get<SessionStore>())
             koin.get<SessionSnapshotCodec>()
             koin.get<SessionPersistence>()
             koin.get<TokenExpiryPolicy>()
@@ -122,10 +129,17 @@ class DependencyInjectionTest {
             assertEquals(networkEnvironmentProvider.get(), networkEnvironment)
             assertSame(ktorTransport, koin.get<NetworkTransport>())
             assertIs<SessionNetworkAuthorizationProvider>(authorizationProvider)
-            assertIs<ClientMetadataHeaderProvider>(koin.get<NetworkHeaderProvider>())
+            assertIs<ConfigurationNetworkHeaderProvider>(koin.get<NetworkHeaderProvider>())
             koin.get<NetworkResponseCache>()
             koin.get<NetworkExecutor>()
-            koin.get<NetworkDataSource>()
+            assertSame(networkDataSource, koin.get<NetworkDataSource>())
+
+            assertIs<RemoteBootstrapRepository>(bootstrapRepository)
+            assertSame(bootstrapRepository, koin.get<BootstrapRepository>())
+            assertIs<DynamicStartupPayloadDecoder>(payloadDecoder)
+            assertSame(payloadDecoder, koin.get<StartupPayloadDecoder>())
+            koin.get<ResolveBootstrapUseCase>()
+            koin.get<BootstrapStartupTask>()
 
             koin.get<NetworkActionExecutor>()
             koin.get<CapabilityActionExecutor>()
@@ -137,10 +151,6 @@ class DependencyInjectionTest {
             koin.get<FormTemplateRuntimeFactory>()
             koin.get<DynamicScreenCache>()
             koin.get<DynamicFeatureFactory>()
-
-            koin.get<PartnerBootstrapClient>()
-            koin.get<PartnerBootstrapPolicyEvaluator>()
-            koin.get<PartnerBootstrapStartupTask>()
 
             assertSame(realtimeTransport, koin.get<RealtimeTransport>())
             koin.get<RealtimeStream>()
