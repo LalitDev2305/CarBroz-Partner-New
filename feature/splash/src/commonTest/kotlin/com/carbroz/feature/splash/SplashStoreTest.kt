@@ -10,6 +10,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -66,6 +67,18 @@ class SplashStoreTest {
         assertEquals(SplashState.Ready, store.state.value)
         assertEquals(listOf<SplashEffect>(SplashEffect.Navigate(TestPayload)), effects)
         collector.cancel()
+        store.close()
+    }
+
+    @Test
+    fun `navigation effect survives collector attaching after ready emission`() = runTest {
+        val runtime = FakeRuntime()
+        val store = SplashStore(runtime, backgroundScope)
+
+        runtime.publish(ApplicationRuntimeState.Ready(TestPayload, emptyList(), 1u))
+        runCurrent()
+
+        assertEquals(SplashEffect.Navigate(TestPayload), store.effects.first())
         store.close()
     }
 
