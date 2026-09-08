@@ -189,6 +189,23 @@
 			};
 			name = Release;
 		};
+		F30000000000000000000003 /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = STAGING;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Staging;
+		};
 		F40000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -261,6 +278,42 @@
 			};
 			name = Release;
 		};
+		F40000000000000000000003 /* Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CARBROZ_API_BASE_URL = "https://staging.invalid";
+				CARBROZ_ENVIRONMENT = staging;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../app/composition/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CarBrozPartner/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				KOTLIN_FRAMEWORK_BUILD_TYPE = Release;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					CarBrozShared,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.carbroz.partner.staging;
+				PRODUCT_NAME = "CarBroz Partner";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Staging;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -268,6 +321,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F40000000000000000000001 /* Debug */,
+				F40000000000000000000003 /* Staging */,
 				F40000000000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -277,6 +331,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F30000000000000000000001 /* Debug */,
+				F30000000000000000000003 /* Staging */,
 				F30000000000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
