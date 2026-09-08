@@ -25,6 +25,11 @@ struct CarBrozPartnerApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear {
+                    if scenePhase == .active {
+                        AppLifecycleBridge.shared.moveToForeground()
+                    }
+                }
         }
         .onChange(of: scenePhase) { phase in
             switch phase {
