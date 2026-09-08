@@ -9,13 +9,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /** Presentation-only MVI owner for the static Splash feature. */
@@ -26,10 +26,10 @@ class SplashStore(
     private val parentJob = parentScope.coroutineContext[Job]
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentJob))
     private val mutableState = MutableStateFlow(runtime.state.value.toSplashState())
-    private val mutableEffects = MutableSharedFlow<SplashEffect>(extraBufferCapacity = 8)
+    private val effectChannel = Channel<SplashEffect>(capacity = Channel.BUFFERED)
 
     override val state: StateFlow<SplashState> = mutableState.asStateFlow()
-    val effects: SharedFlow<SplashEffect> = mutableEffects.asSharedFlow()
+    val effects: Flow<SplashEffect> = effectChannel.receiveAsFlow()
 
     private var lifecycleState: AppLifecycleState = AppLifecycleState.Unknown
     private var startupJob: Job? = null
@@ -41,7 +41,7 @@ class SplashStore(
                 mutableState.value = runtimeState.toSplashState()
                 if (runtimeState is ApplicationRuntimeState.Ready && lastNavigatedAttempt != runtimeState.attempt) {
                     lastNavigatedAttempt = runtimeState.attempt
-                    mutableEffects.emit(SplashEffect.Navigate(runtimeState.payload))
+                    effectChannel.send(SplashEffect.Navigate(runtimeState.payload))
                 }
             }
         }
@@ -57,6 +57,7 @@ class SplashStore(
 
     fun close() {
         startupJob?.cancel()
+        effectChannel.close()
         scope.cancel()
     }
 
@@ -87,7 +88,7 @@ class SplashStore(
 
     private fun openUpdateIfAvailable() {
         val update = mutableState.value as? SplashState.RequiredUpdate ?: return
-        scope.launch { mutableEffects.emit(SplashEffect.OpenUpdateUri(update.updateUri)) }
+        scope.launch { effectChannel.send(SplashEffect.OpenUpdateUri(update.updateUri)) }
     }
 
     private fun startRuntime(retry: Boolean) {
