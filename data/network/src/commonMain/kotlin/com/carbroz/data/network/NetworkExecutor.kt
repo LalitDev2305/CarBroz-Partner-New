@@ -69,8 +69,7 @@ class NetworkExecutor(
 
             val shouldRetry = when (recovery) {
                 NetworkAuthenticationRecoveryResult.Recovered -> true
-                NetworkAuthenticationRecoveryResult.SessionInvalidated ->
-                    request.authentication == NetworkAuthentication.OPTIONAL_SESSION
+                NetworkAuthenticationRecoveryResult.SessionInvalidated -> false
                 NetworkAuthenticationRecoveryResult.Unavailable -> false
             }
             if (!shouldRetry) return finish(context, firstResult, startedAt)
@@ -225,7 +224,7 @@ class NetworkExecutor(
         val duration = elapsedSince(startedAt)
         val correlationId = context.correlationId()
         val attributes = mapOf(
-            "method" to DiagnosticAttribute(context.method.name),
+            "method" to DiagnosticAttribute(context.method.name)),
             "outcome" to DiagnosticAttribute(outcome.metricName()),
         )
         observer.observe(NetworkObservation.Finished(context, outcome))
