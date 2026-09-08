@@ -4,6 +4,7 @@ import com.carbroz.data.bootstrap.RemoteBootstrapRepository
 import com.carbroz.data.database.CarBrozDatabase
 import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.network.ConfigurationNetworkHeaderProvider
+import com.carbroz.data.network.DiagnosticNetworkTransport
 import com.carbroz.data.network.KtorNetworkTransport
 import com.carbroz.data.network.NetworkAuthorizationProvider
 import com.carbroz.data.network.NetworkDataSource
@@ -127,7 +128,8 @@ class DependencyInjectionTest {
             koin.get<SessionRestoreStartupTask>()
 
             assertEquals(networkEnvironmentProvider.get(), networkEnvironment)
-            assertSame(ktorTransport, koin.get<NetworkTransport>())
+            assertNotNull(ktorTransport)
+            assertIs<DiagnosticNetworkTransport>(koin.get<NetworkTransport>())
             assertIs<SessionNetworkAuthorizationProvider>(authorizationProvider)
             assertIs<ConfigurationNetworkHeaderProvider>(koin.get<NetworkHeaderProvider>())
             koin.get<NetworkResponseCache>()
@@ -160,6 +162,65 @@ class DependencyInjectionTest {
             koin.get<BackgroundTaskRunner>()
             koin.get<StartupCoordinator>()
             koin.get<ApplicationRuntime>()
+        } finally {
+            application.close()
+        }
+    }
+
+    @Test
+    fun productionUsesCanonicalKtorTransportWithoutDetailedDiagnosticDecorator() {
+        val production = configuration.copy(
+            environment = AppEnvironment.Production,
+            apiBaseUrl = "https://production.invalid",
+            buildInformation = configuration.buildInformation.copy(
+                versionName = "1.0.0",
+                applicationId = "com.carbroz.partner",
+            ),
+        )
+        val application = koinApplication {
+            modules(
+                carBrozApplicationModule(
+                    configuration = production,
+                    secureStorage = FakeSecureStorage(),
+                    databaseProvider = FailingDatabaseProvider(),
+                    preferenceStoreProvider = PreferenceStoreProvider { FakePreferenceStore() },
+                ),
+            )
+        }
+
+        try {
+            assertSame(
+                application.koin.get<KtorNetworkTransport>(),
+                application.koin.get<NetworkTransport>(),
+            )
+        } finally {
+            application.close()
+        }
+    }
+
+    @Test
+    fun stagingUsesDetailedDiagnosticDecorator() {
+        val staging = configuration.copy(
+            environment = AppEnvironment.Staging,
+            apiBaseUrl = "https://staging.invalid",
+            buildInformation = configuration.buildInformation.copy(
+                versionName = "1.0.0-staging",
+                applicationId = "com.carbroz.partner.staging",
+            ),
+        )
+        val application = koinApplication {
+            modules(
+                carBrozApplicationModule(
+                    configuration = staging,
+                    secureStorage = FakeSecureStorage(),
+                    databaseProvider = FailingDatabaseProvider(),
+                    preferenceStoreProvider = PreferenceStoreProvider { FakePreferenceStore() },
+                ),
+            )
+        }
+
+        try {
+            assertIs<DiagnosticNetworkTransport>(application.koin.get<NetworkTransport>())
         } finally {
             application.close()
         }
