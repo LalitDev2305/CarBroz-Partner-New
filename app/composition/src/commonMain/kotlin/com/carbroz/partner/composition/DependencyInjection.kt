@@ -6,6 +6,7 @@ import com.carbroz.data.database.CarBrozDatabaseProvider
 import com.carbroz.data.database.DatabaseHealthCheck
 import com.carbroz.data.database.RoomDatabaseHealthCheck
 import com.carbroz.data.network.ConfigurationNetworkHeaderProvider
+import com.carbroz.data.network.DiagnosticNetworkTransport
 import com.carbroz.data.network.ExecutorNetworkDataSource
 import com.carbroz.data.network.InMemoryNetworkResponseCache
 import com.carbroz.data.network.KtorNetworkTransport
@@ -61,6 +62,7 @@ import com.carbroz.foundation.lifecycle.DefaultAppLifecycle
 import com.carbroz.foundation.navigation.NavigationState
 import com.carbroz.foundation.navigation.NavigationStore
 import com.carbroz.foundation.observability.CorrelationIdProvider
+import com.carbroz.foundation.observability.DiagnosticBlockSink
 import com.carbroz.foundation.observability.LogLevel
 import com.carbroz.foundation.observability.MainThreadDispatcher
 import com.carbroz.foundation.observability.MainThreadResponsivenessMonitor
@@ -121,6 +123,7 @@ fun carBrozApplicationModule(
 ) = module {
     single { configuration }
     single<ConfigurationProvider> { ConfigurationProvider { get<AppConfiguration>() } }
+    single<DiagnosticBlockSink> { observabilitySinks.diagnostic }
 
     single<CorrelationIdProvider> { RandomCorrelationIdProvider() }
     single {
@@ -185,7 +188,17 @@ fun carBrozApplicationModule(
     single { NetworkEnvironmentProvider(configurationProvider = get()) }
     single<NetworkEnvironment> { get<NetworkEnvironmentProvider>().get() }
     single { createKtorNetworkTransport() }
-    single<NetworkTransport> { get<KtorNetworkTransport>() }
+    single<NetworkTransport> {
+        when (configuration.environment) {
+            AppEnvironment.Development,
+            AppEnvironment.Staging,
+            -> DiagnosticNetworkTransport(
+                delegate = get<KtorNetworkTransport>(),
+                sink = get(),
+            )
+            AppEnvironment.Production -> get<KtorNetworkTransport>()
+        }
+    }
     single<NetworkAuthorizationProvider> { SessionNetworkAuthorizationProvider(sessionProvider = get()) }
     single<NetworkHeaderProvider> { ConfigurationNetworkHeaderProvider(configurationProvider = get()) }
 
