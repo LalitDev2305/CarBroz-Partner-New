@@ -1,7 +1,7 @@
 package com.carbroz.data.network
 
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -16,14 +16,14 @@ class NetworkSerializationTest {
             NetworkResult.Success(
                 NetworkResponse(
                     statusCode = 200,
-                    body = buildJsonObject { put("value", "ok") },
+                    body = JsonPrimitive("ok"),
                 ),
             )
         }
 
-        val result = source.executeTyped(request(), Payload.serializer())
+        val result = source.executeTyped(request(), String.serializer())
 
-        assertEquals(Payload("ok"), assertIs<NetworkDecodedResult.Success<Payload>>(result).value)
+        assertEquals("ok", assertIs<NetworkDecodedResult.Success<String>>(result).value)
     }
 
     @Test
@@ -33,7 +33,7 @@ class NetworkSerializationTest {
         }
 
         val result = assertIs<NetworkDecodedResult.Failure>(
-            source.executeTyped(request(), Payload.serializer()),
+            source.executeTyped(request(), String.serializer()),
         )
 
         assertEquals(NetworkDecodeFailure.MissingBody, result.reason)
@@ -42,11 +42,16 @@ class NetworkSerializationTest {
     @Test
     fun `typed execution fails closed when body cannot decode`() = runTest {
         val source = NetworkDataSource {
-            NetworkResult.Success(NetworkResponse(statusCode = 200, body = JsonPrimitive("invalid")))
+            NetworkResult.Success(
+                NetworkResponse(
+                    statusCode = 200,
+                    body = buildJsonObject { put("not", "a string") },
+                ),
+            )
         }
 
         val result = assertIs<NetworkDecodedResult.Failure>(
-            source.executeTyped(request(), Payload.serializer()),
+            source.executeTyped(request(), String.serializer()),
         )
 
         assertEquals(NetworkDecodeFailure.InvalidBody, result.reason)
@@ -57,7 +62,7 @@ class NetworkSerializationTest {
         val source = NetworkDataSource { NetworkResult.Failure(NetworkFailure.Timeout) }
 
         val result = assertIs<NetworkDecodedResult.Failure>(
-            source.executeTyped(request(), Payload.serializer()),
+            source.executeTyped(request(), String.serializer()),
         )
 
         assertEquals(NetworkDecodeFailure.Network(NetworkFailure.Timeout), result.reason)
@@ -80,7 +85,4 @@ class NetworkSerializationTest {
         method = NetworkMethod.GET,
         endpoint = NetworkEndpoint("/typed-test"),
     )
-
-    @Serializable
-    private data class Payload(val value: String)
 }
