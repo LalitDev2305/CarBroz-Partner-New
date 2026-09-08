@@ -29,6 +29,7 @@ jobs:
       - name: Verify repository JVM, Android and host-test surface
         run: >-
           ./gradlew
+          verifyStartupArchitecture
           allTests
           assemble
           --warning-mode all
