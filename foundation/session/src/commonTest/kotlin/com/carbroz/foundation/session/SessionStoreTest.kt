@@ -1,10 +1,12 @@
 package com.carbroz.foundation.session
 
 import com.carbroz.foundation.security.Secret
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 class SessionStoreTest {
@@ -32,15 +34,75 @@ class SessionStoreTest {
     }
 
     @Test
-    fun rejectedRestoreDoesNotReplaceExistingState() = runTest {
+    fun malformedRestoreIsClearedAndPublishesSignedOut() = runTest {
         val session = authenticated("subject-a")
         val persistence = FakeSessionPersistence()
         val store = SessionStore(persistence)
         store.authenticate(session)
         persistence.restoreResult = SessionRestoreResult.Rejected(SessionRestoreFailure.MalformedSnapshot)
+
         val result = store.restore()
-        assertEquals(SessionTransitionFailure.RestoreRejected(SessionRestoreFailure.MalformedSnapshot), assertIs<SessionTransitionResult.Failed>(result).reason)
+
+        assertEquals(SessionState.SignedOut, assertIs<SessionTransitionResult.Success>(result).state)
+        assertEquals(SessionState.SignedOut, store.current())
+        assertEquals(1, persistence.clearCalls)
+    }
+
+    @Test
+    fun unsupportedRestoreIsClearedAndPublishesSignedOut() = runTest {
+        val persistence = FakeSessionPersistence(
+            restoreResult = SessionRestoreResult.Rejected(SessionRestoreFailure.UnsupportedSnapshotVersion),
+        )
+        val store = SessionStore(persistence)
+
+        val result = store.restore()
+
+        assertEquals(SessionState.SignedOut, assertIs<SessionTransitionResult.Success>(result).state)
+        assertEquals(1, persistence.clearCalls)
+    }
+
+    @Test
+    fun failedInvalidSnapshotCleanupDoesNotPublishSignedOut() = runTest {
+        val session = authenticated("subject-a")
+        val persistence = FakeSessionPersistence()
+        val store = SessionStore(persistence)
+        store.authenticate(session)
+        persistence.restoreResult = SessionRestoreResult.Rejected(SessionRestoreFailure.MalformedSnapshot)
+        persistence.clearResult = SessionPersistenceResult.Failed(SessionPersistenceFailure.StorageUnavailable)
+
+        val result = store.restore()
+
+        assertEquals(
+            SessionTransitionFailure.Persistence(SessionPersistenceFailure.StorageUnavailable),
+            assertIs<SessionTransitionResult.Failed>(result).reason,
+        )
         assertEquals(session, store.current())
+    }
+
+    @Test
+    fun storageUnavailableRestoreFailsWithoutChangingCurrentState() = runTest {
+        val session = authenticated("subject-a")
+        val persistence = FakeSessionPersistence()
+        val store = SessionStore(persistence)
+        store.authenticate(session)
+        persistence.restoreResult = SessionRestoreResult.Rejected(SessionRestoreFailure.StorageUnavailable)
+
+        val result = store.restore()
+
+        assertEquals(
+            SessionTransitionFailure.RestoreRejected(SessionRestoreFailure.StorageUnavailable),
+            assertIs<SessionTransitionResult.Failed>(result).reason,
+        )
+        assertEquals(session, store.current())
+        assertEquals(0, persistence.clearCalls)
+    }
+
+    @Test
+    fun restoreCancellationPropagates() = runTest {
+        val persistence = FakeSessionPersistence(restoreError = CancellationException("cancel"))
+        val store = SessionStore(persistence)
+
+        assertFailsWith<CancellationException> { store.restore() }
     }
 
     @Test
@@ -189,11 +251,15 @@ class SessionStoreTest {
         var restoreResult: SessionRestoreResult = SessionRestoreResult.NoSession,
         var saveResult: SessionPersistenceResult = SessionPersistenceResult.Success,
         var clearResult: SessionPersistenceResult = SessionPersistenceResult.Success,
+        private val restoreError: Throwable? = null,
     ) : SessionPersistence {
         var lastSaved: SessionState.Authenticated? = null
         val savedSessions = mutableListOf<SessionState.Authenticated>()
         var clearCalls = 0
-        override suspend fun restore(): SessionRestoreResult = restoreResult
+        override suspend fun restore(): SessionRestoreResult {
+            restoreError?.let { throw it }
+            return restoreResult
+        }
         override suspend fun save(session: SessionState.Authenticated): SessionPersistenceResult {
             lastSaved = session
             savedSessions += session
