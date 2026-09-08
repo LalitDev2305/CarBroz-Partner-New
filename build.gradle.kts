@@ -1,5 +1,10 @@
+import org.gradle.api.DefaultTask
 import org.gradle.api.Project
-import org.gradle.api.artifacts.ProjectDependency
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform) apply false
@@ -21,16 +26,128 @@ val foundationLocalRepository = layout.buildDirectory.dir("foundation-repository
 fun Project.isNeutralFoundationProject(): Boolean =
     neutralFoundationPrefixes.any { prefix -> path.startsWith(prefix) } && path !in productSpecificProjectPaths
 
-fun Project.commonMainProjectDependencyPaths(): Set<String> =
-    sequenceOf("commonMainApi", "commonMainImplementation")
-        .mapNotNull { configurationName -> configurations.findByName(configurationName) }
-        .flatMap { configuration ->
-            configuration.dependencies
-                .withType(ProjectDependency::class.java)
-                .asSequence()
+abstract class VerifyStartupArchitectureTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val architectureFiles: ConfigurableFileCollection
+
+    @TaskAction
+    fun verifyArchitecture() {
+        val contentsByPath = architectureFiles.files.associate { file ->
+            file.invariantSeparatorsPath to file.readText()
         }
-        .map { dependency -> dependency.path }
-        .toSet()
+
+        fun content(relativePath: String): String = contentsByPath.entries
+            .singleOrNull { (path, _) -> path.endsWith("/$relativePath") || path == relativePath }
+            ?.value
+            ?: error("Architecture verification input is missing: $relativePath")
+
+        fun hasProjectDependency(buildFile: String, dependencyPath: String): Boolean {
+            val escapedPath = Regex.escape(dependencyPath)
+            return Regex("""project\s*\(\s*(?:path\s*=\s*)?[\"']$escapedPath[\"']""")
+                .containsMatchIn(buildFile)
+        }
+
+        val moduleBuildFiles = mapOf(
+            ":feature:splash" to content("feature/splash/build.gradle.kts"),
+            ":runtime:application" to content("runtime/application/build.gradle.kts"),
+            ":data:network" to content("data/network/build.gradle.kts"),
+            ":data:bootstrap" to content("data/bootstrap/build.gradle.kts"),
+        )
+
+        val requiredDependencies = mapOf(
+            ":feature:splash" to setOf(
+                ":foundation:architecture",
+                ":foundation:lifecycle",
+                ":foundation:navigation",
+                ":foundation:design-system",
+                ":runtime:application",
+            ),
+            ":runtime:application" to setOf(
+                ":foundation:lifecycle",
+                ":foundation:observability",
+                ":foundation:session",
+                ":foundation:time",
+            ),
+            ":data:bootstrap" to setOf(
+                ":runtime:application",
+                ":data:network",
+            ),
+        )
+
+        val forbiddenDependencies = mapOf(
+            ":feature:splash" to setOf(
+                ":data:network",
+                ":data:bootstrap",
+                ":foundation:session",
+                ":feature:dynamic",
+                ":app:composition",
+            ),
+            ":runtime:application" to setOf(
+                ":data:network",
+                ":data:bootstrap",
+                ":feature:splash",
+                ":feature:dynamic",
+                ":app:composition",
+            ),
+            ":data:network" to setOf(
+                ":runtime:application",
+                ":data:bootstrap",
+                ":feature:splash",
+                ":feature:dynamic",
+                ":app:composition",
+            ),
+            ":data:bootstrap" to setOf(
+                ":foundation:session",
+                ":feature:splash",
+                ":feature:dynamic",
+                ":app:composition",
+            ),
+        )
+
+        val violations = mutableListOf<String>()
+
+        requiredDependencies.forEach { (module, required) ->
+            val buildFile = moduleBuildFiles.getValue(module)
+            required.sorted().forEach { dependency ->
+                if (!hasProjectDependency(buildFile, dependency)) {
+                    violations += "$module is missing required commonMain dependency $dependency"
+                }
+            }
+        }
+
+        forbiddenDependencies.forEach { (module, forbidden) ->
+            val buildFile = moduleBuildFiles.getValue(module)
+            forbidden.sorted().forEach { dependency ->
+                if (hasProjectDependency(buildFile, dependency)) {
+                    violations += "$module must not depend on $dependency"
+                }
+            }
+        }
+
+        contentsByPath
+            .filterKeys { path ->
+                path.replace('\\', '/').contains("/foundation/") && path.endsWith("/build.gradle.kts")
+            }
+            .forEach { (path, buildFile) ->
+                if (hasProjectDependency(buildFile, ":data:bootstrap")) {
+                    violations += "$path must not depend on Partner-specific :data:bootstrap"
+                }
+            }
+
+        val settings = content("settings.gradle.kts")
+        if (Regex("""include\s*\(\s*[\"']:app:startup[\"']\s*\)""").containsMatchIn(settings)) {
+            violations += ":app:startup is superseded and must not exist"
+        }
+
+        if (violations.isNotEmpty()) {
+            error(
+                "Startup architecture boundary violations:\n" +
+                    violations.joinToString(separator = "\n") { " - $it" },
+            )
+        }
+    }
+}
 
 val cleanFoundationLocalRepository = tasks.register<Delete>("cleanFoundationLocalRepository") {
     group = "publishing"
@@ -79,93 +196,19 @@ tasks.register("verifyFoundationCoordinates") {
     description = "Verifies canonical coordinates for neutral CarBroz foundation modules."
 }
 
-val requiredStartupDependencies = mapOf(
-    ":feature:splash" to setOf(
-        ":foundation:architecture",
-        ":foundation:lifecycle",
-        ":foundation:navigation",
-        ":foundation:design-system",
-        ":runtime:application",
-    ),
-    ":runtime:application" to setOf(
-        ":foundation:lifecycle",
-        ":foundation:observability",
-        ":foundation:session",
-        ":foundation:time",
-    ),
-    ":data:bootstrap" to setOf(
-        ":runtime:application",
-        ":data:network",
-    ),
-)
-
-val forbiddenStartupDependencies = mapOf(
-    ":feature:splash" to setOf(
-        ":data:network",
-        ":data:bootstrap",
-        ":foundation:session",
-        ":feature:dynamic",
-        ":app:composition",
-    ),
-    ":runtime:application" to setOf(
-        ":data:network",
-        ":data:bootstrap",
-        ":feature:splash",
-        ":feature:dynamic",
-        ":app:composition",
-    ),
-    ":data:network" to setOf(
-        ":runtime:application",
-        ":data:bootstrap",
-        ":feature:splash",
-        ":feature:dynamic",
-        ":app:composition",
-    ),
-    ":data:bootstrap" to setOf(
-        ":foundation:session",
-        ":feature:splash",
-        ":feature:dynamic",
-        ":app:composition",
-    ),
-)
-
-tasks.register("verifyStartupArchitecture") {
+tasks.register<VerifyStartupArchitectureTask>("verifyStartupArchitecture") {
     group = "verification"
     description = "Enforces the frozen Splash/bootstrap dependency and ownership boundaries."
-
-    doLast {
-        val violations = mutableListOf<String>()
-
-        requiredStartupDependencies.forEach { (projectPath, required) ->
-            val actual = project(projectPath).commonMainProjectDependencyPaths()
-            (required - actual).sorted().forEach { missing ->
-                violations += "$projectPath is missing required commonMain dependency $missing"
-            }
-        }
-
-        forbiddenStartupDependencies.forEach { (projectPath, forbidden) ->
-            val actual = project(projectPath).commonMainProjectDependencyPaths()
-            (actual intersect forbidden).sorted().forEach { dependency ->
-                violations += "$projectPath must not depend on $dependency"
-            }
-        }
-
-        subprojects
-            .filter { foundationProject -> foundationProject.path.startsWith(":foundation:") }
-            .forEach { foundationProject ->
-                if (":data:bootstrap" in foundationProject.commonMainProjectDependencyPaths()) {
-                    violations += "${foundationProject.path} must not depend on Partner-specific :data:bootstrap"
-                }
-            }
-
-        if (project.findProject(":app:startup") != null) {
-            violations += ":app:startup is superseded and must not exist"
-        }
-
-        if (violations.isNotEmpty()) {
-            error("Startup architecture boundary violations:\n${violations.joinToString(separator = "\n") { " - $it" }}")
-        }
-    }
+    architectureFiles.from(
+        layout.projectDirectory.file("settings.gradle.kts"),
+        layout.projectDirectory.file("feature/splash/build.gradle.kts"),
+        layout.projectDirectory.file("runtime/application/build.gradle.kts"),
+        layout.projectDirectory.file("data/network/build.gradle.kts"),
+        layout.projectDirectory.file("data/bootstrap/build.gradle.kts"),
+        layout.projectDirectory.asFileTree.matching {
+            include("foundation/*/build.gradle.kts")
+        },
+    )
 }
 
 tasks.register("publishFoundationToLocalRepository") {
