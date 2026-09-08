@@ -57,8 +57,8 @@ class SplashStore(
 
     fun close() {
         startupJob?.cancel()
-        effectChannel.close()
         scope.cancel()
+        effectChannel.close()
     }
 
     private fun onLifecycleChanged(state: AppLifecycleState) {
