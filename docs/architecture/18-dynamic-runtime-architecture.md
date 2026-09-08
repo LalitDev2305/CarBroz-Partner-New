@@ -9,18 +9,21 @@ Splash is the only currently known static application screen. Every screen after
 Feature ownership is explicit:
 
 - `feature:splash` owns static Splash presentation only: UI state, user/lifecycle intents and one-shot effects. It does not own networking, bootstrap DTOs, caching, session persistence, headers or startup policy.
-- `app:startup` owns Partner-specific startup orchestration: session restoration task, Partner bootstrap transport contract, client-metadata header provider and pure bootstrap policy evaluation.
-- `runtime:application` is the single canonical owner of startup lifecycle state and ordered startup task execution.
-- `feature:dynamic` is the single feature for every backend-driven screen. It owns dynamic destination/request contracts, screen loading/error/retry lifecycle, runtime screen cache, action-result orchestration, external/realtime screen events and the Compose Dynamic feature UI.
+- `runtime:application` is the single canonical owner of startup lifecycle state, ordered startup task execution and transport-independent bootstrap application policy/contracts.
+- `foundation:session` is the sole session owner, including persisted-session restoration and invalid/corrupt persisted-session cleanup.
+- `data:bootstrap` owns only the Partner bootstrap transport adapter: route, serializable Partner DTO and the remote implementation of the application-owned `BootstrapRepository`.
+- `data:network` owns the canonical REST execution stack, global configuration-derived metadata headers, typed response-decoding mechanism, auth integration and transport policies.
+- `feature:dynamic` is the single feature for every backend-driven screen. It owns dynamic destination/request contracts, the implementation that validates an opaque bootstrap payload into `DynamicScreenInstruction`, screen loading/error/retry lifecycle, runtime screen cache, action-result orchestration, external/realtime screen events and the Compose Dynamic feature UI.
 - `foundation:navigation` is the sole navigation mechanics owner: back-stack state, commands, restoration policy and the canonical `Navigation3Host` presentation adapter.
 - `runtime:sdui` is the reusable SDUI engine used by `feature:dynamic`; it owns protocol validation, normalization, definitions, registries, `SduiRuntime` assembly and normalized-screen rendering through `SduiScreenRenderer`. It does not own feature lifecycle or navigation.
 - `runtime:action` is the sole generic semantic-action preparation owner, including `ActionPreparerFactory`; it does not execute network/platform feature effects itself.
 - `app:composition` is a composition root only. It assembles process dependencies, maps navigation destinations to feature content, consumes feature effects and owns the application-specific transient process-state adapter. It must not implement another startup store, navigation, dynamic-screen, SDUI, action or networking engine.
+- `app:startup` does not exist; startup responsibilities are split by their canonical owners rather than collected in an application dumping-ground module.
 - Android/Desktop/iOS hosts remain thin platform entry points.
 
 Canonical runtime loop:
 
-`Splash -> common lifecycle Foreground -> ApplicationRuntime -> session restore -> app:startup Partner bootstrap -> GET /api/v1/partner/bootstrap through canonical networking -> validated DynamicScreenInstruction -> SplashEffect.Navigate -> deferred restoration check -> DynamicDestination -> foundation:navigation -> feature:dynamic -> trusted screen request -> runtime:sdui decode -> schema validation -> compatibility -> normalization -> runtime IR -> render -> semantic command -> runtime:action preparation -> binding/form resolution -> feature effect adapter -> local effect or navigation command -> foundation:navigation -> same feature:dynamic -> repeat`.
+`Splash -> common lifecycle Foreground -> ApplicationRuntime -> SessionRestoreStartupTask -> foundation:session restore/repair -> BootstrapStartupTask -> ResolveBootstrapUseCase -> BootstrapRepository -> data:bootstrap RemoteBootstrapRepository -> GET /api/v1/partner/bootstrap through canonical data:network -> normalized BootstrapSnapshot -> feature:dynamic StartupPayloadDecoder validation -> trusted DynamicScreenInstruction -> SplashEffect.Navigate -> deferred restoration check -> DynamicDestination -> foundation:navigation -> feature:dynamic -> trusted screen request -> runtime:sdui decode -> schema validation -> compatibility -> normalization -> runtime IR -> render -> semantic command -> runtime:action preparation -> binding/form resolution -> feature effect adapter -> local effect or navigation command -> foundation:navigation -> same feature:dynamic -> repeat`.
 
 The backend chooses the next screen. The client owns validation, trusted execution, rendering, lifecycle, navigation mechanics, security and restoration safety.
 
@@ -174,26 +177,29 @@ The bridge serializes only semantic restored destinations and must never write a
 
 `SplashStore` is presentation-only. It observes the common lifecycle and the single `ApplicationRuntime` state, maps those values to Splash presentation state and emits typed effects. It does not call the bootstrap endpoint, persist config or hold a second bootstrap state.
 
-`ApplicationRuntime` owns the canonical startup lifecycle. `StartupCoordinator` executes `SessionRestoreStartupTask` first and `PartnerBootstrapStartupTask` second. Session restoration returns `Continue`; Partner bootstrap is the final resolver.
+`ApplicationRuntime` owns the canonical startup lifecycle. `StartupCoordinator` executes `SessionRestoreStartupTask` first and `BootstrapStartupTask` second. Session restoration returns `Continue`; bootstrap is the final resolver.
 
-`PartnerBootstrapStartupTask` lives in `app:startup` and is deliberately thin:
+`SessionRestoreStartupTask` lives in `runtime:application` and only adapts the complete `foundation:session` restore result into startup semantics. Malformed/unsupported persisted-session cleanup belongs to `SessionStore`, not the startup task.
 
-`PartnerBootstrapClient -> PartnerBootstrapPolicyEvaluator -> StartupTaskResult`.
+`BootstrapStartupTask` is deliberately thin:
 
-`PartnerBootstrapClient` calls `GET /api/v1/partner/bootstrap` through the canonical `NetworkDataSource` with `OPTIONAL_SESSION`. It does not manually attach client metadata or Authorization headers. `ClientMetadataHeaderProvider` supplies platform/app/build metadata through the canonical network header extension point; session infrastructure owns Authorization and authentication recovery.
+`ResolveBootstrapUseCase -> StartupTaskResult`.
 
-`PartnerBootstrapPolicyEvaluator` purely converts the typed response to one of:
+`ResolveBootstrapUseCase` owns application policy: repository failure semantics, canonical local/backend authentication consistency, Required Update precedence, Maintenance blocking, trusted next-payload decoding and Optional Update notices.
 
-- Ready with the validated existing `DynamicScreenInstruction` payload;
-- Required Update blocker;
-- Maintenance blocker;
-- invalid-contract failure.
+The application-owned `BootstrapRepository` contract is implemented by `data:bootstrap/RemoteBootstrapRepository`. That adapter calls `GET /api/v1/partner/bootstrap` through canonical `NetworkDataSource` with `OPTIONAL_SESSION`, owns the Partner serializable DTO/route and maps the wire envelope into a transport-free `BootstrapSnapshot`. It does not make startup-policy decisions.
+
+`data:network/ConfigurationNetworkHeaderProvider` supplies platform/app/build metadata globally through the canonical network header extension point; session/network infrastructure owns Authorization and authentication recovery. The bootstrap adapter supplies no manual metadata/Auth headers.
+
+`BootstrapSnapshot.nextPayload` is opaque serialized data at the application boundary. `runtime:application` defines `StartupPayloadDecoder`; `feature:dynamic` implements it using the existing `DynamicScreenInstructionCodec`. This preserves dependency direction: `feature:dynamic -> runtime:application`, never `runtime:application -> feature:dynamic`.
 
 Required Update and Maintenance are valid blocked startup outcomes, not technical failures. Optional Update is a non-blocking Ready notice.
 
 When the runtime becomes Ready, `SplashStore` emits one `SplashEffect.Navigate` per startup attempt. `app:composition` consumes that effect, converts the already-validated instruction to `DynamicDestination`, and delegates to `NavigationProcessStateBridge.applyAfterBootstrap(...)` so saved process state cannot bypass fresh startup.
 
 `foundation:navigation` performs the actual stack mutation and `Navigation3Host` maps the resulting semantic destination to feature content. From that point every backend-driven screen is handled by the same `feature:dynamic` feature.
+
+Login, OTP, Dashboard, Profile, Booking UI, Earnings UI and other normal backend screens do not create screen-specific clients/repositories/use cases/stores. Dedicated domain code is introduced only when a real client-owned business/security/state invariant exists.
 
 `CarBrozApp` must not construct or operate the Dynamic store from individual SDUI/network/action/form dependencies. It receives one `DynamicFeatureFactory` and delegates a `DynamicDestination` to `DynamicFeature`.
 
@@ -231,12 +237,16 @@ The runtime is considered extensible only when these remain true:
 12. `runtime:action` remains the only generic semantic-action preparation owner.
 13. `runtime:application` remains the only startup-state owner; no `BootstrapStore`/`BootstrapDestinationStore` may reappear.
 14. `feature:splash` remains presentation-only and may not depend on `data:network` or `data:preferences`.
-15. Partner-specific startup transport/policy remains in `app:startup`, not in neutral foundation/runtime modules.
+15. Partner bootstrap transport remains in `data:bootstrap`; application bootstrap policy/contracts remain in `runtime:application`; `app:startup` must not be reintroduced.
+16. `data:network` remains product-neutral and must not contain Partner bootstrap DTOs/routes.
+17. All normal post-Splash screens/actions remain on the one generic `feature:dynamic` + SDUI/action/network path unless a genuine business invariant justifies domain-specific code.
 
 ## 14. Prohibited regressions
 
 Do not reintroduce:
 
+- `app:startup` or another mixed-responsibility startup dumping-ground module;
+- `PartnerBootstrapClient`, `PartnerBootstrapPolicyEvaluator` or a bootstrap-specific Ktor client;
 - `ReferenceDestination`, `ReferenceSduiStore`, `REFERENCE_SCREEN_ENDPOINT` or bootstrap `Reference` routes;
 - `LoginDestination`, `OtpDestination`, `DashboardDestination` or equivalent business-flow destinations;
 - `BootstrapStore`, `BootstrapDestinationStore`, `BootstrapConfigurationStartupTask`, the old `/api/v1/app` startup path or a Splash-owned remote-config cache;
