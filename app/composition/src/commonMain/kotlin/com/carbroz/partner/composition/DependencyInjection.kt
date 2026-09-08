@@ -130,8 +130,9 @@ fun carBrozApplicationModule(
         Observability(
             policy = ObservabilityPolicy(
                 minimumLogLevel = when (configuration.environment) {
-                    AppEnvironment.Development -> LogLevel.DEBUG
-                    AppEnvironment.Staging -> LogLevel.INFO
+                    AppEnvironment.Development,
+                    AppEnvironment.Staging,
+                    -> LogLevel.DEBUG
                     AppEnvironment.Production -> LogLevel.WARN
                 },
                 crashReportingEnabled = true,
