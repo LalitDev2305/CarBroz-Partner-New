@@ -43,6 +43,7 @@ fun initializeCarBrozDesktopApplication(
                 trace = diagnosticSink,
                 responsiveness = diagnosticSink,
                 resource = diagnosticSink,
+                diagnostic = diagnosticSink,
             )
         },
         resourceDiagnostics = { DesktopResourceDiagnostics() },
