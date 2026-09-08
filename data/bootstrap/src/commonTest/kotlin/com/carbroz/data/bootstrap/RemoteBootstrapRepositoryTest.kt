@@ -130,6 +130,30 @@ class RemoteBootstrapRepositoryTest {
     }
 
     @Test
+    fun `blank minimum version fails closed`() = runTest {
+        val result = assertIs<BootstrapRepositoryResult.Failure>(
+            repository(successResponse(authenticated = false, minimumVersion = " ")).load(),
+        )
+
+        assertEquals(
+            BootstrapRepositoryFailure.InvalidPayload("bootstrap_invalid_minimum_version"),
+            result.reason,
+        )
+    }
+
+    @Test
+    fun `blank latest version fails closed`() = runTest {
+        val result = assertIs<BootstrapRepositoryResult.Failure>(
+            repository(successResponse(authenticated = false, latestVersion = " ")).load(),
+        )
+
+        assertEquals(
+            BootstrapRepositoryFailure.InvalidPayload("bootstrap_invalid_latest_version"),
+            result.reason,
+        )
+    }
+
+    @Test
     fun `conflicting update flags fail closed`() = runTest {
         val result = assertIs<BootstrapRepositoryResult.Failure>(
             repository(successResponse(authenticated = false, required = true, optional = true)).load(),
@@ -165,6 +189,8 @@ class RemoteBootstrapRepositoryTest {
     private fun successResponse(
         authenticated: Boolean,
         configVersion: String = "1",
+        minimumVersion: String = "1.0.0",
+        latestVersion: String = "1.1.0",
         required: Boolean = false,
         optional: Boolean = false,
     ): NetworkResult.Success = NetworkResult.Success(
@@ -184,8 +210,8 @@ class RemoteBootstrapRepositoryTest {
                         put("update", buildJsonObject {
                             put("required", required)
                             put("optional", optional)
-                            put("minimumVersion", "1.0.0")
-                            put("latestVersion", "1.1.0")
+                            put("minimumVersion", minimumVersion)
+                            put("latestVersion", latestVersion)
                         })
                         put("features", buildJsonObject {
                             put("registrationEnabled", true)
