@@ -97,9 +97,11 @@ class DiagnosticNetworkTransport(
     private fun prettyHeaders(headers: Map<String, String>): String {
         if (headers.isEmpty()) return "{}"
         val sanitized = JsonObject(
-            headers.toSortedMap(String.CASE_INSENSITIVE_ORDER).mapValues { (name, value) ->
-                JsonPrimitive(if (isSensitiveKey(name)) REDACTED else value)
-            },
+            headers.entries
+                .sortedBy { it.key.lowercase() }
+                .associate { (name, value) ->
+                    name to JsonPrimitive(if (isSensitiveKey(name)) REDACTED else value)
+                },
         )
         return prettyJson.encodeToString(JsonElement.serializer(), sanitized)
     }
@@ -112,7 +114,7 @@ class DiagnosticNetworkTransport(
     }
 
     private fun prettyElement(element: JsonElement?): String {
-        if (element == null || element is JsonNull) return "<empty>"
+        if (element == null || element == JsonNull) return "<empty>"
         return prettyJson.encodeToString(JsonElement.serializer(), redact(element))
     }
 
