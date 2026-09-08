@@ -224,7 +224,7 @@ class NetworkExecutor(
         val duration = elapsedSince(startedAt)
         val correlationId = context.correlationId()
         val attributes = mapOf(
-            "method" to DiagnosticAttribute(context.method.name)),
+            "method" to DiagnosticAttribute(context.method.name),
             "outcome" to DiagnosticAttribute(outcome.metricName()),
         )
         observer.observe(NetworkObservation.Finished(context, outcome))
