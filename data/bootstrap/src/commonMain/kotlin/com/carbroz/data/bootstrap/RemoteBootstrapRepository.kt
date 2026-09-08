@@ -1,12 +1,12 @@
 package com.carbroz.data.bootstrap
 
 import com.carbroz.data.network.NetworkAuthentication
+import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.NetworkDecodeFailure
 import com.carbroz.data.network.NetworkDecodedResult
 import com.carbroz.data.network.NetworkFailure
 import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
-import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.data.network.executeTyped
 import com.carbroz.runtime.application.bootstrap.BootstrapMaintenance
 import com.carbroz.runtime.application.bootstrap.BootstrapRepository
@@ -16,7 +16,6 @@ import com.carbroz.runtime.application.bootstrap.BootstrapSnapshot
 import com.carbroz.runtime.application.bootstrap.BootstrapUpdate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.encodeToString
 
 /**
  * Network-authoritative Partner bootstrap repository.
