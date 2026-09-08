@@ -25,42 +25,91 @@ class DesktopResourceDiagnostics : ResourceDiagnostics {
     }
 }
 
-/** Sanitized console diagnostic sink for Desktop development and operational support. */
-class DesktopPlatformDiagnosticSink : LogSink, CrashSink, PerformanceSink, TraceSink, ResponsivenessSink, ResourceSink {
+/**
+ * Curated Desktop diagnostic console for Development/Staging only.
+ *
+ * Operational metrics/traces/resources remain available through their neutral contracts but are intentionally
+ * not printed here. The local console is reserved for readable startup flow and HTTP request/response blocks.
+ */
+class DesktopPlatformDiagnosticSink :
+    LogSink,
+    CrashSink,
+    PerformanceSink,
+    TraceSink,
+    ResponsivenessSink,
+    ResourceSink,
+    DiagnosticBlockSink {
+
     override fun emit(event: LogEvent) {
-        val rendered = render(event.category, event.message, event.correlationId, event.attributes)
-        if (event.level.ordinal >= LogLevel.WARN.ordinal) System.err.println(rendered) else println(rendered)
+        renderFlow(event)?.let(::println)
+    }
+
+    override fun emit(block: DiagnosticBlock) {
+        val (color, label) = when (block.kind) {
+            DiagnosticBlockKind.API_REQUEST -> CYAN to "🌐 API REQUEST"
+            DiagnosticBlockKind.API_RESPONSE -> GREEN to "✅ API RESPONSE"
+            DiagnosticBlockKind.API_ERROR -> RED to "❌ API ERROR"
+        }
+        val rendered = buildString {
+            append(color)
+            appendLine("╭─ $label  ${block.title}")
+            block.content.lineSequence().forEach { line -> appendLine("│ $line") }
+            append("╰────────────────────────────────────────────────────────")
+            append(RESET)
+        }
+        if (block.kind == DiagnosticBlockKind.API_ERROR) System.err.println(rendered) else println(rendered)
     }
 
     override fun record(event: CrashEvent, throwable: Throwable?) {
-        System.err.println(render(event.category, event.message, event.correlationId, event.attributes))
-    }
-
-    override fun record(metric: PerformanceMetric) {
-        println("metric=${metric.name} duration_ms=${metric.durationMillis} correlation=${metric.correlationId?.value.orEmpty()} ${renderAttributes(metric.attributes)}")
-    }
-
-    override fun record(span: TraceSpan) {
-        println("trace=${span.name} duration_ms=${span.durationMillis} outcome=${span.outcome.name.lowercase()} correlation=${span.correlationId.value} ${renderAttributes(span.attributes)}")
-    }
-
-    override fun record(incident: ResponsivenessIncident) {
-        System.err.println("responsiveness=${incident.scope} blocked_ms=${incident.blockedMillis} threshold_ms=${incident.thresholdMillis}")
-    }
-
-    override fun record(snapshot: ResourceSnapshot) {
-        println(
-            "resources heap_used=${snapshot.heapUsedBytes ?: -1} heap_limit=${snapshot.heapLimitBytes ?: -1} physical_memory=${snapshot.physicalMemoryBytes ?: -1} processors=${snapshot.processorCount ?: -1}",
+        if (event.category != STARTUP_CATEGORY) return
+        System.err.println(
+            "$RED❌ FLOW ERROR  ${event.category}.${event.message}${correlationSuffix(event.correlationId)}$RESET",
         )
     }
 
-    private fun render(
-        category: String,
-        message: String,
-        correlationId: CorrelationId?,
-        attributes: Map<String, DiagnosticAttribute>,
-    ): String = "category=$category event=$message correlation=${correlationId?.value.orEmpty()} ${renderAttributes(attributes)}"
+    // Intentionally silent in the local console: the user-facing diagnostic stream contains FLOW + API only.
+    override fun record(metric: PerformanceMetric) = Unit
+    override fun record(span: TraceSpan) = Unit
+    override fun record(incident: ResponsivenessIncident) = Unit
+    override fun record(snapshot: ResourceSnapshot) = Unit
 
-    private fun renderAttributes(attributes: Map<String, DiagnosticAttribute>): String =
-        attributes.entries.joinToString(separator = " ") { (key, attribute) -> "$key=${attribute.value}" }
+    private fun renderFlow(event: LogEvent): String? {
+        if (event.category != STARTUP_CATEGORY) return null
+        val taskId = event.attributes["task_id"]?.value
+        val message = when (event.message) {
+            "startup_started" ->
+                "AppLifecycle.Foreground → SplashStore → ApplicationRuntime.start() → StartupCoordinator.run()"
+            "startup_task_started" -> when (taskId) {
+                "session.restore" -> "StartupCoordinator.run() → SessionRestoreStartupTask.execute()"
+                "bootstrap" -> "StartupCoordinator.run() → BootstrapStartupTask.execute() → ResolveBootstrapUseCase.invoke() → RemoteBootstrapRepository.load()"
+                else -> "StartupCoordinator.run() → StartupTask.execute(task=$taskId)"
+            }
+            "startup_ready" -> "Bootstrap resolved → ApplicationRuntime.Ready → SplashEffect.Navigate"
+            "startup_blocked" -> "Bootstrap resolved → ApplicationRuntime.Blocked"
+            "startup_task_failed" -> "Startup task failed(task=$taskId)"
+            "startup_missing_resolution" -> "StartupCoordinator.run() → FAILED(startup_missing_resolution)"
+            else -> return null
+        }
+        val color = when (event.level) {
+            LogLevel.DEBUG -> DIM
+            LogLevel.INFO -> MAGENTA
+            LogLevel.WARN -> YELLOW
+            LogLevel.ERROR -> RED
+        }
+        return "$color▶️ FLOW  $message${correlationSuffix(event.correlationId)}$RESET"
+    }
+
+    private fun correlationSuffix(correlationId: CorrelationId?): String =
+        correlationId?.value?.takeIf(String::isNotBlank)?.let { "  [${it}]" }.orEmpty()
+
+    private companion object {
+        const val STARTUP_CATEGORY = "startup"
+        const val RESET = "\u001B[0m"
+        const val RED = "\u001B[31m"
+        const val GREEN = "\u001B[32m"
+        const val YELLOW = "\u001B[33m"
+        const val MAGENTA = "\u001B[35m"
+        const val CYAN = "\u001B[36m"
+        const val DIM = "\u001B[2m"
+    }
 }
