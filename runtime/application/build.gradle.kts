@@ -18,14 +18,12 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:observability"))
             implementation(project(":foundation:session"))
             implementation(project(":foundation:time"))
             implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
-            implementation(project(":foundation:security"))
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
         }
