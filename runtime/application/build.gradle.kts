@@ -19,7 +19,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(project(":foundation:observability"))
-            implementation(project(":foundation:session"))
+            api(project(":foundation:session"))
             implementation(project(":foundation:time"))
             implementation(libs.kotlinx.coroutines.core)
         }
