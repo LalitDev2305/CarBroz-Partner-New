@@ -113,21 +113,26 @@ The build-local Maven repository must be cleaned before every aggregate foundati
 
 ## Slice 17.4 — Closed runtime-support consumers
 
-After the Slice 17.3 leaf cluster was frozen, two directly consumed modules formed closed second-tier dependency boundaries:
+After the Slice 17.3 leaf cluster was frozen, two directly consumed modules form the second-tier runtime-support boundary:
 
-- `:foundation:session`, whose CarBroz production dependencies are only `:foundation:security` and `:foundation:time`.
-- `:runtime:application`, whose CarBroz production dependencies are only `:foundation:lifecycle`, `:foundation:observability`, and `:foundation:time`.
+- `:foundation:session`, whose CarBroz production dependencies are `:foundation:security` and `:foundation:time`.
+- `:runtime:application`, whose frozen bootstrap target dependency closure includes `:foundation:lifecycle`, `:foundation:observability`, `:foundation:time`, and canonical `:foundation:session` because the focused application startup use case invokes `SessionStore.restore()` rather than duplicating session policy.
 
-Published mode therefore consumes `session` and `runtime:application` through the canonical foundation release train while default development mode preserves project dependencies. Dependency insight must prove both selected artifacts and their already-adopted transitive foundation closure. Navigation, SDUI, data, platform, action, and binding modules remain project-bound in this slice.
+The bootstrap architecture freeze therefore expands the application module's previous dependency closure by one existing canonical owner; it does not create a new session abstraction or a product-specific session module. The publication boundary remains closed because `foundation:session` is already part of this same governed second-tier release-train slice and itself depends only on the already-adopted security/time leaf modules.
+
+Published mode consumes `session` and `runtime:application` through the canonical foundation release train while default development mode preserves project dependencies. Dependency insight must prove both selected artifacts and their transitive foundation closure. Navigation, SDUI, data, platform, action, and binding modules remain project-bound in this slice.
+
+The focused bootstrap refactor must update the actual Gradle dependency graph and published dependency metadata together. Documentation alone does not satisfy this acceptance criterion.
 
 ### Slice 17.4 acceptance criteria
 
 - `session` resolves as `com.carbroz.foundation:session:1.0.0-alpha01` in published mode.
 - `runtime:application` resolves as `com.carbroz.foundation:application:1.0.0-alpha01` in published mode.
-- Their CarBroz transitive dependencies are already within the frozen Slice 17.3 artifact cluster.
+- `runtime:application` may depend on the canonical `foundation:session` artifact/project for startup restoration; it must not introduce a parallel session port solely to preserve an outdated dependency graph.
+- The complete CarBroz transitive dependency closure of both modules remains inside the governed foundation release train.
 - Partner Android host tests, Desktop tests, iOS Arm64 compilation, and iOS Simulator Arm64 compilation pass through published mode.
 - Repository-wide `check` remains green in default project mode.
-- No broader runtime/data/platform migration is introduced.
+- No broader runtime/data/platform migration is introduced by this governance correction.
 
 ## Slice 17.5 — Remaining direct leaf foundation adoption
 
