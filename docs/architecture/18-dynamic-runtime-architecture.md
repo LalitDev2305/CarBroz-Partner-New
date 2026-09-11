@@ -1,37 +1,72 @@
 # CarBroz Dynamic Runtime Architecture
 
-Status: frozen architecture addendum for the post-Splash runtime.
+Status: **FROZEN ARCHITECTURE ADDENDUM** for the post-Splash runtime and its startup handoff.
+
+This document refines the Master Architecture Constitution without creating a parallel architecture. The detailed bootstrap contract is frozen in `feature/splash/README.md`; both documents must remain consistent.
+
+---
 
 ## 1. Feature and product-flow ownership
 
-Splash is the only currently known static application screen. Every screen after Splash is backend-driven. Client code must not encode business flow names such as Login, OTP, Dashboard, Booking, KYC, Profile, Availability or Earnings into navigation or runtime architecture.
+Splash is the intentional static application feature. Normal screens after Splash are backend-driven. Client architecture must not encode business flow names such as Login, OTP, Dashboard, Booking, KYC, Profile, Availability or Earnings merely because those screens exist.
 
-Feature ownership is explicit:
+Canonical ownership:
 
-- `feature:splash` owns static Splash presentation only: UI state, user/lifecycle intents and one-shot effects. It does not own networking, bootstrap DTOs, caching, session persistence, headers or startup policy.
-- `runtime:application` is the single canonical owner of startup lifecycle state, ordered startup task execution and transport-independent bootstrap application policy/contracts.
-- `foundation:session` is the sole session owner, including persisted-session restoration and invalid/corrupt persisted-session cleanup.
-- `data:bootstrap` owns only the Partner bootstrap transport adapter: route, serializable Partner DTO and the remote implementation of the application-owned `BootstrapRepository`.
-- `data:network` owns the canonical REST execution stack, global configuration-derived metadata headers, typed response-decoding mechanism, auth integration and transport policies.
-- `feature:dynamic` is the single feature for every backend-driven screen. It owns dynamic destination/request contracts, the implementation that validates an opaque bootstrap payload into `DynamicScreenInstruction`, screen loading/error/retry lifecycle, runtime screen cache, action-result orchestration, external/realtime screen events and the Compose Dynamic feature UI.
-- `foundation:navigation` is the sole navigation mechanics owner: back-stack state, commands, restoration policy and the canonical `Navigation3Host` presentation adapter.
-- `runtime:sdui` is the reusable SDUI engine used by `feature:dynamic`; it owns protocol validation, normalization, definitions, registries, `SduiRuntime` assembly and normalized-screen rendering through `SduiScreenRenderer`. It does not own feature lifecycle or navigation.
-- `runtime:action` is the sole generic semantic-action preparation owner, including `ActionPreparerFactory`; it does not execute network/platform feature effects itself.
-- `app:composition` is a composition root only. It assembles process dependencies, maps navigation destinations to feature content, consumes feature effects and owns the application-specific transient process-state adapter. It must not implement another startup store, navigation, dynamic-screen, SDUI, action or networking engine.
-- `app:startup` does not exist; startup responsibilities are split by their canonical owners rather than collected in an application dumping-ground module.
+- `feature:splash` owns the static Splash UI and its MVI/UDF presentation state, intents and one-shot effects.
+- `runtime:application` owns transport-independent startup orchestration/policy through one focused `ResolveStartupUseCase`, typed `StartupResult`/`StartupDestination`, the inward `BootstrapRepository` port and the process-scoped reusable `PartnerConfigStore`.
+- `foundation:session` is the sole session owner, including persisted-session restoration, invalid/corrupt persisted-session cleanup, refresh, invalidation and logout semantics.
+- `data:bootstrap` owns only the Partner bootstrap transport adapter: route, serializable DTOs, DTO mapping and the remote implementation of `BootstrapRepository`.
+- `data:network` owns the canonical REST execution stack, configuration-derived metadata headers, typed response decoding, authentication integration/recovery and transport policies.
+- `feature:dynamic` is the single feature for backend-driven screens. It owns dynamic destination/request contracts, screen loading/error/retry lifecycle, runtime screen cache, action-result orchestration, external/realtime screen events and Dynamic feature UI.
+- `foundation:navigation` is the sole navigation mechanics owner: back-stack state, commands, restoration policy and Navigation 3 adapter/presentation.
+- `runtime:sdui` is the reusable SDUI protocol/normalization/rendering engine used by `feature:dynamic`. It does not own feature lifecycle, bootstrap policy or navigation mechanics.
+- `runtime:action` is the sole generic semantic-action preparation owner. It does not execute network/platform feature effects itself.
+- `app:composition` is composition/adaptation only. It wires owners, maps the trusted `StartupDestination` to the existing Dynamic destination contract, consumes feature effects and owns the application-specific process-state bridge.
+- `app:startup` does not exist.
 - Android/Desktop/iOS hosts remain thin platform entry points.
 
 Canonical runtime loop:
 
-`Splash -> common lifecycle Foreground -> ApplicationRuntime -> SessionRestoreStartupTask -> foundation:session restore/repair -> BootstrapStartupTask -> ResolveBootstrapUseCase -> BootstrapRepository -> data:bootstrap RemoteBootstrapRepository -> GET /api/v1/partner/bootstrap through canonical data:network -> normalized BootstrapSnapshot -> feature:dynamic StartupPayloadDecoder validation -> trusted DynamicScreenInstruction -> SplashEffect.Navigate -> deferred restoration check -> DynamicDestination -> foundation:navigation -> feature:dynamic -> trusted screen request -> runtime:sdui decode -> schema validation -> compatibility -> normalization -> runtime IR -> render -> semantic command -> runtime:action preparation -> binding/form resolution -> feature effect adapter -> local effect or navigation command -> foundation:navigation -> same feature:dynamic -> repeat`.
+```text
+Splash
+  -> SplashStore
+  -> ResolveStartupUseCase
+       -> SessionStore.restore()
+       -> BootstrapRepository
+       -> data:bootstrap RemoteBootstrapRepository
+       -> GET /api/v1/partner/config/bootstrap through canonical data:network
+       -> typed BootstrapSnapshot
+       -> PartnerConfigStore
+       -> StartupResult.Ready(StartupDestination)
+  -> SplashEffect.Navigate
+  -> app:composition maps to DynamicDestination
+  -> NavigationProcessStateBridge
+  -> foundation:navigation
+  -> feature:dynamic
+  -> trusted screen request
+  -> runtime:sdui decode
+  -> schema validation
+  -> compatibility
+  -> normalization
+  -> runtime IR
+  -> render
+  -> semantic command
+  -> runtime:action preparation
+  -> binding/form resolution
+  -> feature effect adapter
+  -> local effect or navigation command
+  -> foundation:navigation
+  -> same feature:dynamic
+  -> repeat
+```
 
 The backend chooses the next screen. The client owns validation, trusted execution, rendering, lifecycle, navigation mechanics, security and restoration safety.
 
-The detailed Splash/startup contract is frozen in `feature/splash/README.md`; this addendum must remain consistent with it.
+---
 
 ## 2. Dynamic screen identity
 
-The canonical identity remains three distinct values:
+Canonical identity remains three distinct values:
 
 - `screenId`: dynamic screen identity.
 - `templateId`: concrete template identity/back-stack participant.
@@ -39,11 +74,13 @@ The canonical identity remains three distinct values:
 
 `templateType` is rendering behavior, never business-screen identity.
 
+Startup transports these values through the typed `StartupDestination`; normal Dynamic runtime then uses its existing trusted destination/instruction model.
+
+---
+
 ## 3. Flexible strongly typed SDUI hierarchy
 
-`Template` is the tree root, `Component` is the mandatory composition level and `Element` is terminal. `Section` and `Group` are optional structural levels.
-
-Allowed grammar:
+`Template` is the tree root, `Component` is mandatory composition and `Element` is terminal. `Section` and `Group` are optional structural levels.
 
 ```text
 Template := Component+
@@ -53,7 +90,7 @@ Group := Element+
 Element := terminal
 ```
 
-Therefore all of the following are valid, including simultaneously inside one Template:
+Valid branches may coexist in one Template:
 
 ```text
 Component -> Elements
@@ -61,11 +98,13 @@ Component -> Sections -> Elements
 Component -> Sections -> Groups -> Elements
 ```
 
-Every Component chooses its own branch independently. Every Section chooses its own branch independently. The backend must not send dummy Section or Group nodes.
+Every Component chooses its own branch independently. Every Section chooses its own branch independently. Backend must not send dummy Section or Group nodes.
 
-The relationships are explicit XOR relationships, not an unsafe generic tree. A Component may not mix direct Elements and Sections as siblings. A Section may not mix direct Elements and Groups as siblings. Groups must contain terminal Elements. Empty branches are invalid.
+Relationships are explicit XOR relationships, not an unsafe generic tree. A Component may not mix direct Elements and Sections as siblings. A Section may not mix direct Elements and Groups as siblings. Groups contain terminal Elements. Empty branches are invalid.
 
 Historical `SubComponent`, `Child` and `ChildrenData` terminology is not part of this runtime.
+
+---
 
 ## 4. Definition and registration ownership
 
@@ -77,197 +116,340 @@ Each hierarchy level owns its supported definitions:
 - `GroupDefinitions`
 - `ElementDefinitions`
 
-`SduiRegistryFactory` only composes those five collections into one immutable `SduiRegistry`; it does not manually enumerate concrete UI definitions.
+`SduiRegistryFactory` composes those collections into one immutable `SduiRegistry`; it does not manually enumerate concrete UI definitions.
 
-Adding a new UI type should modify only its owning hierarchy level plus focused tests. For example, adding a `RatingElement` must not require changes to navigation, `SduiRendererDispatcher`, action execution, unrelated Templates or other hierarchy levels.
+Adding a new UI type should modify only its owning hierarchy level plus focused tests. Adding a `RatingElement`, for example, must not require changes to navigation, the generic renderer dispatcher, action execution or unrelated Template definitions.
 
-Definitions remain atomic: each `SduiDefinition<P>` owns its server `NodeType`, typed property decoding and, when renderable, its Compose rendering semantics.
+Definitions remain atomic: each `SduiDefinition<P>` owns its server `NodeType`, typed property decoding/normalization and rendering semantics when renderable.
+
+---
 
 ## 5. Typed property architecture
 
-Raw transport `properties` are untrusted `JsonObject` values. They are never rendered directly. During normalization the registered definition decodes them into typed `NodeProperties`.
+Raw transport `properties` are untrusted JSON. They are never rendered directly. During normalization the registered definition decodes them into typed properties.
 
-Common safe visual/layout concerns are represented by `CommonNodeProperties`, including visibility, fill behavior, dimensions/min-max constraints, padding, margin, background, border and shape radius. Concrete definitions compose that common contract with their own specialized typed properties.
+Common safe visual/layout concerns are represented once through shared property contracts. Concrete definitions compose common concerns with specialized typed properties.
 
 Examples:
 
-- Stack containers own axis, spacing and main/cross-axis alignment.
-- Form Template owns adaptive/readable content-width and content-padding policy.
+- Stack containers own axis, spacing and alignment.
+- Form Template owns adaptive/readable content policy.
 - Input owns field identity, initial value, label, placeholder, required/enabled/read-only state, max length and keyboard type.
-- Button owns text, enabled and loading state.
-- Text owns typography token, alignment and max lines.
+- Button owns text/enabled/loading state.
+- Text owns typography/alignment/max-lines semantics.
 
-Do not replace this with one giant universal nullable property object. Do not duplicate common Compose modifier behavior across every renderer. `applyCommonNodeProperties` is the shared modifier boundary; container-specific arrangement remains owned by the container definition.
+Do not replace this with one giant universal nullable property model. Do not duplicate common Compose modifier behavior across every renderer.
+
+---
 
 ## 6. Rendering ownership
 
-The normalized sealed child relationships determine traversal per node. The renderer does not assume one fixed depth for the entire screen.
+The normalized sealed child relationships determine traversal per node. The renderer does not assume one fixed depth for an entire screen.
 
-`SduiRendererDispatcher` is a composite orchestrator only. It resolves `(NodeKind, NodeType)` through the immutable registry and delegates rendering to the registered definition. Common visibility is enforced before delegation.
+`SduiRendererDispatcher` is a composite orchestrator. It resolves `(NodeKind, NodeType)` through the immutable registry and delegates rendering to the registered definition.
 
-`SduiScreenRenderer` is the only normalized-screen rendering boundary. Despite rendering a server-driven screen, it is not a feature host: it receives an already normalized `Screen`, dispatches registered SDUI definitions and emits semantic command intents. Feature loading, errors, lifecycle, navigation and effect execution do not belong there.
+`SduiScreenRenderer` is the only normalized-screen rendering boundary. It receives an already normalized `Screen`, dispatches registered definitions and emits semantic interaction. Loading, errors, lifecycle, navigation and effect execution do not belong there.
 
-`DynamicScreen` belongs to `feature:dynamic` and owns feature UI state around the SDUI renderer: loading, retry/error, action-in-flight and presentation UI. There must not be another `DynamicScreenHost` inside `runtime:sdui`.
+`DynamicScreen` belongs to `feature:dynamic` and owns feature UI state around the SDUI renderer: loading, retry/error, action-in-flight and presentation UI. There must not be another feature host inside `runtime:sdui`.
 
-Canonical typed traversal utilities such as `Screen.elements()` are reused by interaction/form infrastructure so hierarchy walking is not duplicated in multiple subsystems.
+Canonical typed traversal utilities are reused so hierarchy walking is not duplicated across interaction/form infrastructure.
+
+---
 
 ## 7. Form Template ownership
 
-Form behavior is not a standalone application runtime. It exists because `FORM_TEMPLATE` requires mutable field state, validation and command-time bindings, therefore it lives under:
+Form behavior exists because FORM_TEMPLATE requires mutable field state, validation and command-time bindings. It belongs under the Form Template runtime inside `runtime:sdui` rather than a standalone generic application runtime.
 
-`runtime:sdui/template/form/runtime`.
+Form Template runtime owns:
 
-That package owns `FormState`, `FormFieldState`, `FormStore`, validators, form binding adaptation and `FormTemplateRuntimeFactory`. The old standalone `runtime:form` module must not be reintroduced.
+- form state/field state;
+- form Store;
+- validators;
+- form binding adaptation;
+- Form Template runtime factory.
 
-`FormTemplateRuntimeFactory` creates a FormStore only when `screen.template.type == FORM_TEMPLATE`. Other Template types never gain form state simply because they contain an Element that can contribute a field.
+A Form Store is created only when the current Template requires form behavior. Other Template types do not gain form state merely because they contain an Element capable of contributing a field.
 
-Form-capable Element definitions optionally implement `FormFieldContributor`. The Form Template runtime discovers those capabilities through the SDUI registry; `feature:dynamic` and `app:composition` do not identify concrete `InputElementProperties` or other concrete input types.
+Form-capable Element definitions expose a typed contribution capability. `feature:dynamic` and `app:composition` do not identify concrete Input property classes.
 
-An INPUT renderer emits its stable `fieldId`. The Form Template runtime owns the current value/validation state and `$form.<field>` bindings resolve that latest value when a command executes.
+Generic binding expression resolution remains in `runtime:binding` because session/screen/config/event/result/runtime bindings are not exclusive to forms.
 
-Generic binding expression resolution remains in `runtime:binding` because screen/session/config/event/result/runtime binding semantics are not exclusive to FORM_TEMPLATE.
+---
 
 ## 8. Generic action semantics and effect ownership
 
-An interaction is not assumed to be a network call and a network call is not assumed to return another screen.
+An interaction is not automatically a network call, and a network call is not automatically another screen.
 
-Generic commands include:
+Generic command families include:
 
-- `REQUEST`: relative trusted request with `SCREEN` or `NONE` response mode.
-- `CAPABILITY`: platform capability through the capability registry.
-- `NAVIGATION`: local back-stack operation.
-- `PRESENTATION`: message/dialog/sheet state.
-- `LOCAL_STATE`: runtime value mutation.
-- `FORM`: FORM_TEMPLATE state operation.
-- `BACKGROUND`: deferred/continuous execution semantic.
-- `SEQUENCE`: ordered composition of generic commands.
-- `CONDITIONAL`: binding-resolved boolean branch selection.
+- `REQUEST`
+- `CAPABILITY`
+- `NAVIGATION`
+- `PRESENTATION`
+- `LOCAL_STATE`
+- `FORM`
+- `BACKGROUND`
+- `SEQUENCE`
+- `CONDITIONAL`
 
-Sequence/conditional commands are meta-actions prepared recursively by `ActionPreparer`; renderers remain unaware of action composition semantics. Composite command recursion and sequence sizes are protocol-bounded.
-
-`runtime:action` owns command-to-`PreparedAction` interpretation. `feature:dynamic` contains only thin effect adapters that translate prepared actions to the already existing owners: `data:network`, `foundation:capabilities`, `platform:background`, and `foundation:navigation`. Those adapters must not recreate HTTP, capability, background or navigation engines.
+`runtime:action` owns command-to-prepared-action interpretation. `feature:dynamic` contains only thin effect adapters that translate prepared actions to canonical existing owners such as `data:network`, capabilities/background owners and `foundation:navigation`.
 
 No Partner-specific command type belongs in the generic runtime.
 
+---
+
 ## 9. Navigation ownership and transition contract
 
-`foundation:navigation` is the sole owner of navigation state, mutation commands, back-stack restoration policy and Navigation3 presentation. `CarBrozApp` must render the canonical navigation state through `Navigation3Host`; it must not implement another current-destination/back-stack host.
+`foundation:navigation` is the sole owner of navigation state, mutation commands, back-stack restoration policy and Navigation 3 presentation.
 
-Splash bootstrap and subsequent dynamic actions converge on the same feature-owned `DynamicScreenInstruction` / `DynamicDestination` model. `DynamicDestination` is feature data implementing the generic `NavigationDestination` contract; it does not own navigation mechanics. The old misleading `DynamicNavigation.kt` ownership/name must not be reintroduced.
+Splash bootstrap and subsequent dynamic actions converge on the same Dynamic destination model. `DynamicDestination` is feature data implementing the generic navigation destination contract; it does not own navigation mechanics.
 
-A dynamic instruction carries screen identity, trusted relative request, semantic transition, stable back-stack key and restore policy.
+A dynamic instruction carries screen identity, trusted relative request, semantic transition, stable back-stack identity and restore policy.
 
-Screen transitions are framework-neutral: `PUSH`, `REPLACE`, `RESET`, `STAY`. `feature:dynamic` translates those semantic transitions into `NavigationCommand` values and submits them to `NavigationStore`; only `foundation:navigation` mutates the stack. Local back-stack actions use `POP` and `POP_TO`. Navigation framework types are not exposed to backend payloads or SDUI rendering definitions.
+Framework-neutral transitions include `PUSH`, `REPLACE`, `RESET` and `STAY`. Local back-stack actions use semantic POP/POP_TO commands. Navigation framework types are not exposed to backend payloads or SDUI definitions.
 
-`runtime:sdui` has no dependency on navigation mechanics. A renderer emits a semantic command; execution/orchestration outside the renderer eventually asks `foundation:navigation` to navigate.
+`runtime:sdui` has no dependency on navigation mechanics. Renderers emit semantic command intent; execution outside the renderer may eventually ask `foundation:navigation` to navigate.
+
+---
 
 ## 10. Screen cache and process restoration
 
-`feature:dynamic` owns a bounded process-memory `DynamicScreenCache`, separate from HTTP caching because it contains normalized screen state, FORM_TEMPLATE state, runtime values, action result and presentation state.
+`feature:dynamic` owns bounded process-memory dynamic screen cache separately from HTTP caching because it may contain normalized screen/form/runtime/action-result/presentation state.
 
-Generic whole-stack restoration mechanics and fail-closed fallback policy belong to `foundation:navigation`. Missing/malformed/unknown/unsafe entries restore no prefix and navigation falls back atomically to Splash. `CACHE_ONLY` destinations are not persisted because replay could repeat a non-idempotent request.
+Generic whole-stack restoration mechanics and fail-closed fallback policy belong to `foundation:navigation`.
 
-`NavigationProcessStateBridge` remains in `app:composition` because persistence has to map application-specific Splash/Dynamic destinations to the generic restoration contract and integrate with platform-owned transient saved-state. The platform-facing `restore(encodedState)` operation only captures pending state; it must never mutate `NavigationStore` before startup resolves.
+`NavigationProcessStateBridge` remains in `app:composition` because application saved-state adaptation must coordinate the static Splash root and Dynamic destinations with generic restoration semantics.
 
-After fresh bootstrap produces the server-authoritative root, `applyAfterBootstrap(freshRoot)` may restore a saved stack only when its restored root `navigationId` exactly matches the fresh root. Otherwise the saved state is discarded and navigation is atomically reset to the fresh bootstrap destination.
+Its platform-facing restore operation only captures pending state. It must never mutate `NavigationStore` before fresh startup resolves.
 
-The bridge serializes only semantic restored destinations and must never write arbitrary dynamic-instruction payloads to durable preferences.
+After fresh bootstrap produces the server-authoritative root:
 
-## 11. Startup and dynamic feature handoff
+```text
+fresh root
+  ↓
+NavigationProcessStateBridge.applyAfterBootstrap(...)
+  ├── restored root navigationId matches fresh root
+  │     -> restore validated saved stack when safe
+  └── mismatch/malformed/unsafe
+        -> discard saved state and reset to fresh root
+```
 
-`SplashStore` is presentation-only. It observes the common lifecycle and the single `ApplicationRuntime` state, maps those values to Splash presentation state and emits typed effects. It does not call the bootstrap endpoint, persist config or hold a second bootstrap state.
+The bridge serializes semantic restorable destinations only and must never write arbitrary untrusted dynamic payloads to durable preferences.
 
-`ApplicationRuntime` owns the canonical startup lifecycle. `StartupCoordinator` executes `SessionRestoreStartupTask` first and `BootstrapStartupTask` second. Session restoration returns `Continue`; bootstrap is the final resolver.
+---
 
-`SessionRestoreStartupTask` lives in `runtime:application` and only adapts the complete `foundation:session` restore result into startup semantics. Malformed/unsupported persisted-session cleanup belongs to `SessionStore`, not the startup task.
+## 11. Frozen startup and Dynamic handoff
 
-`BootstrapStartupTask` is deliberately thin:
+### One presentation state owner
 
-`ResolveBootstrapUseCase -> StartupTaskResult`.
+`SplashStore` is the single startup presentation state owner. It observes common lifecycle/user intents, calls `ResolveStartupUseCase`, reduces `StartupResult` into `SplashState` and emits typed one-shot effects.
 
-`ResolveBootstrapUseCase` owns application policy: repository failure semantics, canonical local/backend authentication consistency, Required Update precedence, Maintenance blocking, trusted next-payload decoding and Optional Update notices.
+Do **not** maintain a parallel observable `ApplicationRuntimeState` describing Loading/Ready/Blocked/Failed again.
 
-The application-owned `BootstrapRepository` contract is implemented by `data:bootstrap/RemoteBootstrapRepository`. That adapter calls `GET /api/v1/partner/bootstrap` through canonical `NetworkDataSource` with `OPTIONAL_SESSION`, owns the Partner serializable DTO/route and maps the wire envelope into a transport-free `BootstrapSnapshot`. It does not make startup-policy decisions.
+### One startup application orchestrator
 
-`data:network/ConfigurationNetworkHeaderProvider` supplies platform/app/build metadata globally through the canonical network header extension point; session/network infrastructure owns Authorization and authentication recovery. The bootstrap adapter supplies no manual metadata/Auth headers.
+`ResolveStartupUseCase` is a focused application use case, not a task framework.
 
-`BootstrapSnapshot.nextPayload` is opaque serialized data at the application boundary. `runtime:application` defines `StartupPayloadDecoder`; `feature:dynamic` implements it using the existing `DynamicScreenInstructionCodec`. This preserves dependency direction: `feature:dynamic -> runtime:application`, never `runtime:application -> feature:dynamic`.
+It performs:
 
-Required Update and Maintenance are valid blocked startup outcomes, not technical failures. Optional Update is a non-blocking Ready notice.
+```text
+SessionStore.restore()
+   ↓
+BootstrapRepository.load()
+   ↓
+PartnerConfigStore.update(valid reusable config)
+   ↓
+required update policy
+   ↓
+maintenance policy
+   ↓
+StartupResult.Ready(StartupDestination)
+```
 
-When the runtime becomes Ready, `SplashStore` emits one `SplashEffect.Navigate` per startup attempt. `app:composition` consumes that effect, converts the already-validated instruction to `DynamicDestination`, and delegates to `NavigationProcessStateBridge.applyAfterBootstrap(...)` so saved process state cannot bypass fresh startup.
+It does not parse transport DTOs, own Ktor, manipulate navigation directly, render Splash, duplicate session repair or execute arbitrary pluggable startup tasks.
 
-`foundation:navigation` performs the actual stack mutation and `Navigation3Host` maps the resulting semantic destination to feature content. From that point every backend-driven screen is handled by the same `feature:dynamic` feature.
+### Bootstrap transport
 
-Login, OTP, Dashboard, Profile, Booking UI, Earnings UI and other normal backend screens do not create screen-specific clients/repositories/use cases/stores. Dedicated domain code is introduced only when a real client-owned business/security/state invariant exists.
+The application-owned `BootstrapRepository` is implemented by `data:bootstrap/RemoteBootstrapRepository`.
 
-`CarBrozApp` must not construct or operate the Dynamic store from individual SDUI/network/action/form dependencies. It receives one `DynamicFeatureFactory` and delegates a `DynamicDestination` to `DynamicFeature`.
+Canonical request:
 
-Realtime, notifications/deep-links and future external entry mechanisms must converge on the same Dynamic instruction contract. A realtime refresh must not blindly replay non-idempotent acquisition requests.
+```text
+GET /api/v1/partner/config/bootstrap
+NetworkAuthentication.OPTIONAL_SESSION
+```
 
-Deferred background work and genuinely continuous execution remain separate semantics. Automatic sync remains opt-in until an operation has explicit safe offline/idempotency/conflict behavior.
+Canonical backend envelope:
 
-## 12. Existing-code-first rule
+```text
+status
+code
+message
+data
+traceId
+```
 
-Before introducing, moving or renaming an implementation, audit the complete repository for the same responsibility, not merely the same class name.
+The stale `/api/v1/partner/bootstrap` route and `success: Boolean` envelope assumption are superseded.
 
-- If a canonical owner already exists, extend or reuse it instead of creating a parallel engine.
-- If new ownership supersedes an old implementation, delete the obsolete source, tests, dependencies and stale documentation in the same change.
-- Do not preserve `Old`, `New`, `Reference`, `Core`, `Dynamic`, compatibility wrappers or alternate hosts solely to avoid deleting obsolete code.
-- Similar names are not the only duplicate signal; different names implementing substantially the same responsibility are also duplicates.
-- A module created for one responsibility must not silently become the owner of unrelated concerns.
+`data:network/ConfigurationNetworkHeaderProvider` supplies platform/app/build metadata through the canonical network extension point. Session/network infrastructure owns Authorization and authentication recovery. Bootstrap adapter adds neither manually.
 
-The architecture is accepted only when there is one authoritative implementation path per responsibility.
+### Typed destination
+
+Bootstrap `nextScreen` is mapped once into the application-owned typed `StartupDestination`.
+
+Do not use:
+
+```text
+JsonElement -> String -> StartupPayloadDecoder -> decode again
+```
+
+`runtime:application` must not depend on `feature:dynamic`. `app:composition` performs a thin mapping from trusted `StartupDestination` to the existing Dynamic destination/instruction contract.
+
+### Partner configuration
+
+Reusable bootstrap config is retained in a small process-scoped `PartnerConfigStore`, including configuration version, Partner feature switches and optional-update metadata needed by approved consumers.
+
+Do not persist bootstrap to Room/DataStore by default. Maintenance, required update, authentication truth and initial destination remain fresh server-authoritative startup decisions.
+
+### Optional-session recovery
+
+When an OPTIONAL_SESSION request receives 401:
+
+```text
+refresh succeeds
+  -> retry with refreshed token
+
+refresh/session recovery definitively invalidates session
+  -> canonical session becomes SignedOut
+  -> OPTIONAL_SESSION only: retry once without Authorization
+
+recovery unavailable
+  -> return failure
+```
+
+A required `SESSION` request never downgrades to anonymous after invalidation.
+
+This is generic network/session behavior, not bootstrap-specific repository logic.
+
+### Startup result semantics
+
+Required Update and Maintenance are valid blocking application results, not transport failures.
+
+Optional Update remains non-blocking config metadata; do not create a generic `StartupNotice` framework without a real consumer.
+
+When startup returns Ready, Splash emits one navigation effect for that successful attempt. `app:composition` adapts the destination and delegates to `NavigationProcessStateBridge.applyAfterBootstrap(...)` so restored process state cannot bypass fresh startup authority.
+
+From that point every normal backend-driven screen is handled by the same `feature:dynamic` feature.
+
+---
+
+## 12. Existing-code-first and migration rule
+
+Before introducing, moving, renaming or deleting an implementation, audit the complete repository for the responsibility and all consumers/tests.
+
+- Reuse a canonical owner when one exists.
+- If new ownership supersedes an old implementation, migrate consumers/tests and delete the obsolete source/dependencies in the same focused slice.
+- Do not preserve `Old`, `New`, `Reference`, compatibility wrappers or alternate startup hosts merely to avoid deletion.
+- Similar names are not the only duplicate signal; different names implementing the same responsibility are duplicates too.
+- A module created for one responsibility must not silently become owner of unrelated concerns.
+
+The focused bootstrap migration targets removal, after proven replacement, of:
+
+```text
+ApplicationRuntime / ApplicationRuntimeState
+StartupCoordinator
+StartupTask / StartupTaskResult / StartupResolution
+SessionRestoreStartupTask
+BootstrapStartupTask
+StartupPayload / StartupPayloadDecoder
+DynamicStartupPayloadDecoder
+StartupNotice
+```
+
+`ResolveBootstrapUseCase` converges into `ResolveStartupUseCase`.
+
+The architecture is accepted only when one authoritative implementation path remains.
+
+---
 
 ## 13. Extension invariants
 
-The runtime is considered extensible only when these remain true:
+The runtime is considered extensible only when all of these remain true:
 
 1. New Element definitions do not require central renderer/navigation/action modifications.
 2. New Template/Component/Section/Group definitions register only through their owning level.
 3. Common properties are decoded once and composed with type-specific properties.
 4. No renderer performs networking directly.
-5. No screen-specific Login/OTP/Dashboard/etc. renderer or destination is introduced.
+5. No screen-specific Login/OTP/Dashboard renderer or destination is introduced merely for server screens.
 6. Transport JSON is decoded, validated, compatibility-checked and normalized before rendering/execution.
 7. Different Component hierarchy depths can coexist in one Template response.
-8. Template-specific runtime behavior remains underneath that Template package unless evidence proves it is cross-template.
-9. `app:composition` remains composition only; dynamic lifecycle changes belong to `feature:dynamic`.
+8. Template-specific runtime behavior remains underneath that Template unless evidence proves it cross-template.
+9. `app:composition` remains composition/adaptation only.
 10. `foundation:navigation` remains the only back-stack/navigation mechanics owner.
 11. `runtime:sdui` remains the only generic SDUI runtime/rendering owner.
 12. `runtime:action` remains the only generic semantic-action preparation owner.
-13. `runtime:application` remains the only startup-state owner; no `BootstrapStore`/`BootstrapDestinationStore` may reappear.
-14. `feature:splash` remains presentation-only and may not depend on `data:network` or `data:preferences`.
-15. Partner bootstrap transport remains in `data:bootstrap`; application bootstrap policy/contracts remain in `runtime:application`; `app:startup` must not be reintroduced.
-16. `data:network` remains product-neutral and must not contain Partner bootstrap DTOs/routes.
-17. All normal post-Splash screens/actions remain on the one generic `feature:dynamic` + SDUI/action/network path unless a genuine business invariant justifies domain-specific code.
+13. `feature:splash` remains the only startup presentation state owner; no second startup observable state machine may reappear.
+14. `runtime:application` remains the startup application-policy/orchestration owner through focused use cases/contracts, not a generic task engine.
+15. Partner bootstrap transport remains in `data:bootstrap`; application bootstrap semantics remain in `runtime:application`; `app:startup` must not be introduced.
+16. `data:network` remains product-neutral and contains no Partner bootstrap DTOs/routes.
+17. All normal post-Splash screens/actions remain on the one `feature:dynamic` + SDUI/action/network path unless a genuine client-owned invariant justifies domain-specific code.
+18. Bootstrap `nextScreen` remains typed across the application boundary; do not reintroduce JSON round-tripping.
+19. Bootstrap persistence is not introduced without an explicit freshness/security product contract.
+20. `NavigationProcessStateBridge` continues to validate saved state against a fresh server-authoritative root before restoration.
+
+---
 
 ## 14. Prohibited regressions
 
 Do not reintroduce:
 
-- `app:startup` or another mixed-responsibility startup dumping-ground module;
-- `PartnerBootstrapClient`, `PartnerBootstrapPolicyEvaluator` or a bootstrap-specific Ktor client;
-- `ReferenceDestination`, `ReferenceSduiStore`, `REFERENCE_SCREEN_ENDPOINT` or bootstrap `Reference` routes;
-- `LoginDestination`, `OtpDestination`, `DashboardDestination` or equivalent business-flow destinations;
-- `BootstrapStore`, `BootstrapDestinationStore`, `BootstrapConfigurationStartupTask`, the old `/api/v1/app` startup path or a Splash-owned remote-config cache;
-- networking, session persistence, bootstrap DTO decoding or client-metadata header construction inside `feature:splash`;
-- a fixed `Template -> Component -> Section -> Group -> Element` requirement;
+- `app:startup` or another mixed-responsibility startup dumping ground;
+- a generic `StartupTask` pipeline without demonstrated need;
+- a second observable startup state machine beside `SplashStore`;
+- `BootstrapStore` or `BootstrapDestinationStore`;
+- bootstrap-specific Ktor/HttpClient infrastructure;
+- Partner bootstrap DTOs/routes inside `data:network`;
+- the stale `/api/v1/partner/bootstrap` route;
+- the stale `success: Boolean` bootstrap envelope;
+- JSON String/`JsonElement` round-trip for `nextScreen`;
+- Splash-owned remote-config/bootstrap cache;
+- Room/DataStore bootstrap persistence without explicit approved freshness semantics;
+- networking, session persistence or bootstrap DTO decoding inside `feature:splash`;
+- `LoginDestination`, `OtpDestination`, `DashboardDestination` or equivalent business-screen navigation architecture;
+- a fixed `Template -> Component -> Section -> Group -> Element` depth requirement;
 - dummy Section/Group nodes;
-- unsafe `Node(children: List<Node>)` hierarchies;
+- unsafe generic recursive node hierarchies;
 - one giant concrete SDUI definition list;
 - one universal nullable property object;
 - application-composition knowledge of concrete Input properties;
-- a standalone `runtime:form` module for FORM_TEMPLATE-owned state;
-- `DynamicScreenHost` inside `runtime:sdui` or another feature-like SDUI host;
-- `DynamicSduiRuntime` inside `feature:dynamic` or another feature-owned generic SDUI assembly;
-- `DynamicNavigation.kt` or another feature-owned navigation mechanics implementation;
-- manual application back-stack/current-destination presentation parallel to `Navigation3Host`;
-- dynamic-screen state/store/network/action implementation inside `app:composition`;
+- duplicate generic SDUI runtime inside `feature:dynamic`;
+- feature-owned navigation mechanics;
+- manual back-stack/current-destination state parallel to `NavigationStore`/Navigation 3;
 - direct networking from renderers;
 - absolute backend-provided request URLs;
 - raw platform navigation/background/capability types in SDUI wire payloads;
-- mutation of canonical normalized server `Screen` objects for transient state;
-- automatic replay of non-idempotent requests during restoration or realtime refresh;
+- mutation of canonical normalized server Screen objects for transient state;
+- automatic replay of non-idempotent requests during restoration/realtime refresh;
 - applying saved dynamic navigation before fresh session/bootstrap validation;
 - durable storage of arbitrary dynamic-instruction payloads;
-- duplicate bootstrap/action dynamic-screen contracts.
+- anonymous downgrade for a required `SESSION` request.
+
+---
+
+## 15. Freeze condition
+
+This addendum is frozen only while it agrees with:
+
+```text
+MASTER-ARCHITECTURE-CONSTITUTION.md
+feature/splash/README.md
+module dependency graph
+DI graph
+current backend bootstrap contract
+implementation
+architecture tests
+```
+
+The focused refactor must preserve all unrelated Dynamic/SDUI/navigation behavior while simplifying only startup ownership and transport convergence.
+
+A green build with old and new startup frameworks left in parallel is not a successful migration.
