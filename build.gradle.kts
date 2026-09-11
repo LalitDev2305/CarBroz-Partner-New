@@ -50,6 +50,7 @@ abstract class VerifyStartupArchitectureTask : DefaultTask() {
 
         val moduleBuildFiles = mapOf(
             ":feature:splash" to content("feature/splash/build.gradle.kts"),
+            ":feature:dynamic" to content("feature/dynamic/build.gradle.kts"),
             ":runtime:application" to content("runtime/application/build.gradle.kts"),
             ":data:network" to content("data/network/build.gradle.kts"),
             ":data:bootstrap" to content("data/bootstrap/build.gradle.kts"),
@@ -64,7 +65,6 @@ abstract class VerifyStartupArchitectureTask : DefaultTask() {
                 ":runtime:application",
             ),
             ":runtime:application" to setOf(
-                ":foundation:lifecycle",
                 ":foundation:observability",
                 ":foundation:session",
                 ":foundation:time",
@@ -83,7 +83,11 @@ abstract class VerifyStartupArchitectureTask : DefaultTask() {
                 ":feature:dynamic",
                 ":app:composition",
             ),
+            ":feature:dynamic" to setOf(
+                ":runtime:application",
+            ),
             ":runtime:application" to setOf(
+                ":foundation:lifecycle",
                 ":data:network",
                 ":data:bootstrap",
                 ":feature:splash",
@@ -202,6 +206,7 @@ tasks.register<VerifyStartupArchitectureTask>("verifyStartupArchitecture") {
     architectureFiles.from(
         layout.projectDirectory.file("settings.gradle.kts"),
         layout.projectDirectory.file("feature/splash/build.gradle.kts"),
+        layout.projectDirectory.file("feature/dynamic/build.gradle.kts"),
         layout.projectDirectory.file("runtime/application/build.gradle.kts"),
         layout.projectDirectory.file("data/network/build.gradle.kts"),
         layout.projectDirectory.file("data/bootstrap/build.gradle.kts"),
