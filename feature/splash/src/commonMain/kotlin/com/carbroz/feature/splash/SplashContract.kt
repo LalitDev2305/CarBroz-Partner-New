@@ -2,7 +2,7 @@ package com.carbroz.feature.splash
 
 import com.carbroz.foundation.lifecycle.AppLifecycleState
 import com.carbroz.foundation.navigation.NavigationDestination
-import com.carbroz.runtime.application.startup.StartupPayload
+import com.carbroz.runtime.application.startup.StartupDestination
 
 /** Static application entry destination. */
 data object SplashDestination : NavigationDestination {
@@ -39,6 +39,6 @@ sealed interface SplashState {
 }
 
 sealed interface SplashEffect {
-    data class Navigate(val payload: StartupPayload) : SplashEffect
+    data class Navigate(val destination: StartupDestination) : SplashEffect
     data class OpenUpdateUri(val uri: String) : SplashEffect
 }
