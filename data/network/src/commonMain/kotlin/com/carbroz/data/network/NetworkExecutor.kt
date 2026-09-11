@@ -69,7 +69,8 @@ class NetworkExecutor(
 
             val shouldRetry = when (recovery) {
                 NetworkAuthenticationRecoveryResult.Recovered -> true
-                NetworkAuthenticationRecoveryResult.SessionInvalidated -> false
+                NetworkAuthenticationRecoveryResult.SessionInvalidated ->
+                    request.authentication == NetworkAuthentication.OPTIONAL_SESSION
                 NetworkAuthenticationRecoveryResult.Unavailable -> false
             }
             if (!shouldRetry) return finish(context, firstResult, startedAt)
