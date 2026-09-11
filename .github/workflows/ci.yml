@@ -90,6 +90,8 @@ jobs:
             -sdk iphonesimulator \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
             build
       - name: Build native iOS Staging host
@@ -100,6 +102,8 @@ jobs:
             -sdk iphonesimulator \
             -configuration Staging \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
             CODE_SIGNING_ALLOWED=NO \
             build
       - name: Publish neutral foundation for iOS artifact-boundary verification
