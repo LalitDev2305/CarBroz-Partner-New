@@ -22,6 +22,8 @@ Environment behavior is explicit. Development uses `DEBUG` local platform diagno
 
 `CorrelationId` is the single typed correlation contract for logs, crash events, performance metrics, and traces. IDs are opaque random identifiers containing no user/session/device/business identity. Startup, network executions, and background task executions use one correlation ID per logical operation. Retries and authentication recovery remain part of the same network correlation. Background retry is modeled separately from terminal trace failure.
 
+Startup observability follows the frozen focused-use-case architecture: one logical startup operation is traced end-to-end. Named sub-step spans such as session restoration and bootstrap acquisition may be emitted when diagnostically useful, but observability must not require or recreate a generic `StartupTask` framework.
+
 ## Operational quality
 
 A common main-thread responsiveness watchdog posts platform heartbeats and records bounded incidents when the main/UI thread exceeds the configured threshold. Android uses the main `Looper`, Desktop uses the AWT event queue used by Compose Desktop, and iOS uses the Darwin main dispatch queue. One continuous stall emits one incident; the monitor waits for heartbeat recovery before starting another interval. A caller-supplied coroutine scope remains caller-owned and is never cancelled when the monitor closes.
@@ -30,7 +32,7 @@ Resource sampling is explicit per platform. Android/Desktop report JVM heap usag
 
 ## Instrumented boundaries
 
-- application startup: task and total duration, outcome, crash boundary, trace
+- application startup: total duration, outcome, crash boundary and trace; optional named session-restore/bootstrap spans only where they add diagnostic value
 - network: logical request duration/outcome/correlation across retries and auth recovery
 - Room database health: health-check duration/outcome with cancellation propagation
 - background handler execution: duration/outcome/crash boundary/trace
