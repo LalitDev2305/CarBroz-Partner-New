@@ -65,8 +65,8 @@ One state owner per responsibility. Do not duplicate the same screen/runtime sta
 ## 12. Lifecycle semantics are shared
 Platform lifecycle is translated into common semantic lifecycle state. Product/runtime code observes the common lifecycle contract rather than native APIs.
 
-## 13. Application runtime owns startup state
-`runtime:application` owns bootstrap state and ordered startup tasks. Startup is serialized, cancellation-safe, retryable where appropriate and observable.
+## 13. Startup has one presentation state owner and one application orchestrator
+`feature:splash/SplashStore` is the single MVI/UDF owner of startup presentation state. `runtime:application` owns transport-independent startup orchestration/policy through a focused application use case and inward contracts, not a second observable startup state machine or a generic ordered-task framework. Startup remains serialized at the feature boundary, cancellation-safe, retryable where appropriate and observable. Session restoration remains owned by `foundation:session`; Partner bootstrap transport remains owned by `data:bootstrap`; navigation mechanics remain owned by `foundation:navigation`.
 
 ## 14. Startup is ordered and lazy
 Initialize only systems required for the current startup path, but distinguish lazy initialization from incomplete implementation. Expensive capabilities such as maps, camera or payment are not initialized eagerly; their production-ready contracts/adapters/wiring are still completed in their owning phases so later activation does not require architectural implementation work.
@@ -288,14 +288,14 @@ CarBroz Partner
 │   ├── analytics/              # introduced in its implementation phase
 │   └── testing/                # reusable test infrastructure when justified
 ├── runtime/
-│   ├── application/
+│   ├── application/            # startup use case/contracts + Partner process config
 │   ├── sdui/
 │   ├── binding/
-│   ├── form/
 │   ├── action/
 │   └── capability/
 ├── data/
 │   ├── network/
+│   ├── bootstrap/              # Partner bootstrap transport adapter only
 │   ├── database/
 │   ├── preferences/
 │   ├── secure-storage/
@@ -314,7 +314,8 @@ CarBroz Partner
 │   ├── sharing/
 │   └── external-uri/
 ├── feature/
-│   └── splash/
+│   ├── splash/                 # only startup presentation state owner
+│   └── dynamic/                # generic backend-driven screen feature
 ├── build-logic/
 ├── docs/
 └── gradle/
@@ -389,10 +390,14 @@ Adding a normal Template, Component, Section, Group or Element must not require 
 ### Production bootstrap and dynamic request path
 
 ```text
-Static Splash
+Static Splash / SplashStore
    ↓
-ApplicationRuntime / StartupCoordinator
-   ↓
+ResolveStartupUseCase
+   ├── SessionStore.restore()
+   └── BootstrapRepository
+          ↓
+       data:bootstrap
+          ↓
 Configured bootstrap/config request
    ↓
 Canonical Network Foundation
@@ -400,7 +405,11 @@ Canonical Network Foundation
    ↓
 Bootstrap/config response
    ↓
-Semantic next destination
+Typed StartupDestination + process PartnerConfig
+   ↓
+SplashEffect.Navigate
+   ↓
+app:composition adaptation + NavigationProcessStateBridge
    ↓
 Navigation 3 adapter
    ↓
@@ -437,7 +446,7 @@ KMP source sets and hosts; Gradle Kotlin DSL; version catalog; convention-plugin
 Clean dependency boundaries; MVI/UDF Store/Reducer/Effect contracts; coroutine policies; architecture dependency laws/tests; product-neutral package policy; `expect/actual` policy; prevention of dumping-ground/base-class architecture.
 
 ## Phase 3 — Application Runtime, Lifecycle & Bootstrap
-ApplicationRuntime; application scope; startup coordinator/tasks/registry; startup ordering; cancellation/retry/recovery; cold/warm launch semantics; lifecycle; process restoration strategy; platform bridges; Koin composition-root foundation. Bootstrap contracts must be capable of orchestrating the production config/bootstrap request once the network implementation is supplied in Phase 10.
+Application scope; focused transport-independent startup use case/contracts; single startup presentation state ownership in Splash; startup ordering inside the use case; cancellation/retry/recovery; cold/warm launch semantics; lifecycle; process restoration strategy; platform bridges; Koin composition-root foundation. Do not create a second observable startup state machine or a generic startup-task registry without proven need. Bootstrap contracts must be capable of orchestrating the production config/bootstrap request once the network implementation is supplied in Phase 10.
 
 ## Phase 4 — Configuration, Time, Localization & Feature Control
 Development/Staging/Production environment/build/network configuration; endpoint/service configuration without source edits; time/time-zone; localization/formatting/RTL; runtime feature flags and configuration contracts.
@@ -458,7 +467,7 @@ Envelope/contracts; decoder; strict validation; protocol limits; compatibility; 
 Typed/redaction-aware binding scopes; dynamic form state/validation; action dispatcher/registry; validation/security/authorization; API/navigation/dialog/sheet/URI/capability semantics; trusted endpoint/idempotency policy. API actions must be generic and data-driven so ordinary server-defined button/form actions execute without screen-specific Kotlin networking code.
 
 ## Phase 10 — Networking, Persistence, Caching & Data Infrastructure
-Implement the complete production data platform: Ktor client/engines and lifecycle; serialization; typed request/response/error contracts; request context; Development/Staging/Production endpoint resolution; headers/authentication integration; timeout/retry/backoff/idempotency; connectivity-aware behavior where applicable; security/trusted-host/redaction hooks; HTTP/cache policy and reusable cache abstraction; Room 3 KMP database factory/platform drivers/schema/versioning/migrations/transactions/health/error mapping/testing; DataStore Preferences KMP; secure-storage data adapters; repository/data-source boundaries; Koin wiring and observability hooks. Provide the canonical bootstrap/config API execution path and the generic SDUI screen/action API execution path. After this phase, changing configured backend URLs/contracts should not require inventing networking architecture, database infrastructure or caching infrastructure later.
+Implement the complete production data platform: Ktor client/engines and lifecycle; serialization; typed request/response/error contracts; request context; Development/Staging/Production endpoint resolution; headers/authentication integration; timeout/retry/backoff/idempotency; connectivity-aware behavior where applicable; security/trusted-host/redaction hooks; HTTP/cache policy and reusable cache abstraction; Room 3 KMP database factory/platform drivers/schema/versioning/migrations/transactions/health/error mapping/testing; DataStore Preferences KMP; secure-storage data adapters; repository/data-source boundaries; Koin wiring and observability hooks. Provide the canonical Partner bootstrap/config API adapter path and the generic SDUI screen/action API execution path. After this phase, changing configured backend URLs/contracts should not require inventing networking architecture, database infrastructure or caching infrastructure later.
 
 ## Phase 11 — Offline, Sync, Realtime & Resilience
 Connectivity; operation-specific offline policy; outbox; sync coordinator; conflicts; retries/backoff/dedup/idempotency; `RealtimeTransport`; Ktor WebSockets adapter; reconnect/order/dedup/recovery. Complete the reusable production mechanisms in this phase; only operation-specific queue/conflict rules wait for actual business semantics.
@@ -473,7 +482,7 @@ Semantic common scheduler; Android WorkManager; Android foreground execution bou
 Structured logging/correlation/tracing; crash abstraction; analytics separation/sanitization; performance instrumentation; startup/render/network/database/background metrics; freeze/ANR awareness; resource/memory diagnostics. Production and debug/staging diagnostics behavior must be explicitly configured and privacy-safe.
 
 ## Phase 15 — Static Splash + Neutral Reference Vertical Slice
-Real static Splash using MVI/DI/lifecycle/adaptive UI/Navigation 3. Splash/bootstrap executes the configured bootstrap/config request through the canonical network stack, handles loading/failure/retry/cancellation/cache policy as defined, and resolves the next semantic destination from response/runtime state. Then a neutral SDUI fixture/integration path proves protocol->normalize->binding->render->generic action->network/navigation without Partner business logic or screen-specific API wiring.
+Real static Splash using MVI/DI/lifecycle/adaptive UI/Navigation 3. SplashStore invokes the focused application startup use case; bootstrap executes the configured bootstrap/config request through the canonical network stack, handles loading/failure/retry/cancellation according to the frozen contract, retains approved process-scoped Partner configuration and resolves the next typed semantic destination. Then a neutral SDUI fixture/integration path proves protocol->normalize->binding->render->generic action->network/navigation without Partner business logic or screen-specific API wiring.
 
 ## Phase 16 — Verification, Documentation, CI/Release & Architecture Freeze
 Meaningful >=90% coverage where appropriate; positive/negative/boundary/concurrency/cancellation/protocol/migration/UI/adaptive/accessibility/security/performance suites; KDoc; ADRs; dependency diagrams; extension/testing guides; full Development/Staging/Production and applicable Debug/release verification; Android/iOS/Desktop build matrix; final dependency/security/performance audit. Verify that no frozen production subsystem remains a TODO, placeholder, fake implementation or "implement when needed" architecture gap.
@@ -525,7 +534,7 @@ Current repository implementation has useful production work, but the following 
 ## Keep
 - `foundation:architecture` — matches the small MVI/UDF kernel direction.
 - `foundation:lifecycle` — correct independent lifecycle ownership.
-- `runtime:application` — correct startup/runtime ownership.
+- `runtime:application` — correct owner for transport-independent startup application semantics, but its startup implementation must converge to the focused use-case model frozen above rather than retain a parallel runtime/task framework.
 - `foundation:configuration` — correct configuration owner.
 - `foundation:time` — correct deterministic time owner.
 - `foundation:localization` — correct localization owner.
@@ -542,6 +551,7 @@ Current repository implementation has useful production work, but the following 
 6. **Preserve all current tests and cross-platform compilation while restructuring.** Migration is not permission to rewrite working behavior. Once behavior is proven equivalent, delete the superseded implementation and migrate tests to the canonical owner.
 7. **After all Phase 1–6 reconciliation work, run a full repository hygiene and optimization audit.** Search for duplicate classes/contracts/packages/modules, stale imports/resources/configuration, unused dependencies, obsolete compatibility code, unnecessary abstractions and avoidable platform-specific implementations. Resolve findings before Phase 7.
 8. **Re-audit completed Phases 1–6 against Decision 77.** Anything already declared as frozen infrastructure must be production-complete for its current responsibility rather than a placeholder. Missing production configuration, DI integration, security/session behavior, environment wiring or platform implementation that belongs to Phases 1–6 must be corrected before Phase 7; responsibilities explicitly owned by later phases remain implemented in those later phases, but may not be deferred beyond their owning phase.
+9. **Converge startup ownership before freezing the current bootstrap slice.** `SplashStore` must be the single startup presentation state owner; `runtime:application` must expose the focused startup use case/contracts; superseded `ApplicationRuntime`/startup-task framework types must be removed after consumers/tests migrate; Partner bootstrap transport stays in `data:bootstrap`; `NavigationProcessStateBridge` remains the process-restoration adapter; no second startup state machine may survive.
 
 ## Deferred intentionally to later phases
 - Navigation 3 -> Phase 7.
