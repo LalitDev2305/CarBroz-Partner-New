@@ -250,6 +250,9 @@ fun carBrozApplicationModule(
             sessionStore = get(),
             bootstrapRepository = get(),
             partnerConfigStore = get(),
+            observability = get(),
+            clock = get(),
+            correlationIdProvider = get(),
         )
     }
 
