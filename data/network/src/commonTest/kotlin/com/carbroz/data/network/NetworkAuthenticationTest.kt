@@ -84,7 +84,7 @@ class NetworkAuthenticationTest {
     }
 
     @Test
-    fun optionalSessionDoesNotReplayAsGuestAfterCanonicalSessionInvalidation() = runTest {
+    fun optionalSessionReplaysAsGuestAfterCanonicalSessionInvalidation() = runTest {
         var token: String? = "old-token"
         var attempts = 0
         var recoveries = 0
@@ -93,7 +93,8 @@ class NetworkAuthenticationTest {
             transport = NetworkTransport { request ->
                 attempts += 1
                 seenAuthorization += request.headers["Authorization"]
-                NetworkResult.Failure(NetworkFailure.Http(401))
+                if (attempts == 1) NetworkResult.Failure(NetworkFailure.Http(401))
+                else NetworkResult.Success(NetworkResponse(200))
             },
             authorizationProvider = NetworkAuthorizationProvider { token?.let { "Bearer $it" } },
             authenticationRecovery = NetworkAuthenticationRecovery {
@@ -103,11 +104,10 @@ class NetworkAuthenticationTest {
             },
         )
 
-        val failure = assertIs<NetworkResult.Failure>(executor.execute(optionalSessionGet()))
-        assertEquals(NetworkFailure.Http(401), failure.error)
-        assertEquals(1, attempts)
+        assertIs<NetworkResult.Success>(executor.execute(optionalSessionGet()))
+        assertEquals(2, attempts)
         assertEquals(1, recoveries)
-        assertEquals<List<String?>>(listOf("Bearer old-token"), seenAuthorization)
+        assertEquals<List<String?>>(listOf("Bearer old-token", null), seenAuthorization)
     }
 
     @Test
