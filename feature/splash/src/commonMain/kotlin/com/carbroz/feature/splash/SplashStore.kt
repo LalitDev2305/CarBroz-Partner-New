@@ -2,9 +2,8 @@ package com.carbroz.feature.splash
 
 import com.carbroz.foundation.architecture.store.Store
 import com.carbroz.foundation.lifecycle.AppLifecycleState
-import com.carbroz.runtime.application.ApplicationRuntime
-import com.carbroz.runtime.application.ApplicationRuntimeState
-import com.carbroz.runtime.application.startup.StartupBlocker
+import com.carbroz.runtime.application.startup.ResolveStartupUseCase
+import com.carbroz.runtime.application.startup.StartupResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -14,18 +13,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
-/** Presentation-only MVI owner for the static Splash feature. */
+/** Single MVI/UDF state owner for the static Splash startup presentation. */
 class SplashStore(
-    private val runtime: ApplicationRuntime,
+    private val resolveStartup: ResolveStartupUseCase,
     parentScope: CoroutineScope,
 ) : Store<SplashIntent, SplashState> {
     private val parentJob = parentScope.coroutineContext[Job]
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentJob))
-    private val mutableState = MutableStateFlow(runtime.state.value.toSplashState())
+    private val mutableState = MutableStateFlow<SplashState>(SplashState.Loading)
     private val effectChannel = Channel<SplashEffect>(capacity = Channel.BUFFERED)
 
     override val state: StateFlow<SplashState> = mutableState.asStateFlow()
@@ -33,19 +31,7 @@ class SplashStore(
 
     private var lifecycleState: AppLifecycleState = AppLifecycleState.Unknown
     private var startupJob: Job? = null
-    private var lastNavigatedAttempt: UInt? = null
-
-    init {
-        scope.launch {
-            runtime.state.collectLatest { runtimeState ->
-                mutableState.value = runtimeState.toSplashState()
-                if (runtimeState is ApplicationRuntimeState.Ready && lastNavigatedAttempt != runtimeState.attempt) {
-                    lastNavigatedAttempt = runtimeState.attempt
-                    effectChannel.send(SplashEffect.Navigate(runtimeState.payload))
-                }
-            }
-        }
-    }
+    private var startupStarted = false
 
     override fun dispatch(intent: SplashIntent) {
         when (intent) {
@@ -65,14 +51,14 @@ class SplashStore(
         lifecycleState = state
         when (state) {
             AppLifecycleState.Background -> {
-                startupJob?.cancel()
-                startupJob = null
+                if (startupJob?.isActive == true) {
+                    startupJob?.cancel()
+                    startupJob = null
+                    startupStarted = false
+                }
             }
 
-            AppLifecycleState.Foreground -> {
-                if (runtime.state.value == ApplicationRuntimeState.Idle) startRuntime(retry = false)
-            }
-
+            AppLifecycleState.Foreground -> if (!startupStarted) startStartup()
             AppLifecycleState.Unknown -> Unit
         }
     }
@@ -83,7 +69,10 @@ class SplashStore(
             is SplashState.Error -> current.retryEnabled
             else -> false
         }
-        if (allowed) startRuntime(retry = true)
+        if (allowed) {
+            startupStarted = false
+            startStartup()
+        }
     }
 
     private fun openUpdateIfAvailable() {
@@ -91,42 +80,45 @@ class SplashStore(
         scope.launch { effectChannel.send(SplashEffect.OpenUpdateUri(update.updateUri)) }
     }
 
-    private fun startRuntime(retry: Boolean) {
+    private fun startStartup() {
         if (lifecycleState != AppLifecycleState.Foreground) return
         if (startupJob?.isActive == true) return
+        startupStarted = true
+        mutableState.value = SplashState.Loading
         startupJob = scope.launch {
-            if (retry) runtime.retry() else runtime.start()
+            when (val result = resolveStartup()) {
+                is StartupResult.Ready -> {
+                    mutableState.value = SplashState.Ready
+                    effectChannel.send(SplashEffect.Navigate(result.destination))
+                }
+
+                is StartupResult.RequiredUpdate -> {
+                    mutableState.value = SplashState.RequiredUpdate(
+                        title = result.title,
+                        message = result.message,
+                        updateUri = result.updateUri,
+                    )
+                }
+
+                is StartupResult.Maintenance -> {
+                    mutableState.value = SplashState.Maintenance(
+                        title = result.title ?: "We'll be back soon",
+                        message = result.message ?: "CarBroz Partner is temporarily unavailable. Please try again shortly.",
+                        retryEnabled = result.retryable,
+                    )
+                }
+
+                is StartupResult.Failure -> {
+                    mutableState.value = SplashState.Error(
+                        message = if (result.recoverable) {
+                            "We couldn't connect to CarBroz right now. Check your connection and try again."
+                        } else {
+                            "CarBroz couldn't safely finish startup. Please restart the app or contact support."
+                        },
+                        retryEnabled = result.recoverable,
+                    )
+                }
+            }
         }
-    }
-
-    private fun ApplicationRuntimeState.toSplashState(): SplashState = when (this) {
-        ApplicationRuntimeState.Idle,
-        is ApplicationRuntimeState.Starting,
-        -> SplashState.Loading
-
-        is ApplicationRuntimeState.Ready -> SplashState.Ready
-
-        is ApplicationRuntimeState.Blocked -> when (val reason = blocker) {
-            is StartupBlocker.RequiredUpdate -> SplashState.RequiredUpdate(
-                title = reason.title ?: "Update required",
-                message = reason.message ?: "A newer version of CarBroz Partner is required to continue.",
-                updateUri = reason.updateUri,
-            )
-
-            is StartupBlocker.Maintenance -> SplashState.Maintenance(
-                title = reason.title ?: "We'll be back soon",
-                message = reason.message ?: "CarBroz Partner is temporarily unavailable. Please try again shortly.",
-                retryEnabled = reason.retryable,
-            )
-        }
-
-        is ApplicationRuntimeState.Failed -> SplashState.Error(
-            message = if (failure.recoverable) {
-                "We couldn't connect to CarBroz right now. Check your connection and try again."
-            } else {
-                "CarBroz couldn't safely finish startup. Please restart the app or contact support."
-            },
-            retryEnabled = failure.recoverable,
-        )
     }
 }
