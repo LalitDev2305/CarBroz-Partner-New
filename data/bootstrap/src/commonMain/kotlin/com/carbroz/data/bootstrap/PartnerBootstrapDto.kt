@@ -1,11 +1,11 @@
 package com.carbroz.data.bootstrap
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 
 @Serializable
 internal data class PartnerBootstrapEnvelopeDto(
-    val success: Boolean,
+    val status: Int,
+    val code: String,
     val message: String,
     val data: PartnerBootstrapDataDto? = null,
     val traceId: String? = null,
@@ -41,7 +41,6 @@ internal data class PartnerUpdateDto(
     val storeUrl: String? = null,
 )
 
-/** Decoded for wire compatibility; currently the backend remains authoritative for these choices. */
 @Serializable
 internal data class PartnerFeatureDto(
     val registrationEnabled: Boolean,
@@ -52,5 +51,15 @@ internal data class PartnerFeatureDto(
 @Serializable
 internal data class PartnerBootstrapStartupDto(
     val authenticated: Boolean,
-    val nextScreen: JsonElement,
+    val nextScreen: PartnerStartupScreenDto,
+)
+
+@Serializable
+internal data class PartnerStartupScreenDto(
+    val screenId: String,
+    val templateId: String,
+    val templateType: String,
+    val endpoint: String,
+    val method: String,
+    val authentication: String,
 )
