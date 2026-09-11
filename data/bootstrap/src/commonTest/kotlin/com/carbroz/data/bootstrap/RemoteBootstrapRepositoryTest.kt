@@ -12,6 +12,7 @@ import com.carbroz.runtime.application.startup.BootstrapRepositoryResult
 import com.carbroz.runtime.application.startup.StartupAuthentication
 import com.carbroz.runtime.application.startup.StartupRequestMethod
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -158,15 +159,15 @@ class RemoteBootstrapRepositoryTest {
                         put("version", configVersion)
                         put("maintenance", buildJsonObject {
                             put("enabled", false)
-                            put("title", JsonPrimitive(null))
-                            put("message", JsonPrimitive(null))
+                            put("title", JsonNull)
+                            put("message", JsonNull)
                         })
                         put("update", buildJsonObject {
                             put("required", required)
                             put("optional", optional)
                             put("minimumVersion", minimumVersion)
                             put("latestVersion", latestVersion)
-                            put("storeUrl", JsonPrimitive(null))
+                            put("storeUrl", JsonNull)
                         })
                         put("features", buildJsonObject {
                             put("registrationEnabled", true)
