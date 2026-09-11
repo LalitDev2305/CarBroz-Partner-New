@@ -8,21 +8,19 @@ import com.carbroz.data.network.NetworkFailure
 import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
 import com.carbroz.data.network.executeTyped
-import com.carbroz.runtime.application.bootstrap.BootstrapMaintenance
-import com.carbroz.runtime.application.bootstrap.BootstrapRepository
-import com.carbroz.runtime.application.bootstrap.BootstrapRepositoryFailure
-import com.carbroz.runtime.application.bootstrap.BootstrapRepositoryResult
-import com.carbroz.runtime.application.bootstrap.BootstrapSnapshot
-import com.carbroz.runtime.application.bootstrap.BootstrapUpdate
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
+import com.carbroz.runtime.application.startup.BootstrapMaintenance
+import com.carbroz.runtime.application.startup.BootstrapRepository
+import com.carbroz.runtime.application.startup.BootstrapRepositoryFailure
+import com.carbroz.runtime.application.startup.BootstrapRepositoryResult
+import com.carbroz.runtime.application.startup.BootstrapSnapshot
+import com.carbroz.runtime.application.startup.BootstrapUpdate
+import com.carbroz.runtime.application.startup.PartnerConfig
+import com.carbroz.runtime.application.startup.PartnerFeatures
+import com.carbroz.runtime.application.startup.StartupAuthentication
+import com.carbroz.runtime.application.startup.StartupDestination
+import com.carbroz.runtime.application.startup.StartupRequestMethod
 
-/**
- * Network-authoritative Partner bootstrap repository.
- *
- * HTTP mechanics, client metadata, auth recovery, retry and observability remain in data:network.
- * This adapter owns only the Partner route/DTO and maps it into the application bootstrap contract.
- */
+/** Network-authoritative Partner bootstrap transport adapter. */
 class RemoteBootstrapRepository(
     private val network: NetworkDataSource,
 ) : BootstrapRepository {
@@ -45,21 +43,26 @@ class RemoteBootstrapRepository(
     }
 
     private fun PartnerBootstrapEnvelopeDto.toRepositoryResult(): BootstrapRepositoryResult {
-        if (!success) return invalid("bootstrap_unsuccessful_envelope")
+        if (status != 200 || code != "SUCCESS") return invalid("bootstrap_unsuccessful_envelope")
         val bootstrap = data ?: return invalid("bootstrap_missing_data")
         val config = bootstrap.config
         if (config.version.isBlank()) return invalid("bootstrap_invalid_config_version")
 
-        val update = config.update
-        if (update.minimumVersion.isBlank()) return invalid("bootstrap_invalid_minimum_version")
-        if (update.latestVersion.isBlank()) return invalid("bootstrap_invalid_latest_version")
-        if (update.required && update.optional) return invalid("bootstrap_conflicting_update_policy")
+        val updateDto = config.update
+        if (updateDto.minimumVersion.isBlank()) return invalid("bootstrap_invalid_minimum_version")
+        if (updateDto.latestVersion.isBlank()) return invalid("bootstrap_invalid_latest_version")
+        if (updateDto.required && updateDto.optional) return invalid("bootstrap_conflicting_update_policy")
 
-        val nextPayload = Json.encodeToString(
-            JsonElement.serializer(),
-            bootstrap.startup.nextScreen,
+        val destination = bootstrap.startup.nextScreen.toStartupDestination()
+            ?: return invalid("bootstrap_invalid_next_screen")
+
+        val update = BootstrapUpdate(
+            required = updateDto.required,
+            optional = updateDto.optional,
+            minimumVersion = updateDto.minimumVersion,
+            latestVersion = updateDto.latestVersion,
+            updateUri = updateDto.storeUrl,
         )
-        if (nextPayload.isBlank()) return invalid("bootstrap_missing_next_payload")
 
         return BootstrapRepositoryResult.Success(
             BootstrapSnapshot(
@@ -69,16 +72,40 @@ class RemoteBootstrapRepository(
                     title = config.maintenance.title,
                     message = config.maintenance.message,
                 ),
-                update = BootstrapUpdate(
-                    required = update.required,
-                    optional = update.optional,
-                    minimumVersion = update.minimumVersion,
-                    latestVersion = update.latestVersion,
-                    updateUri = update.storeUrl,
+                config = PartnerConfig(
+                    version = config.version,
+                    features = PartnerFeatures(
+                        registrationEnabled = config.features.registrationEnabled,
+                        individualPartnerEnabled = config.features.individualPartnerEnabled,
+                        organizationPartnerEnabled = config.features.organizationPartnerEnabled,
+                    ),
+                    update = update,
                 ),
-                nextPayload = nextPayload,
+                nextScreen = destination,
             ),
         )
+    }
+
+    private fun PartnerStartupScreenDto.toStartupDestination(): StartupDestination? {
+        val requestMethod = when (method) {
+            "GET" -> StartupRequestMethod.GET
+            else -> return null
+        }
+        val auth = when (authentication) {
+            "NONE" -> StartupAuthentication.NONE
+            "SESSION" -> StartupAuthentication.SESSION
+            else -> return null
+        }
+        return runCatching {
+            StartupDestination(
+                screenId = screenId,
+                templateId = templateId,
+                templateType = templateType,
+                endpoint = endpoint,
+                method = requestMethod,
+                authentication = auth,
+            )
+        }.getOrNull()
     }
 
     private fun NetworkDecodeFailure.toRepositoryFailure(): BootstrapRepositoryFailure = when (this) {
