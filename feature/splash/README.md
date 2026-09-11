@@ -2,160 +2,258 @@
 
 Status: **FROZEN IMPLEMENTATION CONTRACT**
 
-This document defines the exact production architecture for the exceptional static startup path and is the frontend source of truth for Partner bootstrap integration. It is subordinate to `docs/architecture/MASTER-ARCHITECTURE-CONSTITUTION.md`; when they conflict, the Master Constitution wins.
+This document is the frontend source of truth for the exceptional Partner startup/bootstrap path. It is subordinate to `docs/architecture/MASTER-ARCHITECTURE-CONSTITUTION.md` and must remain consistent with `docs/architecture/18-dynamic-runtime-architecture.md`.
 
-The backend Configuration bounded context has its own freeze documentation. This frontend document describes only the client ownership, transport adaptation, startup policy, dynamic handoff, host configuration, local testing, and change rules required to consume the frozen Partner bootstrap contract safely.
+The design is intentionally small: Clean Architecture, MVI/UDF, dependency inversion and single responsibility without a generic startup workflow framework.
 
 ---
 
-## 1. Quick mental model
+## 1. Frozen mental model
 
-CarBroz has exactly two frontend execution paths:
+CarBroz has two frontend execution paths:
 
-1. **Static startup/bootstrap** — Splash restores the canonical local session, calls the server-authoritative Partner bootstrap endpoint, evaluates startup policy, and resolves the first trusted dynamic destination.
-2. **Generic dynamic SDUI runtime** — every normal screen and backend-driven interaction after startup uses the existing generic dynamic runtime.
+1. **Static startup/bootstrap** — Splash owns presentation state while one application use case restores session state, obtains the server-authoritative bootstrap response, applies startup policy and returns a typed startup result.
+2. **Generic dynamic runtime** — after startup, every normal backend-driven screen uses the existing Dynamic + SDUI runtime.
 
 ```text
-STATIC STARTUP EXCEPTION
-Splash
-  -> ApplicationRuntime
-  -> StartupCoordinator
-  -> SessionRestoreStartupTask
-  -> BootstrapStartupTask
-  -> ResolveBootstrapUseCase
-  -> BootstrapRepository
-  -> RemoteBootstrapRepository
-  -> NetworkDataSource
-  -> NetworkExecutor
-  -> KtorNetworkTransport
-  -> GET /api/v1/partner/bootstrap
-  -> BootstrapSnapshot
-  -> trusted StartupPayload
-  -> Ready / Blocked / Failed
-
-NORMAL APPLICATION FLOW
-DynamicScreenInstruction
-  -> DynamicFeature
-  -> SDUI runtime
-  -> binding/action runtime
-  -> NetworkActionExecutor
-  -> same NetworkDataSource / NetworkExecutor / KtorNetworkTransport
+STATIC STARTUP
+SplashScreen
+    ↓ intent
+SplashStore                         # single startup presentation state owner
+    ↓
+ResolveStartupUseCase               # application orchestration + startup policy
+    ├── SessionStore.restore()      # canonical session owner
+    ├── BootstrapRepository.load()  # inward application port
+    └── PartnerConfigStore.update() # process-scoped reusable Partner config
+            ↓
+RemoteBootstrapRepository           # data:bootstrap
+            ↓
+NetworkDataSource
+            ↓
+NetworkExecutor
+            ↓
+KtorNetworkTransport
+            ↓
+GET /api/v1/partner/config/bootstrap
+            ↓
+Bootstrap DTO -> mapper -> application model
+            ↓
+StartupResult
+    ├── RequiredUpdate
+    ├── Maintenance
+    ├── Failure
+    └── Ready(StartupDestination)
+            ↓
+SplashEffect.Navigate
+            ↓
+app:composition
+            ↓
+DynamicDestination
+            ↓
+NavigationProcessStateBridge
+            ↓
+foundation:navigation
+            ↓
+feature:dynamic
+            ↓
+nextScreen.endpoint
+            ↓
+runtime:sdui
 ```
 
-There are no Login/OTP/Dashboard/Profile-specific network stacks, repositories, stores or feature modules merely because those screens exist.
+There are no Login/OTP/Dashboard/Profile-specific frontend feature modules, repositories, stores or network clients merely because those screens exist on the backend.
 
 ---
 
 ## 2. Non-negotiable ownership
 
-- `feature:splash` owns static presentation only: intents, state, effects, store and Splash UI.
-- `runtime:application` is the sole startup-state owner and owns startup orchestration plus transport-independent bootstrap application policy.
-- `foundation:session` is the sole local session/authentication owner, including persisted-session restoration and corrupt-session cleanup.
-- `foundation:configuration` owns immutable process configuration: environment, API base URL, client platform and build information.
-- `data:network` owns the one canonical REST execution stack, global metadata headers, auth integration, retry/timeout/connectivity/cache/security/observability policy and typed response decoding mechanism.
-- `data:bootstrap` owns only the Partner bootstrap HTTP adapter: endpoint, DTOs and `RemoteBootstrapRepository`.
-- `feature:dynamic` owns conversion of the opaque trusted bootstrap payload into a validated `DynamicScreenInstruction`.
-- `foundation:navigation` owns stack mechanics.
-- `app:composition` wires owners together and must not become another startup/network/session owner.
-- `app:startup` must not exist.
+### `feature:splash`
+Owns only:
 
-No second bootstrap store, second REST client, second session snapshot, second navigation stack or second generic dynamic-screen flow is permitted.
+- `SplashIntent`;
+- immutable `SplashState`;
+- one-shot `SplashEffect`;
+- `SplashStore`;
+- static Splash Compose UI;
+- lifecycle/user event handling for the static startup feature.
+
+It does **not** own:
+
+- Ktor/network implementation;
+- bootstrap DTOs/endpoints;
+- session persistence;
+- authorization headers;
+- bootstrap mapping;
+- persisted bootstrap cache;
+- navigation mechanics;
+- SDUI rendering.
+
+`SplashStore` is the one MVI/UDF state owner for startup presentation. No `ApplicationRuntimeState`, `BootstrapStore` or second observable startup state machine may exist in parallel.
+
+### `runtime:application`
+Owns transport-independent application startup semantics:
+
+- `ResolveStartupUseCase`;
+- `StartupResult`;
+- `StartupDestination`;
+- `PartnerConfig` / `PartnerFeatures`;
+- `PartnerConfigStore`;
+- `BootstrapRepository` inward port and normalized bootstrap application models/failures.
+
+It does not own HTTP DTOs, Ktor, Compose, Navigation 3 or Dynamic feature implementation types.
+
+### `foundation:session`
+Owns:
+
+- persisted session restoration;
+- invalid/corrupt session repair/cleanup;
+- authenticated/signed-out truth;
+- refresh/invalidation/logout semantics;
+- secure credential persistence.
+
+Startup calls `SessionStore.restore()`; it does not duplicate session repair policy.
+
+### `data:bootstrap`
+Owns only the Partner bootstrap transport adapter:
+
+- canonical bootstrap route;
+- serializable wire DTOs;
+- envelope/field validation at the transport boundary;
+- DTO -> application bootstrap mapping;
+- `RemoteBootstrapRepository`, implementing the application-owned `BootstrapRepository`.
+
+It does not own startup policy, UI, navigation, session state or a second network stack.
+
+### `data:network`
+Owns the single canonical REST execution stack:
+
+- request execution;
+- global metadata headers;
+- Authorization integration;
+- authentication recovery;
+- timeout/retry/connectivity policy;
+- HTTP cache policy;
+- typed response decoding;
+- observability/security hooks.
+
+Partner bootstrap DTOs/routes do not belong here.
+
+### `foundation:navigation`
+Owns navigation stack mechanics, navigation commands, restoration rules and Navigation 3 adaptation.
+
+### `app:composition`
+Owns only cross-owner wiring and application-specific adaptation. It maps a trusted `StartupDestination` to the existing `DynamicDestination`, consumes Splash effects and coordinates `NavigationProcessStateBridge`.
+
+### `feature:dynamic` / `runtime:sdui`
+They begin **after** bootstrap resolves a destination. They do not decide maintenance, required update, session restoration or bootstrap policy.
+
+`app:startup` must not exist.
 
 ---
 
-## 3. Exact frontend structure for this slice
+## 3. Frozen target structure
+
+The focused refactor converges toward this structure; exact filenames may be adjusted only where current repository naming proves a smaller equivalent without changing ownership.
 
 ```text
 feature/splash/
-├── README.md
 └── src/commonMain/kotlin/com/carbroz/feature/splash/
     ├── SplashContract.kt
     ├── SplashStore.kt
     └── SplashScreen.kt
 
 runtime/application/
-└── src/commonMain/kotlin/com/carbroz/runtime/application/
-    ├── ApplicationRuntime.kt
-    ├── bootstrap/
-    │   ├── BootstrapContract.kt
-    │   └── ResolveBootstrapUseCase.kt
-    └── startup/
-        ├── StartupTask.kt
-        ├── StartupCoordinator.kt
-        ├── SessionRestoreStartupTask.kt
-        └── BootstrapStartupTask.kt
+└── src/commonMain/kotlin/com/carbroz/runtime/application/startup/
+    ├── BootstrapRepository.kt
+    ├── PartnerConfig.kt
+    ├── PartnerConfigStore.kt
+    ├── ResolveStartupUseCase.kt
+    ├── StartupDestination.kt
+    └── StartupResult.kt
 
 data/bootstrap/
 └── src/commonMain/kotlin/com/carbroz/data/bootstrap/
     ├── BootstrapApiContract.kt
     ├── PartnerBootstrapDto.kt
+    ├── BootstrapMapper.kt
     └── RemoteBootstrapRepository.kt
 
-data/network/src/commonMain/kotlin/com/carbroz/data/network/
-├── ConfigurationNetworkHeaderProvider.kt
-├── NetworkDataSource.kt
-├── NetworkExecutor.kt
-├── KtorNetworkTransport.kt
-└── ...canonical shared network infrastructure
+data/network/
+└── existing canonical NetworkDataSource / NetworkExecutor / Ktor transport
 
-feature/dynamic/src/commonMain/kotlin/com/carbroz/feature/dynamic/
-├── DynamicScreenInstructionCodec.kt
-├── DynamicStartupPayloadDecoder.kt
-└── ...generic dynamic runtime
+foundation/session/
+└── existing canonical SessionStore/session infrastructure
 
-foundation/session/src/commonMain/kotlin/com/carbroz/foundation/session/
-└── canonical session infrastructure
-
-foundation/configuration/src/commonMain/kotlin/com/carbroz/foundation/configuration/
-├── AppConfiguration.kt
-├── ConfigurationValidator.kt
-└── ...immutable process configuration
+foundation/navigation/
+└── existing canonical NavigationStore/navigation infrastructure
 
 app/composition/
-└── DI and cross-owner wiring only
-
-androidApp/
-└── Android host configuration and lifecycle bridge
-
-desktopApp/
-└── Desktop host configuration and lifecycle bridge
+├── DI/composition wiring
+└── NavigationProcessStateBridge
 ```
 
-`data:bootstrap` is intentional. It prevents Partner-specific transport code from contaminating reusable `data:network`.
+Do not create one class per trivial mapping merely to mirror layers. `BootstrapMapper` may be a focused mapper function/object if that is the smallest clear implementation.
 
 ---
 
-## 4. Backend Partner bootstrap contract consumed by frontend
+## 4. Superseded startup abstractions
 
-The canonical endpoint is:
+The following current startup abstractions are superseded by this freeze and are migration/removal targets after reference and test migration is proven:
 
-```http
-GET /api/v1/partner/bootstrap
+```text
+ApplicationRuntime
+ApplicationRuntimeState
+StartupCoordinator
+StartupTask
+StartupTaskResult
+StartupResolution
+SessionRestoreStartupTask
+BootstrapStartupTask
+StartupPayload
+StartupPayloadDecoder
+DynamicStartupPayloadDecoder
+StartupNotice
 ```
 
-The backend Configuration domain owns the actual startup policy and persisted `partner.bootstrap` document. The frontend does not call a separate `/config` API.
+`ResolveBootstrapUseCase` is superseded by the broader and clearer `ResolveStartupUseCase` because startup orchestration includes session restoration, bootstrap loading and startup policy.
 
-### Request
+Do not retain compatibility wrappers by default. Keep an old API temporarily only if an actual current consumer requires a staged migration, and remove it before this slice is frozen.
+
+---
+
+## 5. Canonical backend bootstrap transport contract
+
+Current backend routing registers Partner bootstrap under `/config`:
 
 ```http
-GET /api/v1/partner/bootstrap
-X-CarBroz-Platform: ANDROID
-X-CarBroz-App-Version: 1.0.0
-X-CarBroz-Build-Number: 1
-Authorization: Bearer <token>   # optional
+GET /api/v1/partner/config/bootstrap
 ```
 
-The frontend does not manually add those headers inside `RemoteBootstrapRepository`.
+Frontend must not use the stale path:
 
-- platform/version/build come from `ConfigurationNetworkHeaderProvider`;
-- Authorization comes from the canonical session/network integration;
-- bootstrap declares only `NetworkAuthentication.OPTIONAL_SESSION`.
+```text
+/api/v1/partner/bootstrap
+```
 
-### Guest response shape
+### Request metadata
+
+Bootstrap declares:
+
+```text
+method         = GET
+authentication = OPTIONAL_SESSION
+```
+
+Global network ownership supplies client metadata such as platform/app/build information. Authorization is supplied only by canonical session/network integration. `RemoteBootstrapRepository` does not manually concatenate Bearer tokens or duplicate global headers.
+
+### Canonical response envelope
+
+Backend uses the common API envelope:
 
 ```json
 {
-  "success": true,
+  "status": 200,
+  "code": "SUCCESS",
   "message": "Partner bootstrap completed",
   "data": {
     "config": {
@@ -181,10 +279,10 @@ The frontend does not manually add those headers inside `RemoteBootstrapReposito
     "startup": {
       "authenticated": false,
       "nextScreen": {
-        "screenId": "partner_login",
-        "templateId": "partner_login_template",
-        "templateType": "form_template",
-        "endpoint": "/api/v1/partner/sdui/registry/partner_login",
+        "screenId": "...",
+        "templateId": "...",
+        "templateType": "...",
+        "endpoint": "/api/v1/...",
         "method": "GET",
         "authentication": "NONE"
       }
@@ -194,121 +292,153 @@ The frontend does not manually add those headers inside `RemoteBootstrapReposito
 }
 ```
 
-Authenticated startup uses the configured authenticated destination instead of the guest destination.
+The old frontend `success: Boolean` envelope assumption is superseded.
+
+Success validation is based on the canonical transport/HTTP contract and required data, not a synthetic `success` field.
+
+Destination field values are server-authoritative. Frontend architecture must not hardcode Login or Dashboard routing values. Backend bootstrap configuration must itself stay consistent with the backend screen contracts.
 
 ---
 
-## 5. Complete startup request-to-response flow
+## 6. Typed application boundary
+
+Do not carry `JsonElement` or serialize decoded bootstrap JSON back into a String only to decode it again.
+
+Transport DTO:
 
 ```text
-Android/Desktop host starts
+PartnerBootstrapEnvelopeDto
+  -> PartnerBootstrapDataDto
+  -> PartnerStartupScreenDto
+```
+
+maps once into transport-independent application models:
+
+```text
+BootstrapSnapshot
+  ├── authenticated
+  ├── maintenance
+  ├── update
+  ├── features/config
+  └── nextScreen: StartupDestination
+```
+
+`StartupDestination` represents only trusted transport-independent startup navigation data, for example:
+
+```text
+screenId
+templateId
+templateType
+endpoint
+method
+authentication
+```
+
+The application layer must use typed method/authentication semantics rather than arbitrary unchecked strings after mapping.
+
+`runtime:application` does not depend on `feature:dynamic`. `app:composition` performs the thin adaptation:
+
+```text
+StartupDestination
+   -> DynamicScreenInstruction / DynamicDestination
+```
+
+using the existing Dynamic contract and its validation requirements.
+
+---
+
+## 7. Complete startup request-to-response flow
+
+```text
+platform host starts
         ↓
-initializeCarBroz...Application(...)
+AppConfiguration validated
         ↓
-AppConfiguration created and validated
-        ↓
-DI graph created
+Koin graph/composition initialized
         ↓
 Splash rendered
         ↓
-host lifecycle -> Foreground
+common lifecycle enters Foreground
         ↓
-SplashStore -> ApplicationRuntime.start()
+SplashIntent.LifecycleChanged(Foreground)
         ↓
-StartupCoordinator
-        ↓
-SessionRestoreStartupTask
-        ↓
-SessionStore.restore()
-        ├── valid persisted session -> Authenticated
-        ├── no session -> SignedOut
-        └── corrupt unsupported session -> canonical cleanup -> SignedOut
-        ↓
-BootstrapStartupTask
-        ↓
-ResolveBootstrapUseCase
-        ↓
-BootstrapRepository.load()
-        ↓
-RemoteBootstrapRepository
-        ↓
-NetworkRequest(
-    GET,
-    /api/v1/partner/bootstrap,
-    OPTIONAL_SESSION
-)
-        ↓
-NetworkDataSource.executeTyped(...)
-        ↓
-NetworkExecutor
-        ├── resolve trusted API base URL
-        ├── add X-CarBroz-Platform
-        ├── add X-CarBroz-App-Version
-        ├── add X-CarBroz-Build-Number
-        ├── add Authorization only when a canonical session exists
-        ├── enforce auth-recovery policy
-        ├── retry/timeout/connectivity/cache/observability policy
-        └── create final absolute URL
-        ↓
-KtorNetworkTransport
-        ↓
-Backend /api/v1/partner/bootstrap
-        ↓
-PartnerBootstrapEnvelopeDto
-        ↓
-RemoteBootstrapRepository validates/maps
-        ↓
-BootstrapSnapshot(
-    authenticated,
-    maintenance,
-    update,
-    nextPayload
-)
-        ↓
-ResolveBootstrapUseCase policy
-        ├── backend/local auth mismatch -> fail closed
-        ├── required update -> Blocked
-        ├── maintenance -> Blocked
-        ├── invalid nextPayload -> Failed
-        ├── optional update -> Ready + notice
-        └── valid payload -> Ready
-        ↓
-ApplicationRuntime.Ready
-        ↓
-SplashEffect.Navigate(startupPayload)
-        ↓
-NavigationProcessStateBridge.applyAfterBootstrap(...)
-        ↓
-DynamicDestination
-        ↓
-DynamicFeature
-        ↓
-nextScreen.endpoint
-        ↓
-SDUI decode/validate/normalize/render
+SplashStore
+        ├── ignores duplicate start while an attempt is active
+        └── invokes ResolveStartupUseCase
+                ↓
+        SessionStore.restore()
+                ├── valid persisted session -> Authenticated
+                ├── no persisted session -> SignedOut
+                └── malformed/unsupported -> canonical SessionStore cleanup/repair
+                ↓
+        BootstrapRepository.load()
+                ↓
+        RemoteBootstrapRepository
+                ↓
+        NetworkRequest(
+            GET,
+            /api/v1/partner/config/bootstrap,
+            OPTIONAL_SESSION
+        )
+                ↓
+        NetworkDataSource / NetworkExecutor / Ktor
+                ↓
+        canonical backend envelope
+                ↓
+        DTO validation + one-way mapping
+                ↓
+        BootstrapSnapshot
+                ↓
+        PartnerConfigStore.update(reusable config)
+                ↓
+        ResolveStartupUseCase policy
+                ├── required update -> StartupResult.RequiredUpdate
+                ├── maintenance -> StartupResult.Maintenance
+                ├── invalid/failure -> StartupResult.Failure
+                └── ready -> StartupResult.Ready(StartupDestination)
+                ↓
+        SplashStore reducer/state transition
+                ↓
+        Ready -> SplashEffect.Navigate(destination)
+                ↓
+        app:composition maps to DynamicDestination
+                ↓
+        NavigationProcessStateBridge.applyAfterBootstrap(freshRoot)
+                ↓
+        foundation:navigation
+                ↓
+        feature:dynamic
+                ↓
+        nextScreen.endpoint
+                ↓
+        runtime:sdui decode -> validate -> compatibility -> normalize -> render
 ```
 
-A successful bootstrap call is finished before normal SDUI screen loading starts.
+Bootstrap completes before normal SDUI screen acquisition begins.
 
 ---
 
-## 6. Static Splash MVI/UDF
+## 8. Splash MVI/UDF
+
+Canonical UDF:
 
 ```text
 Lifecycle / User
-      ↓ SplashIntent
+      ↓ intent
 SplashStore
-      ↓ delegates startup
-ApplicationRuntime
-      ↑ observable runtime state
-SplashStore
-      ↓ immutable SplashState / one-time SplashEffect
-SplashScreen / composition effect consumer
+      ↓ ResolveStartupUseCase
+StartupResult
+      ↓ reducer/state transition
+SplashState
+      ↓ UI
+SplashScreen
+      ↓ one-shot effect when required
+app:composition
 ```
 
-Splash knows nothing about Ktor, endpoint strings, JSON, DTOs, database/cache mechanics or persisted-session format.
-
 ### Intents
+
+At minimum:
 
 ```text
 LifecycleChanged(state)
@@ -317,6 +447,8 @@ UpdateClicked
 ```
 
 ### States
+
+At minimum:
 
 ```text
 Loading
@@ -328,241 +460,235 @@ Ready
 
 ### Effects
 
+At minimum:
+
 ```text
-Navigate(startupPayload)
+Navigate(StartupDestination)
 OpenUpdateUri(uri)
 ```
 
-Startup begins when common lifecycle enters Foreground.
+The Store owns attempt de-duplication for the feature. A second runtime state machine is prohibited.
+
+Cancellation must propagate; cancellation is not converted into a generic error.
 
 ---
 
-## 7. Startup orchestration
+## 9. ResolveStartupUseCase responsibility
 
-`ApplicationRuntime` is the only observable startup-state owner:
+`ResolveStartupUseCase` is an application use case, not a framework.
+
+It owns only orchestration/policy that spans canonical owners:
+
+1. ask `SessionStore` to restore canonical session state;
+2. stop with a stable startup failure only when restoration itself cannot complete safely;
+3. load fresh Partner bootstrap through `BootstrapRepository`;
+4. update the process-scoped `PartnerConfigStore` after successful validated mapping;
+5. apply startup blocking policy;
+6. return a typed `StartupResult`.
+
+It does **not**:
+
+- parse HTTP DTOs;
+- create Ktor clients;
+- manipulate NavigationStore directly;
+- render Splash;
+- duplicate session cleanup/refresh logic;
+- persist bootstrap to Room/DataStore;
+- execute arbitrary ordered task plugins.
+
+### Policy order
+
+Frozen order:
 
 ```text
-Idle
-Starting(attempt)
-Ready(attempt, payload, notices)
-Blocked(attempt, blocker)
-Failed(taskId, failure, attempt)
+restore canonical session
+  ↓
+load fresh bootstrap
+  ↓
+required update?
+  ├── yes -> block
+  ↓ no
+maintenance enabled?
+  ├── yes -> block
+  ↓ no
+validate/map startup destination
+  ↓
+ready
 ```
 
-`StartupCoordinator` executes exactly:
+Backend already evaluates version comparisons. Frontend consumes `required` / `optional`; it must not implement a second semantic-version policy engine.
 
-```text
-1. SessionRestoreStartupTask
-2. BootstrapStartupTask
-```
-
-Task results:
-
-```text
-Continue
-Resolved(StartupResolution.Ready | StartupResolution.Blocked)
-Failure(StartupFailure)
-```
-
-All tasks returning `Continue` must fail closed with `startup_missing_resolution`. Cancellation propagates.
-
-There is no third `ConfigStartupTask`.
+`optional == true` is stored as runtime config metadata for whichever real UI consumer is later approved. It does not justify a generic `StartupNotice` framework.
 
 ---
 
-## 8. Session restoration and bootstrap authentication
+## 10. PartnerConfigStore
 
-`foundation:session` owns session restoration and session truth.
+The bootstrap response intentionally contains small app-wide Partner configuration:
 
-`SessionStore.restore()` must:
+```text
+config.version
+features.registrationEnabled
+features.individualPartnerEnabled
+features.organizationPartnerEnabled
+update metadata
+```
 
-- restore a valid authenticated snapshot;
-- return signed-out success when no persisted session exists;
-- clear malformed/unsupported local snapshots through canonical persistence;
-- report storage/cleanup failures;
-- propagate cancellation.
+Those values must not be decoded and discarded.
 
-After restore, bootstrap uses `OPTIONAL_SESSION`:
+`PartnerConfigStore` is a small process-scoped application owner for the latest successfully validated reusable Partner configuration. It is not another MVI feature Store and does not own startup presentation state.
+
+It may expose a minimal read-only snapshot/flow required by real consumers. Do not turn it into a generic remote-config framework.
+
+### Do not persist bootstrap by default
+
+Bootstrap is server-authoritative for startup blockers and destination selection. Therefore this freeze does **not** add Room or DataStore persistence for the bootstrap document.
+
+Specifically, stale persisted values must not bypass fresh:
+
+```text
+maintenance
+required update
+authenticated truth
+nextScreen
+```
+
+If offline bootstrap behavior is approved later, it requires an explicit freshness/security product contract before persistence is introduced.
+
+---
+
+## 11. Session restoration and OPTIONAL_SESSION recovery
+
+`SessionStore.restore()` remains the sole restore/repair owner.
+
+Bootstrap uses `OPTIONAL_SESSION`:
 
 ```text
 SignedOut
-  -> no Authorization header
-  -> backend should return startup.authenticated = false
+  -> no Authorization
+  -> backend evaluates guest startup
 
 Authenticated
   -> Authorization: Bearer <access token>
-  -> backend should return startup.authenticated = true
+  -> backend validates supplied bearer
 ```
 
-If local and backend authentication truth disagree, `ResolveBootstrapUseCase` fails closed.
+Backend deliberately rejects an invalid supplied bearer instead of silently treating the same request as anonymous.
 
-An invalid supplied bearer must not silently downgrade the same request into guest bootstrap.
-
----
-
-## 9. Bootstrap application boundary
-
-`runtime:application/bootstrap` contains only transport-independent application semantics.
-
-`BootstrapRepository` is an inward contract. `data:bootstrap` implements it.
-
-The normalized `BootstrapSnapshot` contains only:
+Canonical generic network recovery for `OPTIONAL_SESSION` is:
 
 ```text
-authenticated
-maintenance(enabled, title, message)
-update(required, optional, minimumVersion, latestVersion, updateUri)
-nextPayload
+request with bearer
+   ↓
+401
+   ↓
+authentication recovery
+   ├── Recovered
+   │     -> retry once with refreshed Authorization
+   │
+   ├── SessionInvalidated
+   │     -> canonical session is now SignedOut
+   │     -> OPTIONAL_SESSION only: retry once without Authorization
+   │
+   └── Unavailable
+         -> return original failure
 ```
 
-The following do not cross into the runtime application boundary:
+For `SESSION`, `SessionInvalidated` must **not** cause anonymous retry.
 
-```text
-success
-message
-traceId
-Partner transport DTOs
-JsonElement
-raw HTTP response types
-```
+This policy belongs in the generic network/session boundary, not in `RemoteBootstrapRepository`.
 
-`nextPayload` is opaque serialized startup data until `StartupPayloadDecoder` validates it.
-
-The backend `features` object is decoded for wire compatibility but is not currently copied into `BootstrapSnapshot`. That is intentional until a real application-wide client consumer exists.
+The final successful bootstrap response is the server-authoritative startup authentication result. A lightweight invariant check may remain as defense in depth, but local/backend auth mismatch must not become a second parallel session model.
 
 ---
 
-## 10. ResolveBootstrapUseCase policy order
+## 12. Bootstrap repository/data adapter rules
 
-The order is part of the frozen contract:
+`BootstrapRepository` is owned inward by `runtime:application`. `RemoteBootstrapRepository` implements it in `data:bootstrap`.
 
-1. Load the remote bootstrap snapshot.
-2. Map transport/data failures into stable startup failures.
-3. Compare backend authentication truth with canonical local session state.
-4. Required update has first precedence.
-5. Required update requires a non-blank update URI; otherwise fail closed.
-6. Maintenance is a valid blocked state, not a transport failure.
-7. Decode and validate `nextPayload`.
-8. Optional update becomes a non-blocking notice.
-9. Return `Ready` with a trusted startup payload.
+The adapter owns:
 
-Do not move this policy into Splash, transport code or DTO mapping.
+- `/api/v1/partner/config/bootstrap`;
+- `GET`;
+- `OPTIONAL_SESSION` declaration;
+- Partner bootstrap DTOs;
+- canonical response-envelope validation;
+- required wire-field validation;
+- DTO -> application mapping;
+- normalized transport/data failure mapping.
 
----
+It must not:
 
-## 11. Partner bootstrap data adapter
-
-`data:bootstrap` contains exactly one remote implementation: `RemoteBootstrapRepository`.
-
-It owns:
-
-- `GET /api/v1/partner/bootstrap` through `BootstrapApiContract`;
-- `NetworkAuthentication.OPTIONAL_SESSION`;
-- Partner serializable DTOs;
-- success-envelope validation;
-- required-field validation;
-- DTO -> `BootstrapSnapshot` mapping;
-- network/decode failure -> `BootstrapRepositoryFailure` mapping.
-
-It does not:
-
-- create another HttpClient;
-- add metadata headers manually;
+- instantiate another HttpClient;
+- add global client metadata manually;
 - add Authorization manually;
-- own retries;
-- own session state;
-- decide maintenance/update precedence;
-- navigate;
+- implement token refresh;
+- decide required-update vs maintenance precedence;
+- own navigation;
 - render UI;
-- cache bootstrap in a local business-data cache.
-
-Bootstrap remains network-authoritative.
-
----
-
-## 12. Canonical network stack and headers
-
-All REST traffic uses:
-
-```text
-NetworkDataSource
-      ↓
-NetworkExecutor
-      ↓
-KtorNetworkTransport
-      ↓
-process-owned REST HttpClient
-```
-
-`ConfigurationNetworkHeaderProvider` supplies:
-
-```text
-X-CarBroz-Platform
-X-CarBroz-App-Version
-X-CarBroz-Build-Number
-```
-
-Values come from immutable `AppConfiguration`.
-
-Example Android development values currently resolve conceptually to:
-
-```text
-X-CarBroz-Platform: ANDROID
-X-CarBroz-App-Version: 1.0.0-dev
-X-CarBroz-Build-Number: 1
-```
-
-The backend version comparison supports the development suffix; frontend must still send the real build identity rather than hardcoding `1.0.0` in request code.
+- persist bootstrap configuration;
+- decode the returned startup destination through JSON a second time.
 
 ---
 
-## 13. Dynamic handoff
+## 13. Navigation restoration is retained
 
-After `ApplicationRuntime.Ready`, bootstrap is complete.
+`NavigationProcessStateBridge` has a valid process-restoration responsibility and remains in `app:composition`.
+
+Saved navigation must never bypass fresh server-authoritative startup:
 
 ```text
-ApplicationRuntime.Ready(DynamicScreenInstruction)
-      ↓
-SplashEffect.Navigate
-      ↓
-NavigationProcessStateBridge.applyAfterBootstrap
-      ↓
+capture restored navigation state
+    ↓
+keep pending only
+    ↓
+show Splash
+    ↓
+fresh session restore + bootstrap
+    ↓
+fresh startup root
+    ↓
+compare restored root navigationId
+    ├── exact compatible root -> restore validated saved stack
+    └── mismatch/malformed/unsafe -> discard and reset to fresh root
+```
+
+The bridge does not decide bootstrap policy and does not become a second navigation engine.
+
+`foundation:navigation` remains the only owner of stack mutation/mechanics.
+
+---
+
+## 14. Dynamic handoff and SDUI boundary
+
+Startup only selects the first trusted semantic destination.
+
+After `StartupResult.Ready`:
+
+```text
+StartupDestination
+    ↓ thin app:composition adaptation
 DynamicDestination
-      ↓
+    ↓
+NavigationProcessStateBridge
+    ↓
+NavigationStore
+    ↓
 DynamicFeature
-      ↓
-SDUI screen fetch
-      ↓
-Decode -> Validate -> Compatibility -> Normalize -> Runtime IR
-      ↓
-Dynamic MVI Store / renderer
-      ↓
-Interaction
-      ├── generic API -> NetworkActionExecutor -> canonical network stack
-      ├── navigation
-      ├── capability
-      └── registered domain operation only when genuine client semantics exist
+    ↓ screen request
+runtime:sdui
 ```
 
-Login, OTP, Dashboard, Profile, Booking and Earnings remain backend-driven screens.
+SDUI has zero responsibility for:
 
----
+- bootstrap transport;
+- session restoration;
+- maintenance;
+- required update;
+- feature-config persistence;
+- initial startup policy.
 
-## 14. Navigation restoration
-
-Saved dynamic navigation cannot bypass fresh startup:
-
-```text
-capture saved state
-  -> keep pending
-  -> show Splash
-  -> fresh session restore
-  -> fresh bootstrap
-  -> fresh server-authoritative root
-  -> compare saved root
-      ├── compatible -> restore validated stack
-      └── incompatible/malformed -> discard and ResetTo fresh root
-```
+Normal Login, OTP, Dashboard, KYC, Profile, Booking and Earnings screens remain backend-driven and use the one Dynamic/SDUI runtime.
 
 ---
 
@@ -571,554 +697,251 @@ capture saved state
 Allowed:
 
 ```text
-feature:splash       -> runtime:application + presentation/lifecycle foundations
-runtime:application  -> foundation owners only
-feature:dynamic      -> runtime:application to implement StartupPayloadDecoder
+feature:splash       -> runtime:application + lifecycle/presentation foundations
+runtime:application  -> foundation:session + foundation-neutral contracts
+                         (no data implementation, Compose, Navigation3 or feature dependency)
 data:bootstrap       -> runtime:application + data:network
-app:composition      -> runtime/feature/data/foundation for wiring
+app:composition      -> feature/runtime/data/foundation for wiring/adaptation
+feature:dynamic      -> its existing runtime/foundation owners
 ```
 
 Forbidden:
 
 ```text
-runtime:application -> feature:dynamic
-data:network        -> runtime:application
-data:network        -> Partner bootstrap DTOs
-feature:splash      -> data:network / data:bootstrap / session persistence / bootstrap DTOs
-foundation:*        -> Partner bootstrap transport code
-app:startup         -> anything; the module must not exist
+feature:splash       -> data:network / data:bootstrap / bootstrap DTOs
+feature:splash       -> secure session persistence implementation
+runtime:application  -> feature:dynamic
+runtime:application  -> Ktor / Partner transport DTOs / Navigation3
+data:network         -> runtime:application Partner bootstrap models
+data:network         -> Partner bootstrap DTOs/routes
+runtime:sdui         -> bootstrap policy
+foundation:*         -> Partner bootstrap transport code
+app:startup          -> anything; module must not exist
 ```
+
+`runtime:application` may depend on the canonical session abstraction/owner required to invoke restoration; do not invert the dependency by making session depend on Partner startup.
 
 ---
 
-## 16. Current implementation status
+## 16. Focused refactor classification
 
-The architecture implementation for this slice is present:
+The implementation phase that follows this documentation freeze must first re-inspect current references and tests, then apply the smallest safe migration.
+
+### KEEP
 
 ```text
-✅ static Splash presentation path
-✅ ApplicationRuntime
-✅ StartupCoordinator
-✅ SessionRestoreStartupTask
-✅ BootstrapStartupTask
-✅ ResolveBootstrapUseCase
-✅ BootstrapRepository application contract
-✅ data:bootstrap module
-✅ GET /api/v1/partner/bootstrap endpoint contract
-✅ Partner bootstrap DTOs
-✅ RemoteBootstrapRepository
-✅ canonical NetworkDataSource / NetworkExecutor / Ktor transport
-✅ global platform/version/build headers
-✅ OPTIONAL_SESSION integration
-✅ fail-closed invalid bearer recovery
-✅ DynamicStartupPayloadDecoder
-✅ dynamic SDUI handoff wiring
-✅ Android host lifecycle initialization
-✅ Desktop host lifecycle initialization
+feature:splash module
+SplashContract / SplashStore / SplashScreen
+runtime:application module
+BootstrapRepository concept
+foundation:session / SessionStore
+Partner data:bootstrap module
+canonical data:network stack
+foundation:navigation / NavigationStore
+NavigationProcessStateBridge responsibility
+feature:dynamic
+runtime:sdui
 ```
 
-Focused startup/network tests and `verifyStartupArchitecture` were green at the last verified development baseline.
+### REPLACE / MERGE
 
-This means no new bootstrap/config architecture is required before real API testing.
+```text
+ApplicationRuntime + startup task state machine
+    -> SplashStore + ResolveStartupUseCase
+
+ResolveBootstrapUseCase
+    -> ResolveStartupUseCase
+
+opaque nextPayload JSON round-trip
+    -> typed StartupDestination mapping
+
+throw-away config/features decoding
+    -> PartnerConfigStore
+```
+
+### DELETE AFTER PROVEN ZERO REFERENCES
+
+```text
+StartupCoordinator
+StartupTask
+SessionRestoreStartupTask
+BootstrapStartupTask
+ApplicationRuntime/ApplicationRuntimeState
+StartupPayload/StartupPayloadDecoder
+DynamicStartupPayloadDecoder
+StartupNotice
+obsolete tests/DI bindings/imports for those abstractions
+```
+
+No deletion is performed until replacement tests and consumers are migrated.
 
 ---
 
-## 17. Platform host configuration
+## 17. Verification requirements for the refactor
 
-### Desktop host
+Focused behavior tests must cover at least:
 
-Desktop reads:
+### Splash/MVI
 
-```text
-system property: carbroz.environment
-or environment variable: CARBROZ_ENVIRONMENT
+- lifecycle Foreground starts one attempt;
+- duplicate Foreground/start while loading does not launch a second request;
+- retry launches a new attempt only after terminal retryable state;
+- RequiredUpdate mapping;
+- Maintenance mapping;
+- Failure mapping;
+- Ready emits one navigation effect;
+- cancellation propagates.
 
-system property: carbroz.apiBaseUrl
-or environment variable: CARBROZ_API_BASE_URL
-```
+### Application startup
 
-If not provided, development currently falls back to:
+- session restore occurs before bootstrap;
+- corrupt session cleanup remains owned by SessionStore;
+- required update precedes maintenance;
+- maintenance blocks normal destination;
+- valid ready response returns typed destination;
+- optional update remains non-blocking configuration;
+- config/features are retained in PartnerConfigStore;
+- no config from one failed attempt incorrectly replaces last valid config.
 
-```text
-https://development.invalid
-```
+### Data bootstrap
 
-Therefore real local testing must override the base URL.
+- exact `/api/v1/partner/config/bootstrap` route;
+- `GET` + `OPTIONAL_SESSION`;
+- canonical `status/code/message/data/traceId` envelope;
+- no `success` dependency;
+- required-field validation;
+- typed `nextScreen` mapping;
+- no JsonElement/String re-decode path.
 
-### Android host
+### Network/session
 
-Android reads generated BuildConfig values:
+- OPTIONAL_SESSION without token executes anonymously;
+- valid token executes authenticated;
+- 401 + successful refresh retries with refreshed token;
+- 401 + definitive session invalidation retries OPTIONAL_SESSION once anonymously;
+- SESSION never downgrades to anonymous;
+- no infinite recovery loop.
 
-```text
-BuildConfig.CARBROZ_ENVIRONMENT
-BuildConfig.CARBROZ_API_BASE_URL
-BuildConfig.VERSION_NAME
-BuildConfig.VERSION_CODE
-BuildConfig.APPLICATION_ID
-```
+### Navigation restoration
 
-Development base URL comes from Gradle property:
+- pending state does not mutate NavigationStore before fresh bootstrap;
+- matching restored root may restore stack;
+- mismatched root is discarded/reset;
+- malformed/unsafe state fails closed.
 
-```text
-carbroz.api.development
-```
+Architecture gates must verify:
 
-and currently defaults to:
-
-```text
-https://development.invalid
-```
-
-So a real local backend URL must be supplied for development builds.
-
----
-
-## 18. Local backend testing — Desktop
-
-Backend example:
-
-```text
-http://127.0.0.1:3000
-```
-
-Desktop development configuration already allows local HTTP for `localhost` / `127.0.0.1`.
-
-### PowerShell
-
-```powershell
-$env:CARBROZ_ENVIRONMENT="development"
-$env:CARBROZ_API_BASE_URL="http://127.0.0.1:3000"
-.\gradlew.bat :desktopApp:run
-```
-
-Expected request:
-
-```http
-GET http://127.0.0.1:3000/api/v1/partner/bootstrap
-```
-
-Expected startup behavior for a fresh signed-out desktop app:
-
-```text
-Splash
- -> bootstrap guest response
- -> partner_login DynamicScreenInstruction
- -> navigation to dynamic destination
- -> GET /api/v1/partner/sdui/registry/partner_login
-```
-
-### Desktop readiness
-
-```text
-Bootstrap implementation: READY
-Local HTTP configuration: READY
-Base URL override mechanism: READY
-Can test against local backend: YES
-```
-
-No frontend source-code change is required merely to point Desktop at `127.0.0.1:3000`.
+- Splash has no data-network/bootstrap transport dependency;
+- application startup has no Ktor/Compose/Navigation3/feature dependency;
+- only data:bootstrap owns Partner bootstrap transport DTO/route;
+- no superseded startup framework remains after migration;
+- one canonical startup presentation state owner exists.
 
 ---
 
-## 19. Local backend testing — Android Emulator
+## 18. Local backend integration
 
-Android Emulator cannot use host-machine `127.0.0.1` for the backend. The normal emulator host-loopback alias is:
-
-```text
-10.0.2.2
-```
-
-Target base URL:
+The configured API base URL is platform/environment owned. The bootstrap adapter uses only the relative route:
 
 ```text
-http://10.0.2.2:3000
+/api/v1/partner/config/bootstrap
 ```
 
-However two development-host gaps currently block direct emulator testing:
-
-### Gap A — configuration validation
-
-`ConfigurationValidator` currently permits development HTTP only when the base URL begins with:
+Desktop local example:
 
 ```text
-http://localhost
-http://127.0.0.1
+base URL: http://127.0.0.1:3000
+final call: http://127.0.0.1:3000/api/v1/partner/config/bootstrap
 ```
 
-It does not currently permit:
+Android emulator local example:
 
 ```text
-http://10.0.2.2
+base URL: http://10.0.2.2:3000
+final call: http://10.0.2.2:3000/api/v1/partner/config/bootstrap
 ```
 
-Therefore emulator development configuration would fail before the request is executed.
-
-Required change:
-
-```text
-foundation/configuration/ConfigurationValidator.kt
-```
-
-Allow `http://10.0.2.2` only for `AppEnvironment.Development`.
-
-Do not relax staging/production HTTPS requirements.
-
-### Gap B — Android cleartext HTTP
-
-The shared Android manifest currently has INTERNET permission but does not enable cleartext HTTP.
-
-For local emulator development, add a **development-only** Android manifest override/network-security rule that permits local HTTP.
-
-Preferred ownership:
-
-```text
-androidApp/src/development/AndroidManifest.xml
-```
-
-or an equivalent development-only network security config.
-
-Do not enable cleartext globally for staging/production.
-
-### Development base URL
-
-After those two gaps are fixed, supply:
-
-```text
-carbroz.api.development=http://10.0.2.2:3000
-```
-
-For example through a local/uncommitted Gradle property or command-line `-P` value.
-
-Expected call:
-
-```http
-GET http://10.0.2.2:3000/api/v1/partner/bootstrap
-```
-
-### Android Emulator readiness
-
-```text
-Bootstrap implementation: READY
-Endpoint/DTO mapping: READY
-Headers/auth integration: READY
-Development base URL override: READY
-10.0.2.2 configuration validation: PENDING
-Development-only cleartext allowance: PENDING
-Can directly test local HTTP today without those fixes: NO
-```
-
-Once those two small host-level changes are applied, no bootstrap architecture work remains before emulator testing.
+Development-only local HTTP allowances remain platform/configuration concerns. Do not relax staging/production trusted-host/HTTPS policy to support local testing.
 
 ---
 
-## 20. Local backend testing — Physical Android device
+## 19. Change guide
 
-For a real device on the same LAN, use the development machine's LAN IP, for example:
-
-```text
-http://192.168.x.x:3000
-```
-
-Additional requirements:
-
-- backend must listen on an address reachable from the LAN, not only an inaccessible local binding;
-- Windows firewall/network rules must allow the port;
-- device and machine must be on the same reachable network;
-- `ConfigurationValidator` must explicitly permit the chosen development-only LAN HTTP policy if local physical-device testing is required;
-- Android development cleartext policy must permit it.
-
-Do not broaden production URL validation just to support local device testing.
-
----
-
-## 21. Change guide — what to edit when requirements change
-
-| Requirement | Correct frontend owner / files |
+| Requirement | Canonical owner |
 | --- | --- |
-| Change Partner bootstrap path | `data/bootstrap/BootstrapApiContract.kt` + tests + README; coordinate with backend contract |
-| Change request HTTP method | `BootstrapApiContract`/repository request construction + tests |
-| Add/rename/remove bootstrap response field used only for wire decoding | `PartnerBootstrapDto.kt` + `RemoteBootstrapRepository` tests |
-| Add a new startup application semantic | `runtime/application/bootstrap/BootstrapContract.kt` + `ResolveBootstrapUseCase.kt` + mapping/tests |
-| Change maintenance/update precedence | `ResolveBootstrapUseCase.kt` + runtime tests |
-| Change local/backend auth consistency policy | `ResolveBootstrapUseCase.kt` + session/runtime tests |
-| Change global platform/version/build headers | `ConfigurationNetworkHeaderProvider.kt` + network tests; do not change bootstrap repository manually |
-| Change Authorization behavior | canonical session/network ownership; never bootstrap DTO/repository-specific auth code |
-| Change API base URL source | platform host configuration + `foundation:configuration`; not `RemoteBootstrapRepository` |
-| Add development emulator host support | `ConfigurationValidator.kt` + tests + Android development host policy |
-| Change backend startup destination values only | normally backend `partner.bootstrap`; frontend should not hardcode Login/Dashboard |
-| Change SDUI screen structure/content | backend SDUI contract/runtime compatibility; not bootstrap application policy |
-| Change dynamic payload validation rules | `feature:dynamic` codec/decoder + tests |
-| Change common API envelope (`success/data/traceId`) | coordinated backend/global API contract + bootstrap DTO mapping; treat as versioned contract change |
-| Add client-wide feature-flag consumption | prove consumer first, then map into existing `foundation:configuration/featureflag` ownership |
-| Add Partner KYC/jobs/earnings business data | owning domain/client operation boundary, not generic bootstrap |
+| Bootstrap endpoint/method/wire DTO | `data:bootstrap` |
+| Bootstrap application result/policy | `runtime:application` |
+| Splash state/UI/retry intent | `feature:splash` |
+| Session restore/repair | `foundation:session` |
+| Authorization/401 recovery | `data:network` + `foundation:session` |
+| Global platform/app/build headers | canonical network/configuration provider |
+| Reusable Partner feature config | `PartnerConfigStore` in `runtime:application` |
+| API base URL/environment | `foundation:configuration` + platform host |
+| Saved back-stack mechanics | `foundation:navigation` |
+| Saved-state-to-fresh-root coordination | `NavigationProcessStateBridge` in `app:composition` |
+| Dynamic screen loading | `feature:dynamic` |
+| SDUI decode/validation/rendering | `runtime:sdui` |
+| Backend startup destination values | backend Partner bootstrap configuration |
+
+Do not create a new architectural layer merely because one requirement changes.
 
 ---
 
-## 22. Add / rename / remove bootstrap fields
+## 20. Prohibited regressions
 
-### A. Add a response field
+Do not reintroduce:
 
-First determine whether the new field is:
-
-```text
-transport-only
-or
-startup application semantic
-```
-
-#### Transport-only field
-
-Example: backend adds metadata that the client decodes for compatibility but does not need for startup policy.
-
-Change:
-
-```text
-PartnerBootstrapDto.kt
-+ DTO/repository tests
-```
-
-Do not expand `BootstrapSnapshot` without a real application consumer.
-
-#### Startup semantic field
-
-Example: backend adds a new startup blocker that the client must act on.
-
-Change flow:
-
-```text
-backend contract
-  -> PartnerBootstrapDto.kt
-  -> BootstrapContract.kt
-  -> RemoteBootstrapRepository mapping
-  -> ResolveBootstrapUseCase policy
-  -> StartupResolution/State if necessary
-  -> Splash mapping only if presentation must change
-  -> tests at every changed boundary
-```
-
-### B. Rename a field
-
-A rename is a client/server contract change.
-
-Update together:
-
-```text
-backend response contract
- -> PartnerBootstrapDto
- -> repository mapping
- -> tests
- -> compatibility/versioning decision
- -> documentation
-```
-
-Do not rename only the Kotlin application model while leaving transport expectations inconsistent.
-
-### C. Delete a field
-
-Before deleting:
-
-1. Confirm the backend has removed/versioned it.
-2. Confirm no frontend mapping/runtime consumer uses it.
-3. Remove it from DTOs.
-4. Remove mapping/application semantics only if no longer required.
-5. Update tests.
-6. Consider older backend/client compatibility where applicable.
+- generic `StartupTask` pipelines without demonstrated multi-task need;
+- a second observable startup runtime state beside Splash MVI state;
+- `BootstrapStore` / `BootstrapDestinationStore`;
+- `app:startup`;
+- bootstrap-specific HttpClient/network executor;
+- Partner bootstrap DTOs in `data:network`;
+- navigation mechanics in Splash/application startup;
+- JSON String/`JsonElement` round-trip for `nextScreen`;
+- stale bootstrap persisted as authority for maintenance/update/auth/destination;
+- Login/OTP/Dashboard-specific frontend networking/features solely because those screens exist;
+- SDUI involvement in startup blockers;
+- anonymous downgrade for required `SESSION` requests;
+- old `/api/v1/partner/bootstrap` route;
+- old `success: Boolean` bootstrap envelope assumption.
 
 ---
 
-## 23. Change endpoint, headers or auth
+## 21. Freeze gate
 
-### Endpoint change
+Documentation is frozen before implementation.
 
-Current:
-
-```text
-/api/v1/partner/bootstrap
-```
-
-Frontend owner:
+The focused bootstrap refactor may start only from this ownership model:
 
 ```text
-data/bootstrap/BootstrapApiContract.kt
+SplashStore
+    -> ResolveStartupUseCase
+        -> SessionStore.restore()
+        -> BootstrapRepository
+            -> RemoteBootstrapRepository
+                -> canonical Network stack
+        -> PartnerConfigStore
+        -> StartupResult
+    -> SplashState / SplashEffect
+    -> app:composition
+    -> NavigationProcessStateBridge
+    -> foundation:navigation
+    -> feature:dynamic
+    -> runtime:sdui
 ```
 
-A URL change must be coordinated with backend route tests and frontend integration tests.
-
-Do not move endpoint strings into Splash or `runtime:application`.
-
-### New request header
-
-Ask first whether the header is global or bootstrap-specific.
-
-#### Global client metadata
+The refactor is complete only when:
 
 ```text
-ConfigurationNetworkHeaderProvider
- -> NetworkExecutor
- -> every canonical REST request
+README
+== Master Constitution
+== Dynamic Runtime Architecture
+== module dependency graph
+== DI graph
+== implementation ownership
+== tests
+== current backend bootstrap contract
 ```
 
-#### Bootstrap-only transport header
-
-Only if genuinely bootstrap-specific, add it at the transport adapter/request boundary and test that it cannot override provider-owned reserved headers.
-
-### Auth policy change
-
-Current:
-
-```text
-OPTIONAL_SESSION
-```
-
-Any change must remain within canonical network/session policy. Never manually concatenate `Bearer` inside `RemoteBootstrapRepository`.
-
----
-
-## 24. Troubleshooting local bootstrap
-
-### App remains on Splash / shows generic startup error
-
-Check in this order:
-
-```text
-1. Is backend running?
-2. Is platform base URL real or still *.invalid?
-3. Does ConfigurationValidator accept the URL?
-4. Does Android allow local cleartext if using HTTP?
-5. Can the host reach the backend address?
-6. Are X-CarBroz-Platform/App-Version/Build-Number present?
-7. Is an Authorization header being sent unexpectedly?
-8. Does backend return success=true and data?
-9. Does backend startup.authenticated match local SessionProvider state?
-10. Is nextScreen valid for DynamicStartupPayloadDecoder?
-11. Does nextScreen.endpoint exist and return valid SDUI after navigation?
-```
-
-### Bootstrap succeeds but next screen fails
-
-Bootstrap and SDUI loading are separate stages.
-
-```text
-/bootstrap success
-  !=
-nextScreen.endpoint success
-```
-
-If `partner_login` bootstrap succeeds but the screen cannot render, debug:
-
-```text
-/api/v1/partner/sdui/registry/partner_login
-```
-
-through the dynamic runtime path, not `RemoteBootstrapRepository`.
-
-### Invalid bearer
-
-An invalid bearer must not be retried anonymously as the same bootstrap request. The network/session path must fail closed after invalidation according to current recovery rules.
-
-### 404
-
-Confirm the final composed URL is exactly:
-
-```text
-<apiBaseUrl>/api/v1/partner/bootstrap
-```
-
-and `apiBaseUrl` does not end with `/`.
-
----
-
-## 25. Mandatory verification
-
-### Focused architecture tests
-
-```powershell
-.\gradlew.bat --no-daemon :foundation:session:allTests
-.\gradlew.bat --no-daemon :data:network:allTests
-.\gradlew.bat --no-daemon :data:bootstrap:allTests
-.\gradlew.bat --no-daemon :runtime:application:allTests
-.\gradlew.bat --no-daemon :feature:dynamic:allTests
-.\gradlew.bat --no-daemon :feature:splash:allTests
-.\gradlew.bat --no-daemon verifyStartupArchitecture
-```
-
-### Broader verification
-
-```powershell
-.\gradlew.bat --no-daemon :app:composition:allTests
-.\gradlew.bat --no-daemon allTests
-.\gradlew.bat --no-daemon assemble
-```
-
-Use the focused gates after startup/network changes and broader gates before merging/freezing.
-
-### Manual backend sanity check
-
-```powershell
-$headers = @{
-    "X-CarBroz-Platform" = "ANDROID"
-    "X-CarBroz-App-Version" = "1.0.0"
-    "X-CarBroz-Build-Number" = "1"
-}
-
-Invoke-RestMethod `
-    -Uri "http://127.0.0.1:3000/api/v1/partner/bootstrap" `
-    -Headers $headers `
-    -Method GET |
-    ConvertTo-Json -Depth 10
-```
-
-This verifies the backend contract independently of frontend host networking.
-
----
-
-## 26. Current pending work before real platform testing
-
-### Desktop
-
-```text
-Nothing architectural is pending.
-```
-
-Required operational steps only:
-
-```text
-1. Start backend on 127.0.0.1:3000.
-2. Set CARBROZ_ENVIRONMENT=development.
-3. Set CARBROZ_API_BASE_URL=http://127.0.0.1:3000.
-4. Run :desktopApp:run.
-5. Observe Splash -> bootstrap -> dynamic handoff.
-```
-
-### Android Emulator
-
-Two source-level local-development changes remain:
-
-```text
-1. Allow development-only http://10.0.2.2 in ConfigurationValidator.
-2. Allow development-only Android cleartext HTTP.
-```
-
-Then:
-
-```text
-3. Set carbroz.api.development=http://10.0.2.2:3000.
-4. Install/run developmentDebug.
-5. Observe Splash -> bootstrap -> dynamic handoff.
-```
-
-These are host-development integration changes only. They do not change the frozen startup architecture.
-
----
-
-## 27. Freeze gate
-
-This slice remains frozen only when:
-
-```text
-README == implementation == Gradle graph == DI graph == tests == backend client contract
-```
-
-A green build with old/new ownership in parallel is a failure, not a freeze.
-
-Before any future bootstrap change, determine the correct owner first, update the contract and tests together, and avoid introducing parallel configuration/startup/network paths.
+A green build with old/new startup frameworks in parallel is a failure, not a freeze.
