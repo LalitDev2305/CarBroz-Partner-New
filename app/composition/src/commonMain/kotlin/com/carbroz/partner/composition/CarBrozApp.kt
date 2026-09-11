@@ -16,6 +16,7 @@ import com.carbroz.feature.dynamic.DynamicDestination
 import com.carbroz.feature.dynamic.DynamicFeature
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenInstruction
+import com.carbroz.feature.dynamic.DynamicScreenRequest
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.feature.splash.SplashEffect
 import com.carbroz.feature.splash.SplashIntent
@@ -31,9 +32,14 @@ import com.carbroz.foundation.navigation.Navigation3Host
 import com.carbroz.foundation.navigation.NavigationDestination
 import com.carbroz.foundation.navigation.NavigationDestinationContent
 import com.carbroz.foundation.navigation.NavigationStore
-import com.carbroz.foundation.observability.CrashEvent
-import com.carbroz.foundation.observability.Observability
-import com.carbroz.runtime.application.ApplicationRuntime
+import com.carbroz.runtime.application.startup.ResolveStartupUseCase
+import com.carbroz.runtime.application.startup.StartupAuthentication
+import com.carbroz.runtime.application.startup.StartupDestination
+import com.carbroz.runtime.application.startup.StartupRequestMethod
+import com.carbroz.runtime.sdui.model.NodeType
+import com.carbroz.runtime.sdui.model.RequestAuthentication
+import com.carbroz.runtime.sdui.model.RequestMethod
+import com.carbroz.runtime.sdui.model.ScreenDestination
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.koinInject
@@ -43,15 +49,14 @@ import org.koin.compose.koinInject
 fun CarBrozApp() {
     val navigationStore = koinInject<NavigationStore>()
     val syncActivationCoordinator = koinInject<SyncActivationCoordinator>()
-    val observability = koinInject<Observability>()
-    val applicationRuntime = koinInject<ApplicationRuntime>()
+    val resolveStartupUseCase = koinInject<ResolveStartupUseCase>()
     val lifecycle = koinInject<AppLifecycle>()
     val capabilityRegistry = koinInject<CapabilityRegistry>()
     val dynamicFeatureFactory = koinInject<DynamicFeatureFactory>()
     val scope = rememberCoroutineScope()
 
-    val splashStore = remember(applicationRuntime, scope) {
-        SplashStore(applicationRuntime, scope)
+    val splashStore = remember(resolveStartupUseCase, scope) {
+        SplashStore(resolveStartupUseCase, scope)
     }
     val navigationState by navigationStore.state.collectAsState()
     val splashState by splashStore.state.collectAsState()
@@ -75,17 +80,9 @@ fun CarBrozApp() {
             when (effect) {
                 is SplashEffect.Navigate -> {
                     if (navigationStore.state.value.current != SplashDestination) return@collect
-                    val instruction = effect.payload as? DynamicScreenInstruction
-                    if (instruction == null) {
-                        observability.crash(
-                            CrashEvent(
-                                category = "app-composition",
-                                message = "Unsupported startup payload produced by application runtime.",
-                            ),
-                        )
-                    } else {
-                        NavigationProcessStateBridge.applyAfterBootstrap(DynamicDestination(instruction))
-                    }
+                    NavigationProcessStateBridge.applyAfterBootstrap(
+                        DynamicDestination(effect.destination.toDynamicInstruction()),
+                    )
                 }
 
                 is SplashEffect.OpenUpdateUri -> {
@@ -118,6 +115,24 @@ fun CarBrozApp() {
         )
     }
 }
+
+private fun StartupDestination.toDynamicInstruction(): DynamicScreenInstruction = DynamicScreenInstruction(
+    destination = ScreenDestination(
+        screenId = screenId,
+        templateId = templateId,
+        templateType = NodeType(templateType),
+    ),
+    request = DynamicScreenRequest(
+        method = when (method) {
+            StartupRequestMethod.GET -> RequestMethod.GET
+        },
+        endpoint = endpoint,
+        authentication = when (authentication) {
+            StartupAuthentication.NONE -> RequestAuthentication.NONE
+            StartupAuthentication.SESSION -> RequestAuthentication.SESSION
+        },
+    ),
+)
 
 @Composable
 private fun DestinationContent(
