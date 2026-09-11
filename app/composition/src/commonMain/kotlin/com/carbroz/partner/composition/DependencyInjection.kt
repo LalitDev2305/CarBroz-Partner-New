@@ -46,7 +46,6 @@ import com.carbroz.feature.dynamic.DynamicBindingContextFactory
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
-import com.carbroz.feature.dynamic.DynamicStartupPayloadDecoder
 import com.carbroz.feature.dynamic.NetworkActionExecutor
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.analytics.AnalyticsPolicy
@@ -91,14 +90,9 @@ import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
 import com.carbroz.platform.background.BackgroundTaskRunner
 import com.carbroz.platform.background.ContinuousExecutionController
 import com.carbroz.runtime.action.ActionPreparerFactory
-import com.carbroz.runtime.application.ApplicationRuntime
-import com.carbroz.runtime.application.DefaultApplicationRuntime
-import com.carbroz.runtime.application.bootstrap.BootstrapRepository
-import com.carbroz.runtime.application.bootstrap.ResolveBootstrapUseCase
-import com.carbroz.runtime.application.bootstrap.StartupPayloadDecoder
-import com.carbroz.runtime.application.startup.BootstrapStartupTask
-import com.carbroz.runtime.application.startup.SessionRestoreStartupTask
-import com.carbroz.runtime.application.startup.StartupCoordinator
+import com.carbroz.runtime.application.startup.BootstrapRepository
+import com.carbroz.runtime.application.startup.PartnerConfigStore
+import com.carbroz.runtime.application.startup.ResolveStartupUseCase
 import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.SduiRuntimeFactory
 import com.carbroz.runtime.sdui.compatibility.SduiClientCompatibility
@@ -166,7 +160,6 @@ fun carBrozApplicationModule(
     single { SessionStore(persistence = get()) }
     single<SessionProvider> { get<SessionStore>() }
     single { TokenExpiryPolicy(clock = get()) }
-    single { SessionRestoreStartupTask(sessionStore = get()) }
 
     single<CarBrozDatabaseProvider> { databaseProvider }
     single<CarBrozDatabase> { get<CarBrozDatabaseProvider>().get() }
@@ -250,17 +243,15 @@ fun carBrozApplicationModule(
     single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
     single { NetworkActionExecutor(dataSource = get()) }
 
-    single { DynamicScreenInstructionCodec() }
-    single<StartupPayloadDecoder> { DynamicStartupPayloadDecoder(codec = get()) }
     single<BootstrapRepository> { RemoteBootstrapRepository(network = get()) }
+    single { PartnerConfigStore() }
     single {
-        ResolveBootstrapUseCase(
-            repository = get(),
-            sessionProvider = get(),
-            payloadDecoder = get(),
+        ResolveStartupUseCase(
+            sessionStore = get(),
+            bootstrapRepository = get(),
+            partnerConfigStore = get(),
         )
     }
-    single { BootstrapStartupTask(resolveBootstrap = get()) }
 
     single<SduiRuntime> {
         SduiRuntimeFactory.createCore(
@@ -279,6 +270,7 @@ fun carBrozApplicationModule(
     }
     single { FormTemplateRuntimeFactory(get<SduiRuntime>().registry) }
     single { DynamicScreenCache() }
+    single { DynamicScreenInstructionCodec() }
     single {
         DynamicFeatureFactory(
             sduiRuntime = get(),
@@ -316,16 +308,6 @@ fun carBrozApplicationModule(
             policy = get(),
         )
     }
-
-    single {
-        StartupCoordinator(
-            tasks = listOf(get<SessionRestoreStartupTask>(), get<BootstrapStartupTask>()),
-            observability = get(),
-            clock = get(),
-            correlationIdProvider = get(),
-        )
-    }
-    single<ApplicationRuntime> { DefaultApplicationRuntime(startupCoordinator = get()) }
 }
 
 internal fun initializeCarBrozDependencyInjection(
