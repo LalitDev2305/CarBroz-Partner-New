@@ -28,7 +28,6 @@ import com.carbroz.feature.dynamic.DynamicBindingContextFactory
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
 import com.carbroz.feature.dynamic.DynamicScreenCache
 import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
-import com.carbroz.feature.dynamic.DynamicStartupPayloadDecoder
 import com.carbroz.feature.dynamic.NetworkActionExecutor
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
@@ -58,13 +57,9 @@ import com.carbroz.platform.background.ContinuousExecutionRequest
 import com.carbroz.platform.background.ContinuousExecutionStartResult
 import com.carbroz.platform.background.ContinuousExecutionState
 import com.carbroz.runtime.action.ActionPreparer
-import com.carbroz.runtime.application.ApplicationRuntime
-import com.carbroz.runtime.application.bootstrap.BootstrapRepository
-import com.carbroz.runtime.application.bootstrap.ResolveBootstrapUseCase
-import com.carbroz.runtime.application.bootstrap.StartupPayloadDecoder
-import com.carbroz.runtime.application.startup.BootstrapStartupTask
-import com.carbroz.runtime.application.startup.SessionRestoreStartupTask
-import com.carbroz.runtime.application.startup.StartupCoordinator
+import com.carbroz.runtime.application.startup.BootstrapRepository
+import com.carbroz.runtime.application.startup.PartnerConfigStore
+import com.carbroz.runtime.application.startup.ResolveStartupUseCase
 import com.carbroz.runtime.sdui.SduiRuntime
 import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
 import kotlinx.coroutines.flow.Flow
@@ -110,7 +105,8 @@ class DependencyInjectionTest {
             val authorizationProvider = koin.get<NetworkAuthorizationProvider>()
             val networkDataSource = koin.get<NetworkDataSource>()
             val bootstrapRepository = koin.get<BootstrapRepository>()
-            val payloadDecoder = koin.get<StartupPayloadDecoder>()
+            val partnerConfigStore = koin.get<PartnerConfigStore>()
+            val resolveStartup = koin.get<ResolveStartupUseCase>()
             val realtimeTransport = koin.get<KtorRealtimeTransport>()
 
             assertSame(controller, koin.get<AppLifecycle>())
@@ -125,7 +121,6 @@ class DependencyInjectionTest {
             koin.get<SessionSnapshotCodec>()
             koin.get<SessionPersistence>()
             koin.get<TokenExpiryPolicy>()
-            koin.get<SessionRestoreStartupTask>()
 
             assertEquals(networkEnvironmentProvider.get(), networkEnvironment)
             assertNotNull(ktorTransport)
@@ -138,10 +133,8 @@ class DependencyInjectionTest {
 
             assertIs<RemoteBootstrapRepository>(bootstrapRepository)
             assertSame(bootstrapRepository, koin.get<BootstrapRepository>())
-            assertIs<DynamicStartupPayloadDecoder>(payloadDecoder)
-            assertSame(payloadDecoder, koin.get<StartupPayloadDecoder>())
-            koin.get<ResolveBootstrapUseCase>()
-            koin.get<BootstrapStartupTask>()
+            assertSame(partnerConfigStore, koin.get<PartnerConfigStore>())
+            assertSame(resolveStartup, koin.get<ResolveStartupUseCase>())
 
             koin.get<NetworkActionExecutor>()
             koin.get<CapabilityActionExecutor>()
@@ -160,8 +153,6 @@ class DependencyInjectionTest {
 
             koin.get<BackgroundTaskHandlerRegistry>()
             koin.get<BackgroundTaskRunner>()
-            koin.get<StartupCoordinator>()
-            koin.get<ApplicationRuntime>()
         } finally {
             application.close()
         }
