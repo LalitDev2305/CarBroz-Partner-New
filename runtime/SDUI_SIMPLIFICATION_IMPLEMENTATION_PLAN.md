@@ -1,6 +1,6 @@
 # CarBroz Partner Frontend — SDUI Simplification & Implementation Plan
 
-> **Status:** REVIEW DRAFT — not frozen and not an implementation mandate yet.
+> **Status:** REVIEW DRAFT — architecture re-audit open; not frozen and not an implementation mandate yet.
 >
 > **Goal:** build one simple, scalable, fully dynamic SDUI runtime for the whole CarBroz Partner app. The frontend must render and execute what the backend sends; it must not hardcode Login/OTP behavior or infer product navigation from template types.
 
@@ -1855,3 +1855,85 @@ When backend adds a new action:
 ```
 
 That is the standard we want: **simple enough that a new developer knows exactly where to work, but strict enough that the engine remains safe and scalable for the entire Partner app.**
+
+---
+
+# 24. Architecture amendment — semantic node identity vs child layout
+
+> **Status:** accepted review direction, implementation names still pending the class-by-class audit and owner discussion.
+>
+> **Supersedes:** any Stack-specific interpretation in earlier package, registry, renderer, testing, or extension examples in this review draft. Earlier examples remain historical context; this section is authoritative where they conflict.
+
+A structural SDUI node answers two independent questions:
+
+1. **What semantic node is this?** — its backend `type`, hierarchy level, capabilities and any truly type-specific behavior.
+2. **How are this node's children arranged?** — a reusable child-layout concern driven by the node's properties.
+
+These concerns must not be multiplied together.
+
+```text
+Template / Component / Section / Group
+        │
+        ├── self presentation
+        │     size / padding / background / border / shape / etc.
+        │             ↓
+        │     shared node-property/modifier handling
+        │
+        └── child arrangement
+              axis / spacing / main-axis alignment / cross-axis alignment
+                              ↓
+                    reusable child-layout implementation
+```
+
+The current properties:
+
+```text
+axis
+spacing
+mainAxisAlignment
+crossAxisAlignment
+```
+
+represent a **linear/axis child-layout algorithm**. They are not inherently Template properties, Component properties, Section properties, Group properties, or proof that each hierarchy level needs its own "Stack" rendering implementation.
+
+The current `RenderStack` / `StackContainerRenderer` implementation is therefore treated as an implementation under architecture review, not as a frozen architectural abstraction.
+
+## 24.1 Required direction
+
+- Keep semantic node identity separate from child-layout behavior.
+- Keep hierarchy-safe registration unless the audit proves a better type-safe alternative; this amendment does **not** require collapsing Template/Component/Section/Group registries.
+- Reuse one child-layout implementation across hierarchy levels whenever they share the same arrangement contract.
+- A future genuinely different layout algorithm such as grid, overlay or flow should be implemented once and reused where the backend contract allows it.
+- Do not create a hierarchy × layout matrix such as `StackTemplateRenderer`, `GridTemplateRenderer`, `StackComponentRenderer`, `GridComponentRenderer`, and equivalent Section/Group permutations merely to choose a layout algorithm.
+- A semantic template/component type may still have its own renderer when it has real type-specific behavior beyond generic child arrangement.
+- Generic self-presentation properties remain separate from child arrangement.
+- Normal leaf Elements remain leaves. Their internal Compose layout is an implementation detail unless the protocol explicitly introduces a compositional/container Element.
+- `templateType` remains backend semantic/render-capability identity. It must never become a navigation rule and must not be assumed to equal one child-layout algorithm.
+
+## 24.2 Correctness requirements exposed by this review
+
+The final child-layout abstraction must preserve the complete backend layout contract. In particular:
+
+- spacing and main-axis alignment must be able to work together rather than one silently disabling the other;
+- unsupported layout vocabulary must fail through the client support/capability boundary instead of silently guessing;
+- node self modifiers and child arrangement must have consistent ownership;
+- adding another layout algorithm must not require duplicate implementations at Template, Component, Section and Group levels.
+
+## 24.3 Naming is deliberately not frozen yet
+
+Names such as `ChildLayoutRenderer`, `LinearLayoutRenderer`, `AxisLayoutRenderer`, or similar are only candidate descriptions at this stage. The exact package/class/file shape will be selected only after the complete active `runtime/sdui` class audit is reviewed with the owner.
+
+No production refactor should be performed solely from this amendment before that discussion.
+
+## 24.4 Additional freeze gate
+
+The SDUI engine must not be declared frozen until all of the following are true:
+
+```text
+[ ] semantic structural-node identity is separated from reusable child-layout behavior
+[ ] no hierarchy × layout renderer explosion is required for future layout algorithms
+[ ] spacing + alignment semantics are covered by regression tests
+[ ] unsupported child-layout/accessory/embedded-action vocabulary fails cleanly
+[ ] the class-by-class active runtime/sdui audit is reviewed and approved
+[ ] agreed audit corrections are implemented and verified before final CI/freeze
+```
