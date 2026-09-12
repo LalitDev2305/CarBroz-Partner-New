@@ -2,7 +2,6 @@ package com.carbroz.feature.dynamic
 
 import com.carbroz.data.network.NetworkAuthentication
 import com.carbroz.data.network.NetworkDataSource
-import com.carbroz.data.network.NetworkEndpoint
 import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
 import com.carbroz.data.network.NetworkResponse
@@ -109,6 +108,69 @@ class SduiActionExecutorTest {
     }
 
     @Test
+    fun destinationContractFailureDoesNotCommitSuccessfulResponseOrContext() = runTest {
+        val response = JsonObject(mapOf("data" to JsonObject(mapOf("ok" to JsonPrimitive(true)))))
+        val network = RecordingNetworkDataSource(NetworkResult.Success(NetworkResponse(200, body = response)))
+        val fixture = fixture(network)
+        val action = SduiAction.Request(
+            RequestPayload(
+                method = SduiRequestMethod.POST,
+                endpoint = "/api/v1/action",
+                authentication = SduiAuthentication.NONE,
+                responseMode = SduiRequestResponseMode.DESTINATION,
+                contextUpdates = JsonObject(mapOf("shouldNotExist" to JsonPrimitive(true))),
+            ),
+        )
+
+        val result = fixture.executor.execute(action, emptyMap())
+
+        assertEquals(SduiActionResult.Failure("destination_missing"), result)
+        val snapshot = fixture.flow.snapshot()
+        assertEquals(JsonObject(emptyMap()), snapshot.context)
+        assertNull(snapshot.response)
+    }
+
+    @Test
+    fun sessionValidationFailureDoesNotCommitSuccessfulResponseOrContext() = runTest {
+        val response = JsonObject(
+            mapOf(
+                "data" to JsonObject(
+                    mapOf(
+                        "nextScreen" to JsonObject(
+                            mapOf(
+                                "screenId" to JsonPrimitive("dashboard"),
+                                "templateId" to JsonPrimitive("dashboard_template"),
+                                "templateType" to JsonPrimitive("stack_template"),
+                                "endpoint" to JsonPrimitive("/api/v1/screens/dashboard"),
+                                "method" to JsonPrimitive("GET"),
+                                "authentication" to JsonPrimitive("SESSION"),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val network = RecordingNetworkDataSource(NetworkResult.Success(NetworkResponse(200, body = response)))
+        val fixture = fixture(network)
+        val action = SduiAction.Request(
+            RequestPayload(
+                method = SduiRequestMethod.POST,
+                endpoint = "/api/v1/action",
+                authentication = SduiAuthentication.NONE,
+                responseMode = SduiRequestResponseMode.DESTINATION,
+                contextUpdates = JsonObject(mapOf("shouldNotExist" to JsonPrimitive(true))),
+            ),
+        )
+
+        val result = fixture.executor.execute(action, emptyMap())
+
+        assertEquals(SduiActionResult.Failure("session_credentials_missing"), result)
+        val snapshot = fixture.flow.snapshot()
+        assertEquals(JsonObject(emptyMap()), snapshot.context)
+        assertNull(snapshot.response)
+    }
+
+    @Test
     fun destinationResponseEstablishesSessionBeforeReturningNavigation() = runTest {
         val response = JsonObject(
             mapOf(
@@ -151,6 +213,7 @@ class SduiActionExecutorTest {
         val session = assertIs<SessionState.Authenticated>(fixture.sessionStore.current())
         assertEquals("partner-1", session.subject.value)
         assertEquals(session, persistence.saved)
+        assertEquals(response, fixture.flow.snapshot().response)
     }
 
     @Test

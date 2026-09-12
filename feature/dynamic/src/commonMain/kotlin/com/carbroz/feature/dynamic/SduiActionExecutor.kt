@@ -29,7 +29,6 @@ import com.carbroz.sdui.runtime.SduiOverlay
 import com.carbroz.sdui.value.SduiExecutionContext
 import com.carbroz.sdui.value.SduiValueResolution
 import com.carbroz.sdui.value.SduiValueResolver
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -135,24 +134,36 @@ class SduiActionExecutor(
                 val responseBody = result.response.body
                     ?: return SduiActionResult.Failure("missing_response_body")
 
-                flowContext.updateResponse(responseBody)
-                pendingContext?.let { flowContext.updateContext(it) }
-
                 when (action.payload.responseMode) {
-                    SduiRequestResponseMode.NONE -> SduiActionResult.Completed
+                    SduiRequestResponseMode.NONE -> {
+                        commitSuccessfulResponse(responseBody, pendingContext)
+                        SduiActionResult.Completed
+                    }
                     SduiRequestResponseMode.DESTINATION -> {
                         val destination = extractNextDestination(responseBody)
                             ?: return SduiActionResult.Failure("destination_missing")
+                        val dynamicDestination = runCatching { DynamicDestination.from(destination) }
+                            .getOrElse { return SduiActionResult.Failure("destination_invalid") }
                         val sessionResult = ensureSessionFor(destination, responseBody)
                         if (sessionResult != null) return sessionResult
+
+                        commitSuccessfulResponse(responseBody, pendingContext)
                         SduiActionResult.Navigate(
-                            destination = DynamicDestination.from(destination),
+                            destination = dynamicDestination,
                             mode = action.payload.navigationMode,
                         )
                     }
                 }
             }
         }
+    }
+
+    private suspend fun commitSuccessfulResponse(
+        responseBody: JsonElement,
+        pendingContext: JsonObject?,
+    ) {
+        flowContext.updateResponse(responseBody)
+        pendingContext?.let { flowContext.updateContext(it) }
     }
 
     private suspend fun executeExternalUri(
