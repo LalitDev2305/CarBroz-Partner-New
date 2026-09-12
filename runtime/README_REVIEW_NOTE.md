@@ -1,1 +1,0 @@
-This temporary review note was created only to verify GitHub write access during documentation work and should not be part of the repository.
