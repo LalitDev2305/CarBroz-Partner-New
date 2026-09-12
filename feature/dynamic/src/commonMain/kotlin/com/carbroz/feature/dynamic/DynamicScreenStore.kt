@@ -156,14 +156,19 @@ class DynamicScreenStore(
 
     private fun executeAction(action: SduiAction) {
         if (state.value.actionInFlight) return
-        if (action is SduiAction.Request && action.payload.validate && !validateFields()) return
 
         actionJob?.cancel()
         actionJob = scope.launch {
             mutableState.update { it.copy(actionInFlight = true, failure = null) }
             try {
                 val bindings = state.value.fields.mapValues { (_, field) -> field.value }
-                when (val result = actionExecutor.execute(action, bindings)) {
+                when (
+                    val result = actionExecutor.execute(
+                        action = action,
+                        bindings = bindings,
+                        validate = ::validateFields,
+                    )
+                ) {
                     is SduiActionResult.Failure -> failAction(result.reason)
                     else -> {
                         applyResult(result)
@@ -190,6 +195,7 @@ class DynamicScreenStore(
     private suspend fun applyResult(result: SduiActionResult) {
         when (result) {
             SduiActionResult.Completed -> Unit
+            SduiActionResult.ValidationBlocked -> Unit
             is SduiActionResult.Navigate -> applyNavigation(result.destination, result.mode)
             is SduiActionResult.NodeStateChanged -> applyNodeState(result)
             is SduiActionResult.OverlayChanged -> applyOverlayChange(result)
