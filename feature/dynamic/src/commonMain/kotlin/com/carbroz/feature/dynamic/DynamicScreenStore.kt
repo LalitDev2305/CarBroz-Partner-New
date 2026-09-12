@@ -192,9 +192,20 @@ class DynamicScreenStore(
             SduiActionResult.Completed -> Unit
             is SduiActionResult.Navigate -> applyNavigation(result.destination, result.mode)
             is SduiActionResult.NodeStateChanged -> applyNodeState(result)
-            is SduiActionResult.OverlayChanged -> mutableState.update { it.copy(overlay = result.overlay) }
+            is SduiActionResult.OverlayChanged -> applyOverlayChange(result)
             is SduiActionResult.Sequence -> result.results.forEach { child -> applyResult(child) }
             is SduiActionResult.Failure -> failAction(result.reason)
+        }
+    }
+
+    private fun applyOverlayChange(result: SduiActionResult.OverlayChanged) {
+        mutableState.update { current ->
+            when {
+                result.overlay != null -> current.copy(overlay = result.overlay)
+                result.dismissTargetId == null -> current.copy(overlay = null)
+                current.overlay?.targetId == result.dismissTargetId -> current.copy(overlay = null)
+                else -> current
+            }
         }
     }
 
