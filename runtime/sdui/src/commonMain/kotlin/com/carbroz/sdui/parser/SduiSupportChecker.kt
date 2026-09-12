@@ -2,6 +2,7 @@ package com.carbroz.sdui.parser
 
 import com.carbroz.sdui.model.SduiAction
 import com.carbroz.sdui.model.SduiElement
+import com.carbroz.sdui.model.SduiRequestMethod
 import com.carbroz.sdui.model.SduiScreen
 import com.carbroz.sdui.registry.SduiNodeRegistry
 import kotlinx.serialization.json.JsonArray
@@ -74,7 +75,13 @@ class SduiSupportChecker(
 
     private fun supportAction(action: SduiAction): SduiSupportResult.Unsupported? = when (action) {
         is SduiAction.Request -> unsafeEndpoint(action.payload.endpoint)
-        is SduiAction.Navigate -> unsafeEndpoint(action.payload.endpoint)
+        is SduiAction.Navigate -> {
+            if (action.payload.method != SduiRequestMethod.GET) {
+                SduiSupportResult.Unsupported("unsupported_destination_method:${action.payload.method}")
+            } else {
+                unsafeEndpoint(action.payload.endpoint)
+            }
+        }
         is SduiAction.Sequence -> {
             action.payload.actions.forEach { child -> supportAction(child)?.let { return it } }
             null
