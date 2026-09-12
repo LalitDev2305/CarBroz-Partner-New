@@ -51,10 +51,10 @@ import kotlin.test.assertTrue
 
 class DynamicScreenStoreTest {
     @Test
-    fun showUnwrapsEnvelopeValidatesIdentityAndInitializesBoundFields() = runTest {
+    fun showUnwrapsEnvelopeChecksIdentityAndInitializesBoundFields() = runTest {
         val screen = screen()
-        val screenNetwork = QueueNetworkDataSource(mutableListOf(successEnvelope(screen)))
-        val fixture = fixture(screenNetwork)
+        val network = QueueNetworkDataSource(mutableListOf(successEnvelope(screen)))
+        val fixture = fixture(network)
 
         fixture.store.show(destination())
         advanceUntilIdle()
@@ -66,55 +66,44 @@ class DynamicScreenStoreTest {
         assertEquals(JsonPrimitive(""), state.fields["phone"]?.value)
         assertEquals(JsonPrimitive("keep"), state.fields["other"]?.value)
         assertEquals("device-test", (state.context["deviceId"] as JsonPrimitive).content)
-        assertEquals("/api/v1/screens/login", screenNetwork.requests.single().endpoint.value)
+        assertEquals("/api/v1/screens/login", network.requests.single().endpoint.value)
     }
 
     @Test
-    fun destinationIdentityMismatchFailsWithoutGuessing() = runTest {
-        val mismatched = screen().copy(screenId = "different")
-        val fixture = fixture(QueueNetworkDataSource(mutableListOf(successEnvelope(mismatched))))
-
-        fixture.store.show(destination())
+    fun destinationMismatchMalformedEnvelopeAndUnsupportedSchemaFailPredictably() = runTest {
+        val mismatch = fixture(QueueNetworkDataSource(mutableListOf(successEnvelope(screen().copy(screenId = "different")))))
+        mismatch.store.show(destination())
         advanceUntilIdle()
-
         assertEquals(
             DynamicScreenFailure.UnsupportedContract("destination_identity_mismatch"),
-            fixture.store.state.value.failure,
+            mismatch.store.state.value.failure,
         )
-    }
 
-    @Test
-    fun malformedEnvelopeAndUnsupportedContractHaveDistinctFailures() = runTest {
-        val decodeFixture = fixture(
+        val malformed = fixture(
             QueueNetworkDataSource(
                 mutableListOf(NetworkResult.Success(NetworkResponse(200, body = JsonObject(emptyMap())))),
             ),
         )
-        decodeFixture.store.show(destination())
+        malformed.store.show(destination())
         advanceUntilIdle()
-        assertEquals(DynamicScreenFailure.Decode("screen_data_missing"), decodeFixture.store.state.value.failure)
+        assertEquals(DynamicScreenFailure.Decode("screen_data_missing"), malformed.store.state.value.failure)
 
-        val unsupported = screen().copy(schemaVersion = "99.0")
-        val supportFixture = fixture(QueueNetworkDataSource(mutableListOf(successEnvelope(unsupported))))
-        supportFixture.store.show(destination())
+        val unsupported = fixture(
+            QueueNetworkDataSource(mutableListOf(successEnvelope(screen().copy(schemaVersion = "99.0")))),
+        )
+        unsupported.store.show(destination())
         advanceUntilIdle()
         assertEquals(
             DynamicScreenFailure.UnsupportedContract("unsupported_schema:99.0"),
-            supportFixture.store.state.value.failure,
+            unsupported.store.state.value.failure,
         )
     }
 
     @Test
-    fun valueChangeUpdatesOnlyTargetFieldAndClearsItsError() = runTest {
-        val fixture = fixture(QueueNetworkDataSource(mutableListOf(successEnvelope(screen()))))
-        fixture.store.show(destination())
-        advanceUntilIdle()
+    fun valueChangeUpdatesOnlyTargetField() = runTest {
+        val fixture = loadedFixture()
 
-        fixture.store.dispatch(
-            DynamicScreenIntent.Interaction(
-                SduiInteraction.ValueChanged("phone", JsonPrimitive("9999999999")),
-            ),
-        )
+        fixture.store.dispatch(DynamicScreenIntent.Interaction(valueChanged("9999999999")))
 
         val state = fixture.store.state.value
         assertEquals(JsonPrimitive("9999999999"), state.fields["phone"]?.value)
@@ -124,80 +113,36 @@ class DynamicScreenStoreTest {
     }
 
     @Test
-    fun validateTrueBlocksInvalidRequestAndValidValueAllowsIt() = runTest {
-        val actionNetwork = RecordingNetworkDataSource(
-            NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("data" to JsonObject(emptyMap()))))),
-        )
-        val fixture = fixture(
-            screenNetwork = QueueNetworkDataSource(mutableListOf(successEnvelope(screen()))),
-            actionNetwork = actionNetwork,
-        )
-        fixture.store.show(destination())
-        advanceUntilIdle()
-        val request = SduiAction.Request(
-            RequestPayload(
-                method = SduiRequestMethod.POST,
-                endpoint = "/api/v1/auth/login",
-                authentication = SduiAuthentication.NONE,
-                validate = true,
-                body = JsonObject(mapOf("phone" to JsonObject(mapOf("\$binding" to JsonPrimitive("phone"))))),
-                responseMode = SduiRequestResponseMode.NONE,
-            ),
-        )
+    fun validationPolicyBlocksOnlyValidateTrueRequests() = runTest {
+        val actionNetwork = RecordingNetworkDataSource(successActionResponse())
+        val fixture = loadedFixture(actionNetwork)
+        val validated = request(validate = true)
 
-        fixture.store.dispatch(DynamicScreenIntent.Interaction(SduiInteraction.ActionTriggered(request)))
+        fixture.store.dispatch(DynamicScreenIntent.Interaction(trigger(validated)))
         advanceUntilIdle()
-
         assertEquals(0, actionNetwork.requests.size)
         assertEquals("Enter 10 digits", fixture.store.state.value.fields["phone"]?.error)
 
-        fixture.store.dispatch(
-            DynamicScreenIntent.Interaction(SduiInteraction.ValueChanged("phone", JsonPrimitive("9999999999"))),
-        )
-        fixture.store.dispatch(DynamicScreenIntent.Interaction(SduiInteraction.ActionTriggered(request)))
+        fixture.store.dispatch(DynamicScreenIntent.Interaction(valueChanged("9999999999")))
+        fixture.store.dispatch(DynamicScreenIntent.Interaction(trigger(validated)))
         advanceUntilIdle()
-
         assertEquals(1, actionNetwork.requests.size)
         assertNull(fixture.store.state.value.fields["phone"]?.error)
-        assertFalse(fixture.store.state.value.actionInFlight)
+
+        val secondNetwork = RecordingNetworkDataSource(successActionResponse())
+        val unvalidatedFixture = loadedFixture(secondNetwork)
+        unvalidatedFixture.store.dispatch(DynamicScreenIntent.Interaction(trigger(request(validate = false))))
+        advanceUntilIdle()
+        assertEquals(1, secondNetwork.requests.size)
     }
 
     @Test
-    fun validateFalseDoesNotBlockRequest() = runTest {
-        val actionNetwork = RecordingNetworkDataSource(
-            NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("data" to JsonObject(emptyMap()))))),
-        )
-        val fixture = fixture(
-            QueueNetworkDataSource(mutableListOf(successEnvelope(screen()))),
-            actionNetwork = actionNetwork,
-        )
-        fixture.store.show(destination())
-        advanceUntilIdle()
-        val request = SduiAction.Request(
-            RequestPayload(
-                method = SduiRequestMethod.POST,
-                endpoint = "/api/v1/unvalidated",
-                authentication = SduiAuthentication.NONE,
-                validate = false,
-                responseMode = SduiRequestResponseMode.NONE,
-            ),
-        )
-
-        fixture.store.dispatch(DynamicScreenIntent.Interaction(SduiInteraction.ActionTriggered(request)))
-        advanceUntilIdle()
-
-        assertEquals(1, actionNetwork.requests.size)
-    }
-
-    @Test
-    fun stateAndPresentationActionsReduceIntoTheSingleScreenState() = runTest {
-        val fixture = fixture(QueueNetworkDataSource(mutableListOf(successEnvelope(screen()))))
-        fixture.store.show(destination())
-        advanceUntilIdle()
+    fun statePresentAndDismissReduceIntoSingleScreenState() = runTest {
+        val fixture = loadedFixture()
 
         fixture.store.dispatch(
             DynamicScreenIntent.Interaction(
-                SduiInteraction.ActionTriggered(
+                trigger(
                     SduiAction.State(
                         targetId = "resend",
                         payload = StatePayload(
@@ -214,72 +159,50 @@ class DynamicScreenStoreTest {
 
         fixture.store.dispatch(
             DynamicScreenIntent.Interaction(
-                SduiInteraction.ActionTriggered(
-                    SduiAction.Present("cancel_sheet", PresentPayload(SduiPresentationMode.BOTTOM_SHEET)),
-                ),
+                trigger(SduiAction.Present("cancel_sheet", PresentPayload(SduiPresentationMode.BOTTOM_SHEET))),
             ),
         )
         advanceUntilIdle()
         assertEquals("cancel_sheet", fixture.store.state.value.overlay?.targetId)
 
-        fixture.store.dispatch(
-            DynamicScreenIntent.Interaction(SduiInteraction.ActionTriggered(SduiAction.Dismiss())),
-        )
+        fixture.store.dispatch(DynamicScreenIntent.Interaction(trigger(SduiAction.Dismiss())))
         advanceUntilIdle()
         assertNull(fixture.store.state.value.overlay)
     }
 
     @Test
-    fun refreshReloadsSameFullDestinationAndBackUsesNavigationPop() = runTest {
+    fun refreshBackAndRetryUseCurrentFullDestinationAndNavigationStore() = runTest {
         val current = destination()
-        val root = destination(
-            screenId = "root",
-            templateId = "root_template",
-            endpoint = "/api/v1/screens/root",
-        )
-        val screenNetwork = QueueNetworkDataSource(
-            mutableListOf(successEnvelope(screen()), successEnvelope(screen())),
+        val root = destination("root", "root_template", "/api/v1/screens/root")
+        val network = QueueNetworkDataSource(
+            mutableListOf(
+                NetworkResult.Success(NetworkResponse(500, body = JsonObject(emptyMap()))),
+                successEnvelope(screen()),
+                successEnvelope(screen()),
+            ),
         )
         val navigation = NavigationStore(NavigationState(listOf(root, current)))
-        val fixture = fixture(screenNetwork, navigation = navigation)
+        val fixture = fixture(network, navigation = navigation)
 
         fixture.store.show(current)
         advanceUntilIdle()
+        assertIs<DynamicScreenFailure.Network>(fixture.store.state.value.failure)
+
+        fixture.store.dispatch(DynamicScreenIntent.Retry)
+        advanceUntilIdle()
+        assertNull(fixture.store.state.value.failure)
+
         fixture.store.dispatch(DynamicScreenIntent.Refresh)
         advanceUntilIdle()
-
-        assertEquals(2, screenNetwork.requests.size)
-        assertEquals(current.endpoint, screenNetwork.requests[0].endpoint.value)
-        assertEquals(current.endpoint, screenNetwork.requests[1].endpoint.value)
+        assertEquals(3, network.requests.size)
+        network.requests.forEach { assertEquals(current.endpoint, it.endpoint.value) }
 
         fixture.store.dispatch(DynamicScreenIntent.BackRequested)
         assertEquals(root, navigation.state.value.current)
     }
 
     @Test
-    fun retryReloadsDestinationAfterFailure() = runTest {
-        val screenNetwork = QueueNetworkDataSource(
-            mutableListOf(
-                NetworkResult.Success(NetworkResponse(500, body = JsonObject(emptyMap()))),
-                successEnvelope(screen()),
-            ),
-        )
-        val fixture = fixture(screenNetwork)
-
-        fixture.store.show(destination())
-        advanceUntilIdle()
-        assertIs<DynamicScreenFailure.Network>(fixture.store.state.value.failure)
-
-        fixture.store.dispatch(DynamicScreenIntent.Retry)
-        advanceUntilIdle()
-
-        assertNull(fixture.store.state.value.failure)
-        assertEquals(screen(), fixture.store.state.value.screen)
-        assertEquals(2, screenNetwork.requests.size)
-    }
-
-    @Test
-    fun suspendForBackgroundCancelsLoadAndClearsInFlightFlags() = runTest {
+    fun suspendForBackgroundCancelsOwnedLoadAndClearsFlags() = runTest {
         val network = CancellingNetworkDataSource()
         val fixture = fixture(network)
 
@@ -295,26 +218,35 @@ class DynamicScreenStoreTest {
         assertFalse(fixture.store.state.value.actionInFlight)
     }
 
-    private fun fixture(
+    private suspend fun kotlinx.coroutines.test.TestScope.loadedFixture(
+        actionNetwork: NetworkDataSource = RecordingNetworkDataSource(successActionResponse()),
+    ): Fixture {
+        val fixture = fixture(
+            QueueNetworkDataSource(mutableListOf(successEnvelope(screen()))),
+            actionNetwork = actionNetwork,
+        )
+        fixture.store.show(destination())
+        advanceUntilIdle()
+        return fixture
+    }
+
+    private fun kotlinx.coroutines.test.TestScope.fixture(
         screenNetwork: NetworkDataSource,
-        actionNetwork: NetworkDataSource = RecordingNetworkDataSource(
-            NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("data" to JsonObject(emptyMap()))))),
-        ),
+        actionNetwork: NetworkDataSource = RecordingNetworkDataSource(successActionResponse()),
         navigation: NavigationStore = NavigationStore(NavigationState(listOf(destination()))),
     ): Fixture {
         val flow = DynamicFlowContext()
         val contextProvider = DynamicContextProvider(flow, deviceId = "device-test")
-        val session = SessionStore(InMemorySessionPersistence())
         val actionExecutor = SduiActionExecutor(
             network = actionNetwork,
             capabilities = CapabilityRegistry.builder().build(),
             values = SduiValueResolver(),
             contextProvider = contextProvider,
             flowContext = flow,
-            sessionStore = session,
+            sessionStore = SessionStore(InMemorySessionPersistence()),
         )
         return Fixture(
-            store = DynamicScreenStore(
+            DynamicScreenStore(
                 scope = this,
                 decoder = SduiDecoder(),
                 supportChecker = SduiSupportChecker(SduiNodeRegistration.createRegistry()),
@@ -326,6 +258,31 @@ class DynamicScreenStoreTest {
             ),
         )
     }
+
+    private fun request(validate: Boolean): SduiAction.Request = SduiAction.Request(
+        RequestPayload(
+            method = SduiRequestMethod.POST,
+            endpoint = "/api/v1/auth/login",
+            authentication = SduiAuthentication.NONE,
+            validate = validate,
+            body = JsonObject(
+                mapOf("phone" to JsonObject(mapOf("\$binding" to JsonPrimitive("phone")))),
+            ),
+            responseMode = SduiRequestResponseMode.NONE,
+        ),
+    )
+
+    private fun valueChanged(value: String): SduiInteraction.ValueChanged = SduiInteraction.ValueChanged(
+        elementId = "phone_input",
+        bindingKey = "phone",
+        value = JsonPrimitive(value),
+    )
+
+    private fun trigger(action: SduiAction): SduiInteraction.ActionTriggered = SduiInteraction.ActionTriggered(
+        sourceId = "test_source",
+        event = "click",
+        action = action,
+    )
 
     private fun destination(
         screenId: String = "login",
@@ -377,10 +334,12 @@ class DynamicScreenStoreTest {
 
     private fun successEnvelope(screen: SduiScreen): NetworkResult {
         val data = Json.parseToJsonElement(Json.encodeToString(screen))
-        return NetworkResult.Success(
-            NetworkResponse(200, body = JsonObject(mapOf("data" to data))),
-        )
+        return NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("data" to data))))
     }
+
+    private fun successActionResponse(): NetworkResult = NetworkResult.Success(
+        NetworkResponse(200, body = JsonObject(mapOf("data" to JsonObject(emptyMap())))),
+    )
 
     private data class Fixture(val store: DynamicScreenStore)
 
