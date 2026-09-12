@@ -39,14 +39,10 @@ import com.carbroz.data.sync.OutboxStore
 import com.carbroz.data.sync.RoomOutboxStore
 import com.carbroz.data.sync.SyncConflictResolver
 import com.carbroz.data.sync.SyncCoordinator
-import com.carbroz.feature.dynamic.BackgroundActionExecutor
-import com.carbroz.feature.dynamic.CapabilityActionExecutor
-import com.carbroz.feature.dynamic.DefaultDynamicBindingContextFactory
-import com.carbroz.feature.dynamic.DynamicBindingContextFactory
+import com.carbroz.feature.dynamic.DynamicContextProvider
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
-import com.carbroz.feature.dynamic.DynamicScreenCache
-import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
-import com.carbroz.feature.dynamic.NetworkActionExecutor
+import com.carbroz.feature.dynamic.DynamicFlowContext
+import com.carbroz.feature.dynamic.SduiActionExecutor
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.analytics.AnalyticsPolicy
 import com.carbroz.foundation.analytics.AnalyticsTracker
@@ -89,14 +85,15 @@ import com.carbroz.platform.background.BackgroundTaskHandler
 import com.carbroz.platform.background.BackgroundTaskHandlerRegistry
 import com.carbroz.platform.background.BackgroundTaskRunner
 import com.carbroz.platform.background.ContinuousExecutionController
-import com.carbroz.runtime.action.ActionPreparerFactory
 import com.carbroz.runtime.application.startup.BootstrapRepository
 import com.carbroz.runtime.application.startup.PartnerConfigStore
 import com.carbroz.runtime.application.startup.ResolveStartupUseCase
-import com.carbroz.runtime.sdui.SduiRuntime
-import com.carbroz.runtime.sdui.SduiRuntimeFactory
-import com.carbroz.runtime.sdui.compatibility.SduiClientCompatibility
-import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
+import com.carbroz.sdui.parser.SduiDecoder
+import com.carbroz.sdui.parser.SduiSupportChecker
+import com.carbroz.sdui.registry.SduiNodeRegistration
+import com.carbroz.sdui.registry.SduiNodeRegistry
+import com.carbroz.sdui.render.SduiRenderer
+import com.carbroz.sdui.value.SduiValueResolver
 import org.koin.core.context.startKoin
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -146,7 +143,7 @@ fun carBrozApplicationModule(
     }
     if (resourceDiagnostics != null) {
         single<ResourceDiagnostics> { resourceDiagnostics }
-        single { ResourceDiagnosticsReporter(diagnostics = get(), observability = get()) }
+        single { ResourceDiagnosticsReporter(diagnostics = get(), observability = get(), clock = get()) }
     }
     if (mainThreadDispatcher != null) {
         single { MainThreadResponsivenessMonitor(dispatcher = mainThreadDispatcher, observability = get()) }
@@ -168,13 +165,11 @@ fun carBrozApplicationModule(
     single<PreferenceStore> { get<PreferenceStoreProvider>().get() }
 
     single<CapabilityRegistry> { createCapabilityRegistry(capabilityProviders) }
-    single { CapabilityActionExecutor(registry = get()) }
 
     single { BackgroundTaskHandlerRegistry(backgroundTaskHandlers) }
     single { BackgroundTaskRunner(registry = get(), observability = get(), clock = get(), correlationIdProvider = get()) }
     if (backgroundScheduler != null) single<BackgroundScheduler> { backgroundScheduler }
     if (continuousExecutionController != null) single<ContinuousExecutionController> { continuousExecutionController }
-    single { BackgroundActionExecutor(backgroundScheduler, continuousExecutionController) }
 
     single { ApplicationConnectivity() }
     single<NetworkConnectivityObserver> { get<ApplicationConnectivity>() }
@@ -241,7 +236,6 @@ fun carBrozApplicationModule(
         )
     }
     single<NetworkDataSource> { ExecutorNetworkDataSource(executor = get()) }
-    single { NetworkActionExecutor(dataSource = get()) }
 
     single<BootstrapRepository> { RemoteBootstrapRepository(network = get()) }
     single { PartnerConfigStore() }
@@ -256,35 +250,38 @@ fun carBrozApplicationModule(
         )
     }
 
-    single<SduiRuntime> {
-        SduiRuntimeFactory.createCore(
-            SduiClientCompatibility(
-                clientVersion = configuration.buildInformation.versionCode
-                    .coerceIn(1L, Int.MAX_VALUE.toLong())
-                    .toInt(),
-                supportedProtocolVersions = 1..1,
-                supportedSchemaVersions = 1..1,
-            ),
+    single<SduiNodeRegistry> { SduiNodeRegistration.createRegistry() }
+    single { SduiDecoder() }
+    single { SduiSupportChecker(registry = get()) }
+    single { SduiValueResolver() }
+    single { SduiRenderer(registry = get()) }
+    single { DynamicFlowContext() }
+    single { DynamicContextProvider(flowContext = get()) }
+    single {
+        SduiActionExecutor(
+            network = get(),
+            capabilities = get(),
+            values = get(),
+            contextProvider = get(),
+            flowContext = get(),
+            sessionStore = get(),
         )
     }
-    single { ActionPreparerFactory.createCore() }
-    single<DynamicBindingContextFactory> {
-        DefaultDynamicBindingContextFactory(sessionProvider = get(), configurationProvider = get())
-    }
-    single { FormTemplateRuntimeFactory(get<SduiRuntime>().registry) }
-    single { DynamicScreenCache() }
-    single { DynamicScreenInstructionCodec() }
     single {
         DynamicFeatureFactory(
-            sduiRuntime = get(),
-            actionPreparer = get(),
-            networkActions = get(),
-            capabilityActions = get(),
-            backgroundActions = get(),
+            decoder = get(),
+            supportChecker = get(),
+            renderer = get(),
+            valueResolver = get(),
+            network = get(),
+            actionExecutor = get(),
+            contextProvider = get(),
+            flowContext = get(),
             navigation = get(),
-            bindingContexts = get(),
-            formRuntime = get(),
-            cache = get(),
+            resolveAssetUrl = { path ->
+                if (path.startsWith("http://") || path.startsWith("https://")) path
+                else configuration.apiBaseUrl.trimEnd('/') + "/" + path.trimStart('/')
+            },
         )
     }
 
