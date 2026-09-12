@@ -55,6 +55,11 @@ class SduiFrozenVocabularyTest {
                 group.elements.forEach { assertEquals(true, registry.supportsElement(it.type)) }
             }
         }
+
+        val elements = component.elements.orEmpty()
+        assertIs<JsonObject>(elements.single { it.type == "text" }.properties["leading"])
+        assertIs<JsonObject>(elements.single { it.type == "input" }.properties["leading"])
+        assertIs<JsonObject>(elements.single { it.type == "button" }.properties["trailing"])
     }
 
     @Test
