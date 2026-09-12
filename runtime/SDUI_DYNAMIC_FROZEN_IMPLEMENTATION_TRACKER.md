@@ -101,6 +101,8 @@ Rules frozen by the two authority documents:
 - `DynamicContextProvider` is a read-only projection, not a second state owner.
 - `SduiActionExecutor` executes exactly the seven backend actions.
 - `request` and `navigate` remain distinct; request navigation is explicit through `responseMode=destination`.
+- A request commits `$response` and `contextUpdates` only after the requested response contract succeeds; destination-mode requests validate/construct the destination and satisfy SESSION requirements before committing flow state.
+- Successful request response/context state is committed atomically inside `DynamicFlowContext`.
 - A successful request returning a SESSION destination establishes canonical session state before navigation.
 - Production Dynamic code contains no Login/OTP/Dashboard/Booking-specific routing branch.
 
@@ -108,7 +110,7 @@ Rules frozen by the two authority documents:
 
 | Phase | Requirement | State | Executable / structural proof |
 |---|---|---|---|
-| 1 | Canonical realistic fixtures | VERIFIED | Login, OTP, Dashboard, Booking Details, all-node, all-action, all-value-reference, unsupported vocabulary fixtures exist. |
+| 1 | Canonical realistic fixtures | VERIFIED | Login, OTP, Dashboard, Booking Details, all-node, all-action, all-value-reference, unsupported vocabulary fixtures exist. OTP fixture deliberately contains no resend/cooldown policy. |
 | 2 | Destination consistency boundary | VERIFIED | Store checks `screenId + templateId + templateType`; regression tests cover all identity mismatch classes; endpoint safety is checked client-side. |
 | 3 | Exact SDUI models/actions/value refs | VERIFIED | Typed immutable models use exact seven-action union and exact four structured reference forms. |
 | 4 | API envelope + decoder | VERIFIED | Store unwraps `data`; decoder accepts `JsonElement`; malformed/unknown action tests fail predictably. |
@@ -118,13 +120,13 @@ Rules frozen by the two authority documents:
 | 8 | Template/component/section/group/element renderers | VERIFIED FOR ENGINE | Frozen vocabulary covers registered hierarchy and Text/Image/Input/Button; segmented input is property-driven; full configured compilation is final CI gate. |
 | 9 | One Dynamic screen-state owner | VERIFIED | Field updates preserve other fields; validation, runtime node state, overlay, immutability and cancellation tests exist; legacy `FormStore` removed. |
 | 10 | Structured value resolver | VERIFIED | `$binding/$context/$response/$literal`, nested object/array and missing-path behavior covered. |
-| 11 | Seven-action executor | VERIFIED | request/navigate/present/dismiss/state/external_uri/sequence, failure policy, session-before-navigation, context/response commits and sequence stop behavior covered. |
+| 11 | Seven-action executor | VERIFIED | Exact actions covered; HTTP/destination/session failures do not commit transient flow state; success response/context commit is atomic; SESSION is established before navigation; sequence failure policy covered. |
 | 12 | Full destination/navigation/lifecycle | VERIFIED | Serialization/navigationId/conversion, process restoration, Back/Refresh, background cancellation and repeated-action suppression covered. |
 | 13 | Legacy convergence/removal | VERIFIED STRUCTURALLY | Entire `com.carbroz.runtime.sdui.*` production/test tree removed; temporary `runtime:binding` dependency removed; unrelated runtime action/binding/realtime modules preserved. |
 | 14 | Full vocabulary regression | VERIFIED | All-node, all-action, all-value-reference and unsupported-vocabulary tests exist. |
 | 15 | Dynamic + mock flow tests | VERIFIED FOR ENGINE | Login -> OTP -> Dashboard and Dashboard -> Booking Details -> Back generic flows covered; store/context/executor tests cover generic runtime behavior. |
 | 16 | Real Desktop/backend/manual app integration | DEFERRED BY OWNER | Post-engine. Real production Login/OTP JSON/auth/UI/backend behavior will be validated when the owner runs the app. No fake E2E claim. |
-| 17 | Configured multiplatform/architecture CI | WAITING ON RUNNER | Workflow has `jvm-android`, `published-foundation-boundary`, then dependent `ios`. Latest code run could not allocate/execute steps; details below. |
+| 17 | Configured multiplatform/architecture CI | WAITING ON RUNNER | Workflow has `jvm-android`, `published-foundation-boundary`, then dependent `ios`. Current runs fail before runner allocation (`runner_id=0`, zero steps); details below. |
 | 18 | Documentation freeze | IN_PROGRESS | Tracker converged. Authority-doc status must change from review draft only after configured CI executes green. |
 
 ## 4. Executable proof inventory
@@ -171,8 +173,10 @@ Rules frozen by the two authority documents:
   - safe read-only dynamic context projection
 - `SduiActionExecutorTest`
   - request value resolution and exact network request
-  - request failure commit policy
-  - context/response updates only on success
+  - HTTP failure commit policy
+  - 2xx destination-contract failure leaves `$response`/context untouched
+  - 2xx SESSION validation failure leaves `$response`/context untouched
+  - successful response/context commits only after the entire action contract succeeds
   - response destination navigation
   - SESSION establishment before navigation
   - direct navigate mode/destination
@@ -185,7 +189,7 @@ Rules frozen by the two authority documents:
   - malformed envelope/unsupported schema/network failure
   - binding updates
   - validation true/false policy
-  - state/present/dismiss reduction
+  - product-neutral state/present/dismiss reduction
   - retry/refresh/back
   - background cancellation
 - `DynamicScreenStoreFrozenRegressionTest`
@@ -203,7 +207,7 @@ Rules frozen by the two authority documents:
 - Composition DI tests were migrated to the new decoder/support/registry/renderer/value/executor graph.
 - Startup mapping constructs the full destination without template-type routing inference.
 
-## 5. Legacy-removal proof
+## 5. Legacy/stale-code proof
 
 Cleanup commit:
 
@@ -228,6 +232,26 @@ runtime/action
 runtime/binding
 runtime/application
 realtime/platform/foundation infrastructure
+```
+
+Current PR-diff audit:
+
+- no added `com.carbroz.runtime.sdui` import/reference;
+- no `templateType` routing branch introduced;
+- no hardcoded `screenId == "partner_..."` routing branch introduced;
+- no resend implementation/test id remains in the current PR diff; resend/cooldown appears only in this tracker as an explicit deferred owner decision.
+
+Latest generic-engine hardening commits:
+
+```text
+c2036c2e656ff79b36083d0cc063dca835acd6e1
+fix(dynamic): commit request flow state only after action success
+
+2aa4cd8c9936d39384e833ea966c6676eb959981
+test(dynamic): keep state reducer proof product-neutral
+
+ef953e9a455d658a3cd1502172fe18b147242b4c
+fix(dynamic): make successful request flow commit atomic
 ```
 
 ## 6. CI evidence
@@ -255,12 +279,16 @@ Evidence:
 | SHA / run | Result |
 |---|---|
 | `4611782c...` / `34705005052` | replacement baseline progressed after composition wiring fix. |
-| `8b78a0cc87b263b7514bdc53d7192dc008330ca5` / `34706115457` | `published-foundation-boundary` green; `jvm-android` exposed frozen-fixture Kotlin interpolation defect; iOS skipped because dependency failed. |
+| `8b78a0cc87b263b7514bdc53d7192dc008330ca5` / `34706115457` | `published-foundation-boundary` green; `jvm-android` executed and exposed frozen-fixture Kotlin interpolation defect; iOS skipped because dependency failed. |
 | `0e04f07da5954f90aebff9fd4019bd121b501b2f` | first fixture escaping correction. |
-| `9667c828bdd6e64cc6f0ff53879871e22211d693` / `34708136537` attempt 1 | both Linux jobs reported failure **before any step existed**; job steps empty and logs unavailable. This is not an executable compile/test result. |
-| `9667c828bdd6e64cc6f0ff53879871e22211d693` / `34708136537` failed-job rerun | same zero-step/no-log outcome; iOS skipped because dependencies did not execute green. |
+| `9667c828bdd6e64cc6f0ff53879871e22211d693` / `34708136537` + failed-job rerun | Linux jobs failed before any step existed; logs unavailable; rerun repeated the same pre-runner state. |
+| `9113adb2650538dbc711ac5588d0ef542408a15e` / `34708480982` | same zero-step pre-runner failure. |
+| `7c6dd9be1ee8eb45154a874a1363afd7c40c3698` / `34708588329` | same zero-step pre-runner failure; job metadata showed `runner_id=0`, empty runner name. |
+| `c2036c2e656ff79b36083d0cc063dca835acd6e1` / `34708833317` | same zero-step pre-runner failure; `runner_id=0`. |
+| `2aa4cd8c9936d39384e833ea966c6676eb959981` / `34708903412` | same zero-step pre-runner failure; `runner_id=0`. |
+| `ef953e9a455d658a3cd1502172fe18b147242b4c` / `34709065432` | same zero-step pre-runner failure; both Ubuntu jobs completed in ~2–3 seconds with `steps=[]`, `runner_id=0`; iOS skipped because dependencies never executed. |
 
-GitHub public status reported Actions operational during the zero-step reruns, so no code conclusion is inferred from them. Final freeze still requires a run where the configured jobs actually start and execute.
+GitHub public status reported Actions operational during this sequence, so the precise repository/account-side reason cannot be proven with the available connector. No code/test conclusion is inferred from a job that never acquired a runner. Final freeze still requires a run where the configured jobs actually start and execute.
 
 ## 7. Explicitly deferred / out of generic-engine scope
 
@@ -298,6 +326,7 @@ If any later real JSON requires a new generic capability, it must be added throu
 - [x] full-vocabulary fixture tests
 - [x] Login -> OTP -> Dashboard mock flow
 - [x] legacy SDUI runtime removed
+- [x] resend/cooldown excluded from current implementation pending real OTP contract
 - [ ] configured JVM/Android + published-foundation + iOS CI executes green
 - [~] real backend/manual visual/auth validation — explicitly deferred by owner
 
@@ -313,6 +342,8 @@ If any later real JSON requires a new generic capability, it must be added throu
 - [x] Store owns lifecycle/orchestration but no Compose rendering
 - [x] renderer does not own network/navigation
 - [x] executor supports exact wire action vocabulary
+- [x] failed request/destination/session actions do not partially commit flow state
+- [x] successful response/context flow commit is atomic
 - [x] context provider is projection, not state owner
 - [x] generic auth-shaped mock flow
 - [x] generic booking navigation/back mock flow
@@ -328,7 +359,7 @@ If any later real JSON requires a new generic capability, it must be added throu
 3. Require `jvm-android` green.
 4. Require `published-foundation-boundary` green.
 5. Require dependent `ios` job to run and finish green.
-6. Perform final stale-code audit on that exact SHA.
+6. Perform final exact-SHA stale-code audit after that executable green run.
 7. Update both authority documents from review-draft wording to implemented/frozen generic-engine truth, preserving the deferred boundaries above.
 8. Run the configured workflow once more on the documentation/final exact head if the docs commit triggers CI.
 9. Do **not** merge PR #11 without owner approval.
