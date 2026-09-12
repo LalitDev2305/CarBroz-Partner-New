@@ -28,7 +28,7 @@ class DynamicFlowContext {
     }
 
     suspend fun commitSuccessfulRequest(
-        responseValue: JsonElement,
+        responseValue: JsonElement?,
         contextUpdates: JsonObject?,
     ) = mutex.withLock {
         response = responseValue
