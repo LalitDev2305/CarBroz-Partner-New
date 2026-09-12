@@ -15,8 +15,6 @@ import androidx.compose.ui.Modifier
 import com.carbroz.feature.dynamic.DynamicDestination
 import com.carbroz.feature.dynamic.DynamicFeature
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
-import com.carbroz.feature.dynamic.DynamicScreenInstruction
-import com.carbroz.feature.dynamic.DynamicScreenRequest
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.feature.splash.SplashEffect
 import com.carbroz.feature.splash.SplashIntent
@@ -36,15 +34,12 @@ import com.carbroz.runtime.application.startup.ResolveStartupUseCase
 import com.carbroz.runtime.application.startup.StartupAuthentication
 import com.carbroz.runtime.application.startup.StartupDestination
 import com.carbroz.runtime.application.startup.StartupRequestMethod
-import com.carbroz.runtime.sdui.model.NodeType
-import com.carbroz.runtime.sdui.model.RequestAuthentication
-import com.carbroz.runtime.sdui.model.RequestMethod
-import com.carbroz.runtime.sdui.model.ScreenDestination
+import com.carbroz.sdui.model.SduiAuthentication
+import com.carbroz.sdui.model.SduiRequestMethod
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.serialization.json.JsonPrimitive
 import org.koin.compose.koinInject
 
-/** Composition maps feature effects to canonical application owners; it owns no parallel startup state. */
 @Composable
 fun CarBrozApp() {
     val navigationStore = koinInject<NavigationStore>()
@@ -80,9 +75,7 @@ fun CarBrozApp() {
             when (effect) {
                 is SplashEffect.Navigate -> {
                     if (navigationStore.state.value.current != SplashDestination) return@collect
-                    NavigationProcessStateBridge.applyAfterBootstrap(
-                        DynamicDestination(effect.destination.toDynamicInstruction()),
-                    )
+                    NavigationProcessStateBridge.applyAfterBootstrap(effect.destination.toDynamicDestination())
                 }
 
                 is SplashEffect.OpenUpdateUri -> {
@@ -116,22 +109,18 @@ fun CarBrozApp() {
     }
 }
 
-private fun StartupDestination.toDynamicInstruction(): DynamicScreenInstruction = DynamicScreenInstruction(
-    destination = ScreenDestination(
-        screenId = screenId,
-        templateId = templateId,
-        templateType = NodeType(templateType),
-    ),
-    request = DynamicScreenRequest(
-        method = when (method) {
-            StartupRequestMethod.GET -> RequestMethod.GET
-        },
-        endpoint = endpoint,
-        authentication = when (authentication) {
-            StartupAuthentication.NONE -> RequestAuthentication.NONE
-            StartupAuthentication.SESSION -> RequestAuthentication.SESSION
-        },
-    ),
+private fun StartupDestination.toDynamicDestination(): DynamicDestination = DynamicDestination(
+    screenId = screenId,
+    templateId = templateId,
+    templateType = templateType,
+    endpoint = endpoint,
+    method = when (method) {
+        StartupRequestMethod.GET -> SduiRequestMethod.GET
+    },
+    authentication = when (authentication) {
+        StartupAuthentication.NONE -> SduiAuthentication.NONE
+        StartupAuthentication.SESSION -> SduiAuthentication.SESSION
+    },
 )
 
 @Composable
