@@ -4,6 +4,8 @@ import com.carbroz.sdui.model.SduiScreen
 import com.carbroz.sdui.runtime.FieldState
 import com.carbroz.sdui.runtime.NodeRuntimeState
 import com.carbroz.sdui.runtime.SduiOverlay
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 /** Sole observable mutable state for one live dynamic screen. */
 data class DynamicScreenState(
@@ -14,6 +16,8 @@ data class DynamicScreenState(
     val fields: Map<String, FieldState> = emptyMap(),
     val nodeStates: Map<String, NodeRuntimeState> = emptyMap(),
     val overlay: SduiOverlay? = null,
+    val context: JsonObject = JsonObject(emptyMap()),
+    val response: JsonElement? = null,
     val failure: DynamicScreenFailure? = null,
 )
 
