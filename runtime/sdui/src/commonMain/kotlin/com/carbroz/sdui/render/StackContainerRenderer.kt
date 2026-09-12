@@ -9,8 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.carbroz.sdui.render.modifier.applySduiProperties
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 
 @Composable
 internal fun RenderStack(
@@ -19,62 +17,66 @@ internal fun RenderStack(
     children: @Composable () -> Unit,
 ) {
     val resolvedModifier = modifier.applySduiProperties(properties)
-    when (properties.string("orientation") ?: "vertical") {
-        "horizontal" -> Row(
+    val spacing = properties.float("spacing") ?: 16f
+    val mainAxisAlignment = properties.string("mainAxisAlignment")
+    val crossAxisAlignment = properties.string("crossAxisAlignment")
+
+    when (properties.string("axis")?.uppercase() ?: "VERTICAL") {
+        "HORIZONTAL" -> Row(
             modifier = resolvedModifier,
-            horizontalArrangement = horizontalArrangement(properties["horizontalArrangement"]),
-            verticalAlignment = verticalAlignment(properties.string("verticalAlignment")),
+            horizontalArrangement = horizontalArrangement(spacing, mainAxisAlignment),
+            verticalAlignment = verticalAlignment(crossAxisAlignment),
             content = { children() },
         )
         else -> Column(
             modifier = resolvedModifier,
-            verticalArrangement = verticalArrangement(properties["verticalArrangement"]),
-            horizontalAlignment = horizontalAlignment(properties.string("horizontalAlignment")),
+            verticalArrangement = verticalArrangement(spacing, mainAxisAlignment),
+            horizontalAlignment = horizontalAlignment(crossAxisAlignment),
             content = { children() },
         )
     }
 }
 
-private fun verticalArrangement(value: kotlinx.serialization.json.JsonElement?): Arrangement.Vertical =
-    when (value) {
-        is JsonPrimitive -> when (value.contentOrNull) {
-            "center" -> Arrangement.Center
-            "end" -> Arrangement.Bottom
-            "spaceBetween" -> Arrangement.SpaceBetween
-            "spaceAround" -> Arrangement.SpaceAround
-            "spaceEvenly" -> Arrangement.SpaceEvenly
-            else -> Arrangement.Top
-        }
-        is JsonObject -> if (value.string("type") == "spacedBy") {
-            Arrangement.spacedBy((value.float("spacing") ?: 0f).dp)
-        } else Arrangement.Top
+private fun verticalArrangement(spacing: Float, value: String?): Arrangement.Vertical =
+    if (spacing > 0f) Arrangement.spacedBy(spacing.dp) else when (value.normalizedAlignment()) {
+        "CENTER" -> Arrangement.Center
+        "END" -> Arrangement.Bottom
+        "SPACE_BETWEEN" -> Arrangement.SpaceBetween
+        "SPACE_AROUND" -> Arrangement.SpaceAround
+        "SPACE_EVENLY" -> Arrangement.SpaceEvenly
         else -> Arrangement.Top
     }
 
-private fun horizontalArrangement(value: kotlinx.serialization.json.JsonElement?): Arrangement.Horizontal =
-    when (value) {
-        is JsonPrimitive -> when (value.contentOrNull) {
-            "center" -> Arrangement.Center
-            "end" -> Arrangement.End
-            "spaceBetween" -> Arrangement.SpaceBetween
-            "spaceAround" -> Arrangement.SpaceAround
-            "spaceEvenly" -> Arrangement.SpaceEvenly
-            else -> Arrangement.Start
-        }
-        is JsonObject -> if (value.string("type") == "spacedBy") {
-            Arrangement.spacedBy((value.float("spacing") ?: 0f).dp)
-        } else Arrangement.Start
+private fun horizontalArrangement(spacing: Float, value: String?): Arrangement.Horizontal =
+    if (spacing > 0f) Arrangement.spacedBy(spacing.dp) else when (value.normalizedAlignment()) {
+        "CENTER" -> Arrangement.Center
+        "END" -> Arrangement.End
+        "SPACE_BETWEEN" -> Arrangement.SpaceBetween
+        "SPACE_AROUND" -> Arrangement.SpaceAround
+        "SPACE_EVENLY" -> Arrangement.SpaceEvenly
         else -> Arrangement.Start
     }
 
-private fun horizontalAlignment(value: String?): Alignment.Horizontal = when (value) {
-    "center" -> Alignment.CenterHorizontally
-    "end" -> Alignment.End
+private fun horizontalAlignment(value: String?): Alignment.Horizontal = when (value.normalizedAlignment()) {
+    "CENTER" -> Alignment.CenterHorizontally
+    "END" -> Alignment.End
     else -> Alignment.Start
 }
 
-private fun verticalAlignment(value: String?): Alignment.Vertical = when (value) {
-    "center" -> Alignment.CenterVertically
-    "bottom" -> Alignment.Bottom
+private fun verticalAlignment(value: String?): Alignment.Vertical = when (value.normalizedAlignment()) {
+    "CENTER" -> Alignment.CenterVertically
+    "END" -> Alignment.Bottom
     else -> Alignment.Top
 }
+
+private fun String?.normalizedAlignment(): String? = this
+    ?.replace("-", "_")
+    ?.replace(" ", "_")
+    ?.let { raw ->
+        buildString {
+            raw.forEachIndexed { index, char ->
+                if (char.isUpperCase() && index > 0 && raw[index - 1].isLowerCase()) append('_')
+                append(char.uppercaseChar())
+            }
+        }
+    }
