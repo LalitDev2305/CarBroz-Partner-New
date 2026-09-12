@@ -143,7 +143,7 @@ fun carBrozApplicationModule(
     }
     if (resourceDiagnostics != null) {
         single<ResourceDiagnostics> { resourceDiagnostics }
-        single { ResourceDiagnosticsReporter(diagnostics = get(), observability = get(), clock = get()) }
+        single { ResourceDiagnosticsReporter(diagnostics = get(), observability = get()) }
     }
     if (mainThreadDispatcher != null) {
         single { MainThreadResponsivenessMonitor(dispatcher = mainThreadDispatcher, observability = get()) }
