@@ -65,7 +65,7 @@ object SduiFrozenContractFixtures {
               "elements":[
                 {"id":"text","type":"text","properties":{"text":"Hello","leading":{"type":"divider","properties":{"orientation":"vertical"}},"trailing":{"type":"icon","properties":{"name":"arrow_forward"}}}},
                 {"id":"image","type":"image","properties":{"url":"https://cdn.example.com/image.png","width":120,"height":80}},
-                {"id":"input","type":"input","binding":{"key":"value"},"properties":{"value":"","maxLength":6,"presentation":{"type":"segmented","count":6}}},
+                {"id":"input","type":"input","binding":{"key":"value"},"properties":{"value":"","maxLength":6,"leading":{"type":"icon","properties":{"name":"edit"}},"presentation":{"type":"segmented","count":6}}},
                 {"id":"button","type":"button","properties":{"text":"Continue","trailing":{"type":"icon","properties":{"name":"arrow_forward"}}}}
               ],
               "sections":[{
