@@ -13,7 +13,10 @@ sealed interface SduiAction {
 
     @Serializable
     @SerialName("navigate")
-    data class Navigate(val payload: SduiDestination) : SduiAction
+    data class Navigate(
+        val payload: SduiDestination,
+        val navigationMode: SduiNavigationMode = SduiNavigationMode.PUSH,
+    ) : SduiAction
 
     @Serializable
     @SerialName("present")
@@ -50,6 +53,8 @@ data class RequestPayload(
     val validate: Boolean = false,
     val body: JsonObject? = null,
     val responseMode: SduiRequestResponseMode = SduiRequestResponseMode.NONE,
+    val navigationMode: SduiNavigationMode = SduiNavigationMode.PUSH,
+    val contextUpdates: JsonObject? = null,
 )
 
 @Serializable
@@ -78,6 +83,13 @@ enum class SduiAuthentication { NONE, SESSION }
 enum class SduiRequestResponseMode {
     @SerialName("none") NONE,
     @SerialName("destination") DESTINATION,
+}
+
+@Serializable
+enum class SduiNavigationMode {
+    @SerialName("push") PUSH,
+    @SerialName("replace") REPLACE,
+    @SerialName("reset") RESET,
 }
 
 @Serializable
