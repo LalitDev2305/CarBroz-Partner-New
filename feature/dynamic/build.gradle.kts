@@ -21,17 +21,13 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":foundation:configuration"))
             implementation(project(":foundation:lifecycle"))
             implementation(project(":foundation:navigation"))
             implementation(project(":foundation:capabilities"))
             implementation(project(":foundation:session"))
-            implementation(project(":runtime:action"))
-            implementation(project(":runtime:binding"))
+            implementation(project(":foundation:security"))
             api(project(":runtime:sdui"))
             implementation(project(":data:network"))
-            implementation(project(":data:realtime"))
-            implementation(project(":platform:background"))
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.compose.runtime)
