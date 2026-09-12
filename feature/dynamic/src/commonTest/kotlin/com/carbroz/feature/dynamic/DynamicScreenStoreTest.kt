@@ -146,7 +146,7 @@ class DynamicScreenStoreTest {
             DynamicScreenIntent.Interaction(
                 trigger(
                     SduiAction.State(
-                        targetId = "resend",
+                        targetId = "action_control",
                         payload = StatePayload(
                             operation = SduiStateOperation.SET,
                             property = SduiStateProperty.ENABLED,
@@ -157,7 +157,7 @@ class DynamicScreenStoreTest {
             ),
         )
         advanceUntilIdle()
-        assertEquals(true, fixture.store.state.value.nodeStates["resend"]?.enabled)
+        assertEquals(true, fixture.store.state.value.nodeStates["action_control"]?.enabled)
 
         fixture.store.dispatch(
             DynamicScreenIntent.Interaction(
