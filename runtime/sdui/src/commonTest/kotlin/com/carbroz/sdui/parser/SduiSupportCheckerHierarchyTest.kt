@@ -80,24 +80,40 @@ class SduiSupportCheckerHierarchyTest {
 
     @Test
     fun unsafeNavigateEndpointIsRejectedBeforeExecution() {
+        val result = checker.check(screenWithNavigate(endpoint = "https://example.com/screens/next"))
+
+        assertEquals(SduiSupportResult.Unsupported("unsafe_endpoint"), result)
+    }
+
+    @Test
+    fun nonGetNavigateDestinationIsRejectedBeforeExecution() {
+        val result = checker.check(screenWithNavigate(method = SduiRequestMethod.POST))
+
+        assertEquals(
+            SduiSupportResult.Unsupported("unsupported_destination_method:POST"),
+            result,
+        )
+    }
+
+    private fun screenWithNavigate(
+        endpoint: String = "/api/v1/screens/next",
+        method: SduiRequestMethod = SduiRequestMethod.GET,
+    ): SduiScreen {
         val base = screen()
         val navigate = SduiAction.Navigate(
             payload = SduiDestination(
                 screenId = "next",
                 templateId = "next_template",
                 templateType = "stack_template",
-                endpoint = "https://example.com/screens/next",
-                method = SduiRequestMethod.GET,
+                endpoint = endpoint,
+                method = method,
                 authentication = SduiAuthentication.NONE,
             ),
             navigationMode = SduiNavigationMode.PUSH,
         )
         val element = textElement().copy(actions = mapOf("onClick" to navigate))
         val component = base.template.components.single().copy(elements = listOf(element))
-
-        val result = checker.check(base.copy(template = base.template.copy(components = listOf(component))))
-
-        assertEquals(SduiSupportResult.Unsupported("unsafe_endpoint"), result)
+        return base.copy(template = base.template.copy(components = listOf(component)))
     }
 
     private fun screen(): SduiScreen = SduiScreen(
