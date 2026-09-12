@@ -1,57 +1,52 @@
 package com.carbroz.feature.dynamic
 
 import com.carbroz.foundation.navigation.NavigationDestination
-import com.carbroz.runtime.sdui.model.RequestAuthentication
-import com.carbroz.runtime.sdui.model.RequestMethod
-import com.carbroz.runtime.sdui.model.ScreenDestination
-import com.carbroz.runtime.sdui.model.ScreenTransition
-import kotlinx.serialization.json.JsonObject
+import com.carbroz.sdui.model.SduiAuthentication
+import com.carbroz.sdui.model.SduiDestination
+import com.carbroz.sdui.model.SduiRequestMethod
+import kotlinx.serialization.Serializable
 
-/** Trusted feature-owned instruction for acquiring one backend-driven screen. */
-data class DynamicScreenInstruction(
-    val destination: ScreenDestination,
-    val request: DynamicScreenRequest,
-    val transition: ScreenTransition = ScreenTransition.RESET,
-    val backStackKey: String = destination.screenId,
-    val restorePolicy: DynamicRestorePolicy = DynamicRestorePolicy.CACHE_FIRST,
-) {
-    init { require(backStackKey.isNotBlank()) { "Dynamic back-stack key must not be blank." } }
-}
-
-data class DynamicScreenRequest(
-    val method: RequestMethod,
-    val endpoint: String,
-    val payload: JsonObject = JsonObject(emptyMap()),
-    val authentication: RequestAuthentication = RequestAuthentication.SESSION,
-) {
-    init {
-        require(endpoint.startsWith('/')) { "Dynamic screen endpoint must be relative." }
-        require(!endpoint.startsWith("//")) { "Dynamic screen endpoint must not be protocol-relative." }
-        require("://" !in endpoint) { "Dynamic screen endpoint must not contain an absolute URL." }
-    }
-}
-
-enum class DynamicRestorePolicy {
-    CACHE_ONLY,
-    CACHE_FIRST,
-    REFRESH,
-    NETWORK_ONLY,
-}
-
-/** Feature-owned semantic destination. Stack mechanics remain owned by foundation:navigation. */
+/** One complete backend-defined dynamic screen stack entry. */
+@Serializable
 data class DynamicDestination(
-    val instruction: DynamicScreenInstruction,
+    val screenId: String,
+    val templateId: String,
+    val templateType: String,
+    val endpoint: String,
+    val method: SduiRequestMethod,
+    val authentication: SduiAuthentication,
 ) : NavigationDestination {
-    override val navigationId: String = buildString {
-        append(PREFIX)
-        append(instruction.backStackKey)
-        append(':')
-        append(instruction.destination.screenId)
-        append(':')
-        append(instruction.destination.templateId)
+    init {
+        require(screenId.isNotBlank()) { "Dynamic screenId must not be blank." }
+        require(templateId.isNotBlank()) { "Dynamic templateId must not be blank." }
+        require(templateType.isNotBlank()) { "Dynamic templateType must not be blank." }
+        require(endpoint.startsWith('/') && !endpoint.startsWith("//") && "://" !in endpoint) {
+            "Dynamic endpoint must be a safe relative endpoint."
+        }
+        require(method == SduiRequestMethod.GET) { "Dynamic destinations must be fetched with GET." }
     }
+
+    override val navigationId: String = "$PREFIX$screenId:$templateId:$endpoint"
+
+    fun toSduiDestination(): SduiDestination = SduiDestination(
+        screenId = screenId,
+        templateId = templateId,
+        templateType = templateType,
+        endpoint = endpoint,
+        method = method,
+        authentication = authentication,
+    )
 
     companion object {
         const val PREFIX: String = "dynamic:"
+
+        fun from(value: SduiDestination): DynamicDestination = DynamicDestination(
+            screenId = value.screenId,
+            templateId = value.templateId,
+            templateType = value.templateType,
+            endpoint = value.endpoint,
+            method = value.method,
+            authentication = value.authentication,
+        )
     }
 }
