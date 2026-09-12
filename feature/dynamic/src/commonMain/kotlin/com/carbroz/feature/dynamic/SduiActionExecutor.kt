@@ -37,6 +37,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 
 sealed interface SduiActionResult {
     data object Completed : SduiActionResult
+    data object ValidationBlocked : SduiActionResult
     data class Navigate(
         val destination: DynamicDestination,
         val mode: SduiNavigationMode,
@@ -78,8 +79,12 @@ class SduiActionExecutor(
     suspend fun execute(
         action: SduiAction,
         bindings: Map<String, JsonElement>,
+        validate: () -> Boolean = { true },
     ): SduiActionResult = when (action) {
-        is SduiAction.Request -> executeRequest(action, bindings)
+        is SduiAction.Request -> {
+            if (action.payload.validate && !validate()) SduiActionResult.ValidationBlocked
+            else executeRequest(action, bindings)
+        }
         is SduiAction.Navigate -> SduiActionResult.Navigate(
             destination = DynamicDestination.from(action.payload),
             mode = action.navigationMode,
@@ -100,7 +105,7 @@ class SduiActionExecutor(
             ),
         )
         is SduiAction.ExternalUri -> executeExternalUri(action, bindings)
-        is SduiAction.Sequence -> executeSequence(action, bindings)
+        is SduiAction.Sequence -> executeSequence(action, bindings, validate)
     }
 
     private suspend fun executeRequest(
@@ -200,11 +205,12 @@ class SduiActionExecutor(
     private suspend fun executeSequence(
         action: SduiAction.Sequence,
         bindings: Map<String, JsonElement>,
+        validate: () -> Boolean,
     ): SduiActionResult {
         val results = ArrayList<SduiActionResult>(action.payload.actions.size)
         for (child in action.payload.actions) {
-            val result = execute(child, bindings)
-            if (result is SduiActionResult.Failure) return result
+            val result = execute(child, bindings, validate)
+            if (result is SduiActionResult.Failure || result is SduiActionResult.ValidationBlocked) return result
             results += result
             if (result is SduiActionResult.Navigate) break
         }
