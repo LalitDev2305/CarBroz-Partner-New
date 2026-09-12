@@ -60,6 +60,7 @@ class SduiNodeRegistry {
 
     private fun <T> register(target: MutableMap<String, T>, type: String, value: T, hierarchy: String) {
         require(type.isNotBlank()) { "SDUI $hierarchy renderer type must not be blank" }
-        require(target.putIfAbsent(type, value) == null) { "Duplicate SDUI $hierarchy renderer '$type'" }
+        require(type !in target) { "Duplicate SDUI $hierarchy renderer '$type'" }
+        target[type] = value
     }
 }
