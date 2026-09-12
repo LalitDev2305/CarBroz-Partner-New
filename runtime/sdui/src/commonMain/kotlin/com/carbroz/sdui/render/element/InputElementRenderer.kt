@@ -25,6 +25,8 @@ import com.carbroz.sdui.model.SduiElement
 import com.carbroz.sdui.registry.ElementRenderer
 import com.carbroz.sdui.render.SduiInteraction
 import com.carbroz.sdui.render.SduiRenderContext
+import com.carbroz.sdui.render.accessories
+import com.carbroz.sdui.render.accessory.AccessoryRenderer
 import com.carbroz.sdui.render.float
 import com.carbroz.sdui.render.int
 import com.carbroz.sdui.render.modifier.applySduiProperties
@@ -69,28 +71,41 @@ object InputElementRenderer : ElementRenderer {
             .then(if (node.properties.float("weight") != null) Modifier.fillMaxWidth() else Modifier)
 
         Column(modifier = modifier) {
-            val presentation = node.properties.objectValue("presentation")
-            if (presentation?.string("type") == "segmented") {
-                SegmentedInput(
-                    value = value,
-                    enabled = enabled,
-                    count = presentation.int("count") ?: maxLength ?: 6,
-                    keyboardType = keyboardType,
-                    properties = presentation,
-                    onValueChange = onValueChange,
-                )
-            } else {
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    enabled = enabled,
-                    singleLine = true,
-                    placeholder = node.properties.string("placeholder")?.let { { Text(it) } },
-                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                    visualTransformation = if (keyboardType == KeyboardType.Password) PasswordVisualTransformation() else VisualTransformation.None,
-                    isError = field?.error != null,
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                node.properties.accessories("leading").forEach {
+                    AccessoryRenderer.Render(it, context)
+                    Spacer(Modifier.width(8.dp))
+                }
+
+                val presentation = node.properties.objectValue("presentation")
+                if (presentation?.string("type") == "segmented") {
+                    SegmentedInput(
+                        value = value,
+                        enabled = enabled,
+                        count = presentation.int("count") ?: maxLength ?: 6,
+                        keyboardType = keyboardType,
+                        properties = presentation,
+                        onValueChange = onValueChange,
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        enabled = enabled,
+                        singleLine = true,
+                        placeholder = node.properties.string("placeholder")?.let { { Text(it) } },
+                        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                        visualTransformation = if (keyboardType == KeyboardType.Password) PasswordVisualTransformation() else VisualTransformation.None,
+                        isError = field?.error != null,
+                    )
+                }
+
+                node.properties.accessories("trailing").forEach {
+                    Spacer(Modifier.width(8.dp))
+                    AccessoryRenderer.Render(it, context)
+                }
             }
+
             field?.error?.let { error ->
                 Spacer(Modifier.height(4.dp))
                 Text(error, color = androidx.compose.material3.MaterialTheme.colorScheme.error)
