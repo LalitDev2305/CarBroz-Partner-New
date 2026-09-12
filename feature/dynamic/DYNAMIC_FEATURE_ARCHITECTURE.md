@@ -1,6 +1,6 @@
 # CarBroz Partner Frontend — Dynamic Feature Architecture
 
-> **Status:** REVIEW DRAFT — not frozen and not an implementation mandate yet.
+> **Status:** REVIEW DRAFT — SDUI architecture re-audit open; not frozen and not an implementation mandate yet.
 >
 > **Purpose:** explain the `feature:dynamic` module in simple app-flow language. This module owns the live lifecycle of every backend-driven Partner screen after Splash. It does not define the SDUI protocol itself; that belongs to the SDUI module.
 
@@ -1288,3 +1288,48 @@ When adding a new SDUI element/action, follow the SDUI implementation plan. Only
 ```
 
 Only after these are green should `feature:dynamic` be marked frozen.
+
+---
+
+# 25. Architecture amendment — SDUI child-layout ownership boundary
+
+> **Status:** review direction recorded; exact SDUI implementation names remain pending the runtime/sdui class audit discussion.
+
+This Dynamic document intentionally does **not** own the structural layout algorithm. `feature:dynamic` owns destination loading, live screen state, interaction orchestration and action execution. `runtime:sdui` owns how the backend SDUI node properties are interpreted for rendering.
+
+The following distinction is now mandatory:
+
+```text
+DynamicDestination.templateType
+        ↓
+semantic/render-capability identity of the target Template
+
+Template/Component/Section/Group properties
+        ↓
+SDUI-owned self presentation + child arrangement
+```
+
+Therefore `feature:dynamic` must never contain logic such as:
+
+```text
+if stack_template -> Column
+if form_template -> Column
+if grid_component -> LazyGrid
+```
+
+and it must never infer a layout algorithm from a navigation rule.
+
+`axis`, `spacing`, `mainAxisAlignment` and `crossAxisAlignment` are currently treated as reusable SDUI child-layout properties. Their rendering belongs below the Dynamic boundary and should not require separate Dynamic behavior for Template, Component, Section or Group.
+
+Future layout algorithms such as grid/overlay/flow also remain SDUI concerns. They must not create new Dynamic Stores, intents, effects, destinations or action-executor branches.
+
+The exact SDUI class names (`ChildLayoutRenderer`, `LinearLayoutRenderer`, `AxisLayoutRenderer`, or another final design) are deliberately **not frozen here**. They will be chosen only after owner review of the completed class-by-class SDUI audit.
+
+The Dynamic freeze checklist therefore gains these gates:
+
+```text
+[ ] feature:dynamic contains no child-layout algorithm or stack/grid/overlay branching
+[ ] bound UI values and action $binding values have one canonical owner
+[ ] shared SDUI hierarchy traversal does not get reimplemented independently in Dynamic
+[ ] agreed runtime/sdui audit corrections are implemented before final freeze
+```
