@@ -35,6 +35,7 @@ import com.carbroz.sdui.registry.SduiNodeRegistration
 import com.carbroz.sdui.render.SduiInteraction
 import com.carbroz.sdui.value.SduiValueResolver
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -49,6 +50,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DynamicScreenStoreTest {
     @Test
     fun showUnwrapsEnvelopeChecksIdentityAndInitializesBoundFields() = runTest {

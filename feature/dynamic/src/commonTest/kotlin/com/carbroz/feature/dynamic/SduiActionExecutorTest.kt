@@ -2,6 +2,7 @@ package com.carbroz.feature.dynamic
 
 import com.carbroz.data.network.NetworkAuthentication
 import com.carbroz.data.network.NetworkDataSource
+import com.carbroz.data.network.NetworkEndpoint
 import com.carbroz.data.network.NetworkMethod
 import com.carbroz.data.network.NetworkRequest
 import com.carbroz.data.network.NetworkResponse
@@ -196,7 +197,7 @@ class SduiActionExecutorTest {
         val state = assertIs<SduiActionResult.NodeStateChanged>(
             fixture.executor.execute(
                 SduiAction.State(
-                    targetId = "resend",
+                    targetId = "action_control",
                     payload = StatePayload(
                         operation = SduiStateOperation.SET,
                         property = SduiStateProperty.ENABLED,
@@ -206,7 +207,7 @@ class SduiActionExecutorTest {
                 emptyMap(),
             ),
         )
-        assertEquals("resend", state.targetId)
+        assertEquals("action_control", state.targetId)
         assertEquals(SduiStateProperty.ENABLED, state.update.property)
         assertEquals(JsonPrimitive(true), state.update.value)
     }
@@ -282,15 +283,15 @@ class SduiActionExecutorTest {
     fun latestSuccessfulRequestReplacesResponseSource() = runTest {
         val network = QueueNetworkDataSource(
             mutableListOf(
-                NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("challenge" to JsonPrimitive("old"))))),
-                NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("challenge" to JsonPrimitive("new"))))),
+                NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("version" to JsonPrimitive("old"))))),
+                NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("version" to JsonPrimitive("new"))))),
             ),
         )
         val fixture = fixture(network)
         val action = SduiAction.Request(
             RequestPayload(
                 method = SduiRequestMethod.POST,
-                endpoint = "/api/v1/resend",
+                endpoint = "/api/v1/action",
                 authentication = SduiAuthentication.NONE,
                 responseMode = SduiRequestResponseMode.NONE,
             ),
@@ -299,7 +300,7 @@ class SduiActionExecutorTest {
         fixture.executor.execute(action, emptyMap())
         fixture.executor.execute(action, emptyMap())
 
-        assertEquals(JsonPrimitive("new"), fixture.flow.snapshot().response!!.jsonObject["challenge"])
+        assertEquals(JsonPrimitive("new"), fixture.flow.snapshot().response!!.jsonObject["version"])
     }
 
     private fun fixture(

@@ -32,8 +32,6 @@ kotlin {
             implementation(libs.coil.network.ktor3)
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
-            // Temporary only while the legacy SDUI path coexists during convergence.
-            api(project(":runtime:binding"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
