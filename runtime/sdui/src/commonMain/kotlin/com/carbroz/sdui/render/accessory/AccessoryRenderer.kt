@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,7 +40,7 @@ object IconAccessoryRenderer {
         val size = (properties.float("size") ?: 20f).dp
         val tint = properties.string("color")?.let(::parseSduiColor)
         val vector = when (properties.string("name")) {
-            "arrow_forward" -> Icons.Default.ArrowForward
+            "arrow_forward" -> Icons.AutoMirrored.Filled.ArrowForward
             "edit" -> Icons.Default.Edit
             else -> null
         }
