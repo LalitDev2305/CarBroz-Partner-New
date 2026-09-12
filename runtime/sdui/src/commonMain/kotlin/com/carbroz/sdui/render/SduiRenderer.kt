@@ -20,6 +20,41 @@ class SduiRenderer(
         }
     }
 
+    /** Renders a backend presentation target with the same hierarchy renderers used by the base screen. */
+    @Composable
+    fun RenderTarget(screen: SduiScreen, targetId: String, context: SduiRenderContext) {
+        screen.template.components.forEach { component ->
+            if (component.id == targetId) {
+                RenderComponent(component, context)
+                return
+            }
+            component.elements.orEmpty().firstOrNull { it.id == targetId }?.let {
+                RenderElement(it, context)
+                return
+            }
+            component.sections.orEmpty().forEach { section ->
+                if (section.id == targetId) {
+                    RenderSection(section, context)
+                    return
+                }
+                section.elements.orEmpty().firstOrNull { it.id == targetId }?.let {
+                    RenderElement(it, context)
+                    return
+                }
+                section.groups.orEmpty().forEach { group ->
+                    if (group.id == targetId) {
+                        RenderGroup(group, context)
+                        return
+                    }
+                    group.elements.firstOrNull { it.id == targetId }?.let {
+                        RenderElement(it, context)
+                        return
+                    }
+                }
+            }
+        }
+    }
+
     @Composable
     private fun RenderComponent(node: SduiComponent, context: SduiRenderContext) {
         val renderer = registry.component(node.type) ?: return
