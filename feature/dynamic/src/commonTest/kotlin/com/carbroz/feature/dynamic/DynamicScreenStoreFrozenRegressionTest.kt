@@ -14,6 +14,7 @@ import com.carbroz.foundation.session.SessionState
 import com.carbroz.foundation.session.SessionStore
 import com.carbroz.sdui.model.PresentPayload
 import com.carbroz.sdui.model.RequestPayload
+import com.carbroz.sdui.model.SequencePayload
 import com.carbroz.sdui.model.SduiAction
 import com.carbroz.sdui.model.SduiAuthentication
 import com.carbroz.sdui.model.SduiComponent
@@ -27,6 +28,7 @@ import com.carbroz.sdui.model.SduiStateOperation
 import com.carbroz.sdui.model.SduiStateProperty
 import com.carbroz.sdui.model.SduiTargetApp
 import com.carbroz.sdui.model.SduiTemplate
+import com.carbroz.sdui.model.SduiValidationRule
 import com.carbroz.sdui.model.StatePayload
 import com.carbroz.sdui.parser.SduiDecoder
 import com.carbroz.sdui.parser.SduiSupportChecker
@@ -45,6 +47,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -149,6 +152,75 @@ class DynamicScreenStoreFrozenRegressionTest {
         )
         advanceUntilIdle()
         assertEquals(null, store.state.value.overlay)
+    }
+
+    @Test
+    fun validatedRequestInsideSequenceCannotBypassFieldValidation() = runTest {
+        val validatedScreen = screen().let { base ->
+            val component = base.template.components.single()
+            val input = component.elements.orEmpty().single().copy(
+                properties = JsonObject(mapOf("value" to JsonPrimitive(""))),
+                validation = SduiValidationRule(
+                    required = true,
+                    pattern = "^[0-9]{10}$",
+                    message = "Enter 10 digits",
+                ),
+            )
+            base.copy(template = base.template.copy(components = listOf(component.copy(elements = listOf(input)))))
+        }
+        val actionNetwork = RecordingNetworkDataSource(
+            NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("data" to JsonObject(emptyMap()))))),
+        )
+        val store = fixture(
+            screenNetwork = QueueNetworkDataSource(mutableListOf(successEnvelope(validatedScreen))),
+            actionNetwork = actionNetwork,
+        )
+        store.show(destination())
+        advanceUntilIdle()
+
+        val sequence = SduiAction.Sequence(
+            SequencePayload(
+                actions = listOf(
+                    SduiAction.State(
+                        targetId = "submit",
+                        payload = StatePayload(
+                            operation = SduiStateOperation.SET,
+                            property = SduiStateProperty.LOADING,
+                            value = JsonPrimitive(true),
+                        ),
+                    ),
+                    SduiAction.Request(
+                        RequestPayload(
+                            method = SduiRequestMethod.POST,
+                            endpoint = "/api/v1/action",
+                            authentication = SduiAuthentication.NONE,
+                            validate = true,
+                            responseMode = SduiRequestResponseMode.NONE,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        store.dispatch(
+            DynamicScreenIntent.Interaction(SduiInteraction.ActionTriggered("submit", "onClick", sequence)),
+        )
+        advanceUntilIdle()
+        assertEquals(0, actionNetwork.requests.size)
+        assertEquals("Enter 10 digits", store.state.value.fields["phone"]?.error)
+        assertNull(store.state.value.failure)
+
+        store.dispatch(
+            DynamicScreenIntent.Interaction(
+                SduiInteraction.ValueChanged("phone_input", "phone", JsonPrimitive("9999999999")),
+            ),
+        )
+        store.dispatch(
+            DynamicScreenIntent.Interaction(SduiInteraction.ActionTriggered("submit", "onClick", sequence)),
+        )
+        advanceUntilIdle()
+        assertEquals(1, actionNetwork.requests.size)
+        assertNull(store.state.value.fields["phone"]?.error)
     }
 
     @Test
@@ -265,6 +337,16 @@ class DynamicScreenStoreFrozenRegressionTest {
         private val results: MutableList<NetworkResult>,
     ) : NetworkDataSource {
         override suspend fun execute(request: NetworkRequest): NetworkResult = results.removeAt(0)
+    }
+
+    private class RecordingNetworkDataSource(
+        private val result: NetworkResult,
+    ) : NetworkDataSource {
+        val requests = mutableListOf<NetworkRequest>()
+        override suspend fun execute(request: NetworkRequest): NetworkResult {
+            requests += request
+            return result
+        }
     }
 
     private class ImmediateNetworkDataSource : NetworkDataSource {
