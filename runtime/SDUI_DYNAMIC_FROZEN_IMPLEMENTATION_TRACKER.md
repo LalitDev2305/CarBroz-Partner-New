@@ -1,6 +1,6 @@
 # SDUI + Dynamic Frozen Convergence — Implementation Tracker
 
-> **Status:** SOURCE-COMPLETE FOR THE GENERIC ENGINE — final configured CI execution and authority-document freeze remain blocked by GitHub runner allocation.
+> **Status:** SOURCE-COMPLETE BASELINE / ARCHITECTURE RE-AUDIT OPEN — production refactor is paused for owner review; configured CI also remains blocked by GitHub runner allocation.
 >
 > **Authority 1:** `runtime/SDUI_SIMPLIFICATION_IMPLEMENTATION_PLAN.md`
 >
@@ -18,6 +18,7 @@
 - Login/OTP are not reimplemented as product-specific frontend flows. They exist only as generic SDUI fixtures/mock-flow proof.
 - **Resend/cooldown/timer remains explicitly deferred** until the real OTP JSON/auth contract is implemented.
 - Real backend/manual visual/auth validation remains post-engine validation for the owner’s actual app run.
+- **No production SDUI refactor is authorized from the new architecture audit until findings are reviewed with the owner.**
 - Do not merge to `development` without explicit owner approval.
 
 ## 2. Frozen generic architecture being implemented
@@ -111,28 +112,35 @@ Current generic rules proven in source/tests:
 - Action failure preserves an already-loaded screen instead of replacing valid content with the load-failure UI.
 - Production Dynamic/SDUI code contains no Login/OTP/Dashboard/Booking-specific routing branch.
 
+Architecture re-audit clarification:
+
+- Semantic structural-node identity and child-layout behavior are now explicitly separate concerns.
+- `axis`, `spacing`, `mainAxisAlignment`, `crossAxisAlignment` describe reusable linear/axis child arrangement, not hierarchy-specific Stack ownership.
+- The current `RenderStack` / `StackContainerRenderer` and Stack wrappers remain source baseline only; they are not frozen as the final abstraction.
+- Exact replacement names/design remain pending owner discussion after the class-by-class audit.
+
 ## 3. Phase status
 
 | Phase | Requirement | State | Evidence |
 |---|---|---|---|
 | 1 | Canonical realistic fixtures | VERIFIED | Login, OTP, Dashboard, Booking Details, all-node, all-action, all-value-reference and unsupported fixtures exist. OTP fixture deliberately contains no resend/cooldown policy. |
 | 2 | Destination consistency boundary | VERIFIED | Store checks `screenId + templateId + templateType`; full destination constructor enforces safe relative endpoint + GET load method. |
-| 3 | Exact SDUI models/actions/value refs | VERIFIED | Immutable models use exact seven-action union and exact four reference forms. |
-| 4 | API envelope + decoder | VERIFIED | Store unwraps `data`; decoder consumes `JsonElement`; malformed/unknown action behavior is deterministic. |
-| 5 | Capability/security support checker | VERIFIED | Schema + hierarchy vocabulary + request/navigate endpoint safety + navigate GET requirement + embedded text-span actions are checked. |
-| 6 | Separated hierarchy registry | VERIFIED | One `SduiNodeRegistration.createRegistry()` entry point; hierarchy-specific registration/lookup and duplicate rejection tests exist. |
-| 7 | Common rendering/accessories/contracts | VERIFIED FOR ENGINE | Shared render context/runtime state/accessory renderer exists; Text/Image/Input/Button use reusable accessory paths. Canonical stack wire keys are `axis`, `spacing`, `mainAxisAlignment`, `crossAxisAlignment`. |
-| 8 | Template/component/section/group/element renderers | VERIFIED FOR ENGINE | Stack/Form/Default templates, stack structural renderers and Text/Image/Input/Button leaves exist. Segmented input is property-driven; hierarchy visibility is centrally enforced. |
-| 9 | One Dynamic screen-state owner | VERIFIED | Field updates, validation, node state, overlay, immutable server model and cancellation are owned by `DynamicScreenState`/Store; legacy `FormStore` is gone. |
-| 10 | Structured value resolver | VERIFIED | `$binding/$context/$response/$literal`, nested object/array and deterministic missing-path behavior covered. |
+| 3 | Exact SDUI models/actions/value refs | RE-AUDIT OPEN | Seven-action/four-reference behavior is covered, but the class audit found a likely unused duplicate `SduiValueReference` model that should be discussed before freeze. |
+| 4 | API envelope + decoder | RE-AUDIT OPEN | Envelope/direct `JsonElement` decode is correct; unused decoder helper APIs and nested embedded-action ownership require cleanup discussion. |
+| 5 | Capability/security support checker | RE-AUDIT OPEN | Existing checks cover schema/hierarchy/actions/endpoints, but checker currently knows concrete Text-span structure and does not capability-check accessory vocabulary. |
+| 6 | Separated hierarchy registry | VERIFIED / DESIGN REVIEW | Hierarchy-specific registration/lookup and duplicate rejection remain useful; layout-specific wrapper multiplication is under review. |
+| 7 | Common rendering/accessories/contracts | RE-AUDIT OPEN | Shared paths exist, but child-layout ownership, unsupported accessory behavior and spacing+alignment semantics need correction before freeze. |
+| 8 | Template/component/section/group/element renderers | RE-AUDIT OPEN | Existing renderers work as source baseline, but Stack/Form/Default structural abstraction, Input runtime-value ownership and renderer consistency require owner review. |
+| 9 | One Dynamic screen-state owner | RE-AUDIT OPEN | Store remains sole mutable state owner, but `NodeRuntimeState.value` vs `FieldState.value` can currently produce displayed/submitted value divergence. |
+| 10 | Structured value resolver | VERIFIED BEHAVIOR / CLEANUP OPEN | Four references and nested recursion work; duplicate unused typed reference model is under review. |
 | 11 | Seven-action executor | VERIFIED IN SOURCE/TESTS | HTTP/destination/session commit policy, atomic flow commit, no-body none-response, targeted dismiss, nested request validation, external URI, state and sequence failure policy covered. |
 | 12 | Full destination/navigation/lifecycle | VERIFIED | Serialization/navigation identity/conversion, process restoration, Back/Refresh, cancellation and repeated-action suppression covered. |
 | 13 | Legacy convergence/removal | VERIFIED STRUCTURALLY | Entire old `com.carbroz.runtime.sdui.*` production/test tree removed; temporary `runtime:binding` dependency removed; unrelated runtime modules preserved. |
-| 14 | Full vocabulary regression | VERIFIED | Full hierarchy/actions/references/accessories/clickable text span capability and unsupported vocabulary proof exist. |
-| 15 | Dynamic + mock flow tests | VERIFIED FOR ENGINE | Generic Login -> OTP -> Dashboard and Dashboard -> Booking Details -> Back flows covered; Store/Context/Executor regressions cover generic behavior. |
+| 14 | Full vocabulary regression | RE-AUDIT OPEN | Existing fixtures cover current vocabulary, but unsupported accessory/layout vocabulary and new audit regressions need explicit proof. |
+| 15 | Dynamic + mock flow tests | VERIFIED BASELINE | Generic Login -> OTP -> Dashboard and Dashboard -> Booking Details -> Back flows covered; additional audit regressions are pending. |
 | 16 | Real Desktop/backend/manual app integration | DEFERRED BY OWNER | Post-engine real JSON/auth/UI/backend validation. No fake E2E claim. |
 | 17 | Configured multiplatform/architecture CI | WAITING ON RUNNER | `jvm-android` and `published-foundation-boundary` repeatedly fail before allocation (`runner_id=0`, `steps=[]`); dependent iOS therefore skips. |
-| 18 | Documentation freeze | WAITING ON PHASE 17 | Tracker reflects source truth. Authority docs remain review draft until configured CI actually executes green. |
+| 18 | Documentation freeze | WAITING ON AUDIT + PHASE 17 | Authority docs record the new architecture amendment but remain review drafts; final freeze requires approved audit corrections plus executable green CI. |
 
 ## 4. Executable proof inventory
 
@@ -383,25 +391,29 @@ Any later real JSON that needs a new generic capability must extend the frozen g
 - [x] Refresh reloads current destination
 - [x] no `templateType` routing decisions
 - [x] no duplicate deep structural validator
-- [x] capability/security support checker only
+- [~] capability/security support checker exists; embedded-action/accessory capability ownership is under re-audit
 - [x] safe request/navigate endpoint checks
 - [x] navigate dynamic destination GET capability check
-- [x] embedded clickable text-span actions support-checked
+- [x] embedded clickable text-span actions currently support-checked
 - [x] separated hierarchy registry
 - [x] duplicate registration fails
 - [x] reusable accessories on multiple element types including Input
-- [x] canonical stack layout wire keys restored
+- [~] canonical linear-layout wire keys restored; final child-layout abstraction and spacing/alignment semantics are under re-audit
 - [x] hierarchy-wide runtime visibility
-- [x] one canonical field/runtime state owner
+- [~] one Dynamic screen state owner exists; bound-value vs node runtime-value consistency needs correction
 - [x] exact seven wire actions
-- [x] exact four value references
-- [x] current frozen node vocabulary represented
+- [x] exact four value-reference behaviors
+- [x] current baseline node vocabulary represented
 - [x] Image/Text/Input/Button renderer path
 - [x] segmented input property path
-- [x] full-vocabulary fixture tests
+- [x] baseline full-vocabulary fixture tests
 - [x] Login -> OTP -> Dashboard mock flow
 - [x] legacy SDUI runtime removed
 - [x] resend/cooldown excluded from current implementation
+- [ ] semantic node identity vs reusable child-layout abstraction approved
+- [ ] unsupported accessory/layout vocabulary fails cleanly
+- [ ] dead/duplicate SDUI protocol helpers reviewed and removed or justified
+- [ ] audit regression tests added for approved corrections
 - [ ] configured JVM/Android + published-foundation + iOS CI actually executes green
 - [~] real backend/manual visual/auth validation explicitly deferred
 
@@ -413,7 +425,7 @@ Any later real JSON that needs a new generic capability must extend the frozen g
 - [x] Refresh reuses current full destination
 - [x] `DynamicScreenState` sole mutable screen-state owner
 - [x] no active `FormStore`
-- [x] no local canonical input state competing with Store state
+- [~] no local canonical input store competes with Store, but node runtime `value` can diverge from canonical binding `FieldState.value`
 - [x] Store owns orchestration but not Compose rendering
 - [x] renderer owns no network/navigation
 - [x] exact seven-action executor
@@ -427,18 +439,57 @@ Any later real JSON that needs a new generic capability must extend the frozen g
 - [x] generic auth-shaped mock flow
 - [x] generic booking navigation/back mock flow
 - [x] cancellation/repeated-action tests
+- [ ] duplicated hierarchy traversal between Dynamic and SDUI is resolved/justified
 - [ ] configured multiplatform CI actually executes green
 - [~] real backend/manual app integration explicitly deferred
 
 ## 10. Remaining sequence to `FROZEN GREEN`
 
-1. Obtain a GitHub Actions run where jobs actually acquire runners and execute.
-2. Fix only concrete compile/test failures exposed by that executable run.
-3. Require `jvm-android` green.
-4. Require `published-foundation-boundary` green.
-5. Require dependent `ios` to execute and finish green.
-6. Perform one final exact-SHA stale-code audit after executable green CI.
-7. Update both authority documents from review-draft wording to implemented/frozen generic-engine truth while preserving all deferred boundaries above.
-8. Let the configured workflow run on that final documentation head as applicable.
-9. Do not merge PR #11 without owner approval.
-10. Only then declare: **`SDUI + DYNAMIC GENERIC ENGINE — FROZEN GREEN`**.
+1. Finish and review the class-by-class active `runtime/sdui` audit with the owner.
+2. Agree the exact corrections and exact naming/ownership boundaries; do not implement speculative abstractions.
+3. Implement only the approved generic corrections with focused regression tests.
+4. Re-run exact-tree stale/dead-code and architecture audits.
+5. Obtain a GitHub Actions run where jobs actually acquire runners and execute.
+6. Fix only concrete compile/test failures exposed by that executable run.
+7. Require `jvm-android` green.
+8. Require `published-foundation-boundary` green.
+9. Require dependent `ios` to execute and finish green.
+10. Perform one final exact-SHA stale-code audit after executable green CI.
+11. Update both authority documents from review-draft wording to implemented/frozen generic-engine truth while preserving all deferred boundaries above.
+12. Let the configured workflow run on that final documentation head as applicable.
+13. Do not merge PR #11 without owner approval.
+14. Only then declare: **`SDUI + DYNAMIC GENERIC ENGINE — FROZEN GREEN`**.
+
+## 11. Architecture re-audit checkpoint — no production change yet
+
+The owner identified that the current Stack abstraction may be conflating semantic node identity with generic child arrangement. A complete active `runtime/sdui` production-class audit was therefore performed before any further source refactor.
+
+The audit categories are:
+
+```text
+naming / semantic accuracy
+single responsibility
+unused or duplicate protocol representations
+hierarchy traversal duplication
+renderer/layout genericity
+capability checking
+silent fallback/failure
+state ownership consistency
+future extension cost
+module dependency surface
+```
+
+Confirmed discussion items include:
+
+1. `RenderStack` / `StackContainerRenderer` is functioning as shared linear child-layout machinery and should not force hierarchy-specific Stack/Grid/etc renderer multiplication.
+2. Current nonzero spacing can override/erase main-axis alignment semantics in the linear layout helper.
+3. `SduiSupportChecker` contains a concrete `text` property-shape branch for span actions; embedded-action capability discovery needs a generic ownership boundary.
+4. Accessory vocabulary is not capability-checked and unknown accessories currently disappear silently.
+5. Bound Input display state can prefer `NodeRuntimeState.value` while action `$binding` reads `FieldState.value`, allowing UI/submission divergence.
+6. Hierarchy traversal is independently repeated by renderer, support checker and Dynamic field/validation code.
+7. `SduiValueReference` appears to duplicate the four-reference wire representation without being used by the active resolver path.
+8. `SduiDecoder.decodeAccessory` and string-based action decoding appear unused in active source and should be removed or justified.
+9. Element renderers have inconsistent ownership/default behavior for common modifiers, enabled state, dynamic text/value resolution and hardcoded padding.
+10. Component/Section nullable child collections allow impossible in-memory combinations; any correction must avoid recreating backend structural validation on the client.
+
+These are **audit findings for owner discussion, not authorized production changes**. The two authority documents now record the child-layout separation principle, while exact class names and refactor shape remain intentionally unfrozen.
