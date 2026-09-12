@@ -21,8 +21,7 @@ object SduiFrozenContractFixtures {
         body = """
             "elements": [
               {"id":"otp","type":"input","binding":{"key":"otp"},"validation":{"required":true,"pattern":"^[0-9]{6}$","message":"Enter OTP"},"properties":{"value":"","maxLength":6,"keyboardType":"number","presentation":{"type":"segmented","count":6,"spacing":8,"segmentWidth":44,"segmentHeight":52}}},
-              {"id":"verify","type":"button","properties":{"text":"Verify"},"actions":{"click":{"type":"request","payload":{"method":"POST","endpoint":"/api/v1/auth/verify","authentication":"NONE","validate":true,"body":{"otp":{"__REF_BINDING__":"otp"},"phoneNumber":{"__REF_CONTEXT__":"authFlow.phoneNumber"},"challengeId":{"__REF_RESPONSE__":"data.challengeId"}},"responseMode":"destination","navigationMode":"reset"}}}},
-              {"id":"resend","type":"text","properties":{"text":"Resend OTP"},"actions":{"click":{"type":"request","payload":{"method":"POST","endpoint":"/api/v1/auth/resend","authentication":"NONE","body":{"phoneNumber":{"__REF_CONTEXT__":"authFlow.phoneNumber"}},"responseMode":"none"}}}}
+              {"id":"verify","type":"button","properties":{"text":"Verify"},"actions":{"click":{"type":"request","payload":{"method":"POST","endpoint":"/api/v1/auth/verify","authentication":"NONE","validate":true,"body":{"otp":{"__REF_BINDING__":"otp"},"phoneNumber":{"__REF_CONTEXT__":"authFlow.phoneNumber"},"challengeId":{"__REF_RESPONSE__":"data.challengeId"}},"responseMode":"destination","navigationMode":"reset"}}}}
             ]
         """.trimIndent().wireRefs(),
     )
