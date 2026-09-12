@@ -86,6 +86,41 @@ class SduiActionExecutorTest {
     }
 
     @Test
+    fun responseModeNoneAllowsNoBodyAndClearsStaleResponse() = runTest {
+        val network = QueueNetworkDataSource(
+            mutableListOf(
+                NetworkResult.Success(NetworkResponse(200, body = JsonObject(mapOf("version" to JsonPrimitive("old"))))),
+                NetworkResult.Success(NetworkResponse(204, body = null)),
+            ),
+        )
+        val fixture = fixture(network)
+        val first = SduiAction.Request(
+            RequestPayload(
+                method = SduiRequestMethod.POST,
+                endpoint = "/api/v1/action",
+                authentication = SduiAuthentication.NONE,
+                responseMode = SduiRequestResponseMode.NONE,
+            ),
+        )
+        val noBody = SduiAction.Request(
+            RequestPayload(
+                method = SduiRequestMethod.POST,
+                endpoint = "/api/v1/action",
+                authentication = SduiAuthentication.NONE,
+                responseMode = SduiRequestResponseMode.NONE,
+                contextUpdates = JsonObject(mapOf("completed" to JsonPrimitive(true))),
+            ),
+        )
+
+        assertIs<SduiActionResult.Completed>(fixture.executor.execute(first, emptyMap()))
+        assertIs<SduiActionResult.Completed>(fixture.executor.execute(noBody, emptyMap()))
+
+        val snapshot = fixture.flow.snapshot()
+        assertNull(snapshot.response)
+        assertEquals(JsonPrimitive(true), snapshot.context["completed"])
+    }
+
+    @Test
     fun failedRequestDoesNotApplyContextOrNavigate() = runTest {
         val network = RecordingNetworkDataSource(NetworkResult.Success(NetworkResponse(500, body = JsonObject(emptyMap()))))
         val fixture = fixture(network)
