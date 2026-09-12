@@ -11,6 +11,7 @@ import com.carbroz.sdui.value.SduiExecutionContext
 import com.carbroz.sdui.value.SduiValueResolution
 import com.carbroz.sdui.value.SduiValueResolver
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
@@ -57,7 +58,9 @@ class SduiFrozenVocabularyTest {
         }
 
         val elements = component.elements.orEmpty()
-        assertIs<JsonObject>(elements.single { it.type == "text" }.properties["leading"])
+        val text = elements.single { it.type == "text" }
+        assertIs<JsonArray>(text.properties["spans"])
+        assertIs<JsonObject>(text.properties["leading"])
         assertIs<JsonObject>(elements.single { it.type == "input" }.properties["leading"])
         assertIs<JsonObject>(elements.single { it.type == "button" }.properties["trailing"])
     }
@@ -113,6 +116,18 @@ class SduiFrozenVocabularyTest {
 
         assertEquals(
             SduiSupportResult.Unsupported("unsupported_template:unknown_template"),
+            checker.check(screen),
+        )
+    }
+
+    @Test
+    fun unsupportedEmbeddedTextSpanActionFailsAtCapabilityBoundary() {
+        val screen = assertIs<SduiDecodeResult.Success>(
+            decoder.decode(Json.parseToJsonElement(SduiFrozenContractFixtures.unsupportedSpanAction)),
+        ).screen
+
+        assertEquals(
+            SduiSupportResult.Unsupported("unsupported_action"),
             checker.check(screen),
         )
     }
