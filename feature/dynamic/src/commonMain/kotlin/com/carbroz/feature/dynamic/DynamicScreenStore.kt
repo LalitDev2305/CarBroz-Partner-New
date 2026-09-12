@@ -254,9 +254,10 @@ class DynamicScreenStore(
             val rule = element.validation ?: return@forEach
             val field = updated[key] ?: FieldState()
             val text = (field.value as? JsonPrimitive)?.content.orEmpty()
+            val pattern = rule.pattern
             val invalid = when {
                 rule.required && (field.value is JsonNull || text.isBlank()) -> true
-                rule.pattern != null && text.isNotBlank() -> runCatching { !Regex(rule.pattern).matches(text) }.getOrDefault(true)
+                pattern != null && text.isNotBlank() -> runCatching { !Regex(pattern).matches(text) }.getOrDefault(true)
                 else -> false
             }
             updated[key] = field.copy(
