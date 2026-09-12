@@ -1,9 +1,6 @@
 package com.carbroz.partner.composition
 
 import com.carbroz.feature.dynamic.DynamicDestination
-import com.carbroz.feature.dynamic.DynamicInstructionDecodeResult
-import com.carbroz.feature.dynamic.DynamicRestorePolicy
-import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.navigation.NavigationCommand
 import com.carbroz.foundation.navigation.NavigationDestination
@@ -20,12 +17,7 @@ import kotlinx.serialization.json.Json
 import org.koin.core.Koin
 import org.koin.mp.KoinPlatform
 
-/**
- * Platform-facing process-state bridge.
- *
- * Saved navigation is captured during host restoration but never applied before fresh startup. After
- * bootstrap resolves the current server-authoritative root, a compatible saved stack may be restored.
- */
+/** Saved navigation is applied only after fresh bootstrap establishes the authoritative root. */
 object NavigationProcessStateBridge {
     private val persistence = ApplicationNavigationPersistence()
     private val codec = NavigationProcessStateCodec()
@@ -36,12 +28,10 @@ object NavigationProcessStateBridge {
         return persisted.takeIf { it.isNotEmpty() }?.let(codec::encode)
     }
 
-    /** Captures platform process state. NavigationStore intentionally remains rooted at Splash. */
     fun restore(encodedState: String?) {
         pendingEncodedState = encodedState?.takeIf(String::isNotBlank)
     }
 
-    /** Applies a saved stack only when its root exactly matches the fresh bootstrap root. */
     fun applyAfterBootstrap(freshRoot: DynamicDestination) {
         val encoded = pendingEncodedState
         pendingEncodedState = null
@@ -56,15 +46,9 @@ object NavigationProcessStateBridge {
             return
         }
 
-        val compatible = restored.backStack
-            .firstOrNull()
-            ?.navigationId == freshRoot.navigationId
-
-        if (compatible) {
-            navigationStore().restore(restored)
-        } else {
-            navigationStore().dispatch(NavigationCommand.ResetTo(freshRoot))
-        }
+        val compatible = restored.backStack.firstOrNull()?.navigationId == freshRoot.navigationId
+        if (compatible) navigationStore().restore(restored)
+        else navigationStore().dispatch(NavigationCommand.ResetTo(freshRoot))
     }
 
     private fun NavigationRestorationResult.stateOrNull(): NavigationState = when (this) {
@@ -79,22 +63,19 @@ object NavigationProcessStateBridge {
 }
 
 internal class ApplicationNavigationPersistence(
-    private val instructionCodec: DynamicScreenInstructionCodec = DynamicScreenInstructionCodec(),
+    private val destinationCodec: DynamicDestinationCodec = DynamicDestinationCodec(),
 ) : NavigationDestinationRestorer {
     fun persist(destination: NavigationDestination): RestoredDestination? = when (destination) {
         SplashDestination -> RestoredDestination(SplashDestination.navigationId)
-        is DynamicDestination -> {
-            if (destination.instruction.restorePolicy == DynamicRestorePolicy.CACHE_ONLY) null
-            else RestoredDestination(
-                navigationId = destination.navigationId,
-                payload = instructionCodec.encode(destination.instruction),
-            )
-        }
+        is DynamicDestination -> RestoredDestination(
+            navigationId = destination.navigationId,
+            payload = destinationCodec.encode(destination),
+        )
         else -> null
     }
 
     fun persist(state: NavigationState): List<RestoredDestination> {
-        val persisted = state.backStack.map { persist(it) }
+        val persisted = state.backStack.map(::persist)
         return if (persisted.any { it == null }) emptyList() else persisted.filterNotNull()
     }
 
@@ -110,18 +91,22 @@ internal class ApplicationNavigationPersistence(
             return SplashDestination.takeIf { destination.payload == null }
         }
         if (!destination.navigationId.startsWith(DynamicDestination.PREFIX)) return null
-        val payload = destination.payload ?: return null
-        val decoded = instructionCodec.decode(payload) as? DynamicInstructionDecodeResult.Success ?: return null
-        val restored = DynamicDestination(decoded.instruction)
+        val restored = destination.payload?.let(destinationCodec::decode) ?: return null
         return restored.takeIf { it.navigationId == destination.navigationId }
     }
 }
 
+internal class DynamicDestinationCodec(
+    private val json: Json = Json { ignoreUnknownKeys = false; encodeDefaults = true },
+) {
+    fun encode(destination: DynamicDestination): String = json.encodeToString(destination)
+    fun decode(payload: String): DynamicDestination? = runCatching {
+        json.decodeFromString<DynamicDestination>(payload)
+    }.getOrNull()
+}
+
 internal class NavigationProcessStateCodec(
-    private val json: Json = Json {
-        ignoreUnknownKeys = false
-        encodeDefaults = true
-    },
+    private val json: Json = Json { ignoreUnknownKeys = false; encodeDefaults = true },
 ) {
     fun encode(destinations: List<RestoredDestination>): String = json.encodeToString(
         ProcessStateDto(
@@ -136,18 +121,13 @@ internal class NavigationProcessStateCodec(
 
     fun decode(encodedState: String): List<RestoredDestination>? = runCatching {
         json.decodeFromString<ProcessStateDto>(encodedState).destinations.map {
-            RestoredDestination(
-                navigationId = it.navigationId,
-                payload = it.payload,
-            )
+            RestoredDestination(navigationId = it.navigationId, payload = it.payload)
         }
     }.getOrNull()
 }
 
 @Serializable
-private data class ProcessStateDto(
-    val destinations: List<RestoredDestinationDto>,
-)
+private data class ProcessStateDto(val destinations: List<RestoredDestinationDto>)
 
 @Serializable
 private data class RestoredDestinationDto(
