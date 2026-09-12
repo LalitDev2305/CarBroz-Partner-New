@@ -1,8 +1,11 @@
 package com.carbroz.sdui.parser
 
 import com.carbroz.sdui.model.SduiAction
+import com.carbroz.sdui.model.SduiElement
 import com.carbroz.sdui.model.SduiScreen
 import com.carbroz.sdui.registry.SduiNodeRegistry
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 
 sealed interface SduiSupportResult {
     data object Supported : SduiSupportResult
@@ -12,6 +15,7 @@ sealed interface SduiSupportResult {
 class SduiSupportChecker(
     private val registry: SduiNodeRegistry,
     private val versionPolicy: SduiVersionPolicy = SduiVersionPolicy(),
+    private val decoder: SduiDecoder = SduiDecoder(),
 ) {
     fun check(screen: SduiScreen): SduiSupportResult {
         if (!versionPolicy.supports(screen.schemaVersion)) {
@@ -25,21 +29,21 @@ class SduiSupportChecker(
                 return SduiSupportResult.Unsupported("unsupported_component:${component.type}")
             }
             component.elements.orEmpty().forEach { element ->
-                supportElement(element.type, element.actions.values)?.let { return it }
+                supportElement(element)?.let { return it }
             }
             component.sections.orEmpty().forEach { section ->
                 if (!registry.supportsSection(section.type)) {
                     return SduiSupportResult.Unsupported("unsupported_section:${section.type}")
                 }
                 section.elements.orEmpty().forEach { element ->
-                    supportElement(element.type, element.actions.values)?.let { return it }
+                    supportElement(element)?.let { return it }
                 }
                 section.groups.orEmpty().forEach { group ->
                     if (!registry.supportsGroup(group.type)) {
                         return SduiSupportResult.Unsupported("unsupported_group:${group.type}")
                     }
                     group.elements.forEach { element ->
-                        supportElement(element.type, element.actions.values)?.let { return it }
+                        supportElement(element)?.let { return it }
                     }
                 }
             }
@@ -47,11 +51,24 @@ class SduiSupportChecker(
         return SduiSupportResult.Supported
     }
 
-    private fun supportElement(type: String, actions: Collection<SduiAction>): SduiSupportResult.Unsupported? {
-        if (!registry.supportsElement(type)) {
-            return SduiSupportResult.Unsupported("unsupported_element:$type")
+    private fun supportElement(element: SduiElement): SduiSupportResult.Unsupported? {
+        if (!registry.supportsElement(element.type)) {
+            return SduiSupportResult.Unsupported("unsupported_element:${element.type}")
         }
-        actions.forEach { action -> supportAction(action)?.let { return it } }
+        element.actions.values.forEach { action -> supportAction(action)?.let { return it } }
+        if (element.type == "text") supportTextSpanActions(element)?.let { return it }
+        return null
+    }
+
+    private fun supportTextSpanActions(element: SduiElement): SduiSupportResult.Unsupported? {
+        val spans = element.properties["spans"] as? JsonArray ?: return null
+        spans.forEach { item ->
+            val span = item as? JsonObject ?: return@forEach
+            val rawAction = span["onClick"] ?: return@forEach
+            val action = decoder.decodeAction(rawAction)
+                ?: return SduiSupportResult.Unsupported("unsupported_action")
+            supportAction(action)?.let { return it }
+        }
         return null
     }
 
