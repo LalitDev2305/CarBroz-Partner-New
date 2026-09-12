@@ -14,6 +14,7 @@ class SduiRenderer(
     @Composable
     fun Render(screen: SduiScreen, context: SduiRenderContext) {
         val template = screen.template
+        if (context.nodeStates[template.id]?.visible == false) return
         val renderer = registry.template(template.type) ?: return
         renderer.Render(template, context) {
             template.components.forEach { component -> RenderComponent(component, context) }
@@ -57,6 +58,7 @@ class SduiRenderer(
 
     @Composable
     private fun RenderComponent(node: SduiComponent, context: SduiRenderContext) {
+        if (context.nodeStates[node.id]?.visible == false) return
         val renderer = registry.component(node.type) ?: return
         renderer.Render(node, context) {
             node.elements?.forEach { RenderElement(it, context) }
@@ -66,6 +68,7 @@ class SduiRenderer(
 
     @Composable
     private fun RenderSection(node: SduiSection, context: SduiRenderContext) {
+        if (context.nodeStates[node.id]?.visible == false) return
         val renderer = registry.section(node.type) ?: return
         renderer.Render(node, context) {
             node.elements?.forEach { RenderElement(it, context) }
@@ -75,6 +78,7 @@ class SduiRenderer(
 
     @Composable
     private fun RenderGroup(node: SduiGroup, context: SduiRenderContext) {
+        if (context.nodeStates[node.id]?.visible == false) return
         val renderer = registry.group(node.type) ?: return
         renderer.Render(node, context) {
             node.elements.forEach { RenderElement(it, context) }
@@ -83,6 +87,7 @@ class SduiRenderer(
 
     @Composable
     private fun RenderElement(node: SduiElement, context: SduiRenderContext) {
+        if (context.nodeStates[node.id]?.visible == false) return
         registry.element(node.type)?.Render(node, context)
     }
 }
