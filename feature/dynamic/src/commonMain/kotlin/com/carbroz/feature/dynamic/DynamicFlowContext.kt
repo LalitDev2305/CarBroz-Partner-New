@@ -27,6 +27,14 @@ class DynamicFlowContext {
         response = value
     }
 
+    suspend fun commitSuccessfulRequest(
+        responseValue: JsonElement,
+        contextUpdates: JsonObject?,
+    ) = mutex.withLock {
+        response = responseValue
+        if (contextUpdates != null) context = deepMerge(context, contextUpdates)
+    }
+
     suspend fun clear() = mutex.withLock {
         context = JsonObject(emptyMap())
         response = null

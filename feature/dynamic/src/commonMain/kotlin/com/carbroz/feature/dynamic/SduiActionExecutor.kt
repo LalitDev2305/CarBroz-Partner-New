@@ -136,7 +136,7 @@ class SduiActionExecutor(
 
                 when (action.payload.responseMode) {
                     SduiRequestResponseMode.NONE -> {
-                        commitSuccessfulResponse(responseBody, pendingContext)
+                        flowContext.commitSuccessfulRequest(responseBody, pendingContext)
                         SduiActionResult.Completed
                     }
                     SduiRequestResponseMode.DESTINATION -> {
@@ -147,7 +147,7 @@ class SduiActionExecutor(
                         val sessionResult = ensureSessionFor(destination, responseBody)
                         if (sessionResult != null) return sessionResult
 
-                        commitSuccessfulResponse(responseBody, pendingContext)
+                        flowContext.commitSuccessfulRequest(responseBody, pendingContext)
                         SduiActionResult.Navigate(
                             destination = dynamicDestination,
                             mode = action.payload.navigationMode,
@@ -156,14 +156,6 @@ class SduiActionExecutor(
                 }
             }
         }
-    }
-
-    private suspend fun commitSuccessfulResponse(
-        responseBody: JsonElement,
-        pendingContext: JsonObject?,
-    ) {
-        flowContext.updateResponse(responseBody)
-        pendingContext?.let { flowContext.updateContext(it) }
     }
 
     private suspend fun executeExternalUri(
