@@ -143,15 +143,15 @@ class SduiActionExecutor(
                 if (result.response.statusCode !in 200..299) {
                     return SduiActionResult.Failure("http_${result.response.statusCode}")
                 }
-                val responseBody = result.response.body
-                    ?: return SduiActionResult.Failure("missing_response_body")
 
                 when (action.payload.responseMode) {
                     SduiRequestResponseMode.NONE -> {
-                        flowContext.commitSuccessfulRequest(responseBody, pendingContext)
+                        flowContext.commitSuccessfulRequest(result.response.body, pendingContext)
                         SduiActionResult.Completed
                     }
                     SduiRequestResponseMode.DESTINATION -> {
+                        val responseBody = result.response.body
+                            ?: return SduiActionResult.Failure("missing_response_body")
                         val destination = extractNextDestination(responseBody)
                             ?: return SduiActionResult.Failure("destination_missing")
                         val dynamicDestination = runCatching { DynamicDestination.from(destination) }
