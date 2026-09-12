@@ -12,12 +12,14 @@ import com.carbroz.foundation.session.SessionPersistenceResult
 import com.carbroz.foundation.session.SessionRestoreResult
 import com.carbroz.foundation.session.SessionState
 import com.carbroz.foundation.session.SessionStore
+import com.carbroz.sdui.model.PresentPayload
 import com.carbroz.sdui.model.RequestPayload
 import com.carbroz.sdui.model.SduiAction
 import com.carbroz.sdui.model.SduiAuthentication
 import com.carbroz.sdui.model.SduiComponent
 import com.carbroz.sdui.model.SduiElement
 import com.carbroz.sdui.model.SduiElementBinding
+import com.carbroz.sdui.model.SduiPresentationMode
 import com.carbroz.sdui.model.SduiRequestMethod
 import com.carbroz.sdui.model.SduiRequestResponseMode
 import com.carbroz.sdui.model.SduiScreen
@@ -103,6 +105,50 @@ class DynamicScreenStoreFrozenRegressionTest {
             original.template.components.single().elements.orEmpty().single().properties["value"],
         )
         assertEquals(JsonPrimitive("runtime-value"), store.state.value.nodeStates["phone_input"]?.value)
+    }
+
+    @Test
+    fun targetedDismissDoesNotClearDifferentOverlay() = runTest {
+        val store = loadedStore()
+
+        store.dispatch(
+            DynamicScreenIntent.Interaction(
+                SduiInteraction.ActionTriggered(
+                    sourceId = "present",
+                    event = "onClick",
+                    action = SduiAction.Present(
+                        targetId = "primary_sheet",
+                        payload = PresentPayload(SduiPresentationMode.BOTTOM_SHEET),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals("primary_sheet", store.state.value.overlay?.targetId)
+
+        store.dispatch(
+            DynamicScreenIntent.Interaction(
+                SduiInteraction.ActionTriggered(
+                    sourceId = "wrong_dismiss",
+                    event = "onClick",
+                    action = SduiAction.Dismiss(targetId = "other_sheet"),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals("primary_sheet", store.state.value.overlay?.targetId)
+
+        store.dispatch(
+            DynamicScreenIntent.Interaction(
+                SduiInteraction.ActionTriggered(
+                    sourceId = "matching_dismiss",
+                    event = "onClick",
+                    action = SduiAction.Dismiss(targetId = "primary_sheet"),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertEquals(null, store.state.value.overlay)
     }
 
     @Test
