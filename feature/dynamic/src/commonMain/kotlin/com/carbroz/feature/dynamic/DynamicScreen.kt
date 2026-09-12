@@ -5,67 +5,91 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.carbroz.runtime.sdui.SduiRuntime
-import com.carbroz.runtime.sdui.rendering.SduiScreenRenderer
-import kotlinx.serialization.json.JsonPrimitive
+import androidx.compose.ui.window.Popup
+import com.carbroz.sdui.model.SduiPresentationMode
+import com.carbroz.sdui.render.SduiRenderContext
+import com.carbroz.sdui.render.SduiRenderer
+import com.carbroz.sdui.value.SduiExecutionContext
+import com.carbroz.sdui.value.SduiValueResolution
+import com.carbroz.sdui.value.SduiValueResolver
 
 @Composable
 fun DynamicScreen(
     state: DynamicScreenState,
-    sduiRuntime: SduiRuntime,
-    store: DynamicFeatureStore,
+    renderer: SduiRenderer,
+    valueResolver: SduiValueResolver,
+    resolveAssetUrl: (String) -> String,
+    onIntent: (DynamicScreenIntent) -> Unit,
 ) {
+    val execution = SduiExecutionContext(
+        bindings = state.fields.mapValues { (_, field) -> field.value },
+        context = state.context,
+        response = state.response,
+    )
+    val renderContext = SduiRenderContext(
+        fields = state.fields,
+        nodeStates = state.nodeStates,
+        resolveValue = { raw ->
+            when (val resolved = valueResolver.resolve(raw, execution)) {
+                is SduiValueResolution.Success -> resolved.value
+                is SduiValueResolution.Failure -> null
+            }
+        },
+        resolveAssetUrl = resolveAssetUrl,
+        onInteraction = { onIntent(DynamicScreenIntent.Interaction(it)) },
+    )
+
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             state.loading && state.screen == null -> CircularProgressIndicator()
-            state.failure != null -> Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("Unable to load dynamic screen")
-                Text(state.failure.toString(), style = MaterialTheme.typography.bodySmall)
-                Button(onClick = store::retry) { Text("Retry") }
-            }
-            state.screen != null -> SduiScreenRenderer(
-                screen = state.screen,
-                dispatcher = sduiRuntime.renderer,
-                onCommand = store::onCommand,
-                onRenderFailure = { store.onRenderFailure(it.toString()) },
-                values = store.renderValues,
+            state.failure != null -> DynamicFailure(
+                onRetry = { onIntent(DynamicScreenIntent.Retry) },
             )
+            state.screen != null -> renderer.Render(state.screen, renderContext)
         }
 
         if (state.actionInFlight) CircularProgressIndicator()
-        state.presentation?.let { DynamicPresentationHost(it, store::dismissPresentation) }
+
+        val screen = state.screen
+        val overlay = state.overlay
+        if (screen != null && overlay != null) {
+            when (overlay.presentation) {
+                SduiPresentationMode.DIALOG -> AlertDialog(
+                    onDismissRequest = {},
+                    confirmButton = {},
+                    text = { renderer.RenderTarget(screen, overlay.targetId, renderContext) },
+                )
+
+                SduiPresentationMode.BOTTOM_SHEET -> ModalBottomSheet(onDismissRequest = {}) {
+                    renderer.RenderTarget(screen, overlay.targetId, renderContext)
+                }
+
+                SduiPresentationMode.POPUP -> Popup(onDismissRequest = {}) {
+                    Surface { renderer.RenderTarget(screen, overlay.targetId, renderContext) }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun DynamicPresentationHost(
-    presentation: DynamicPresentationState,
-    onDismiss: () -> Unit,
-) {
-    val message = (presentation.properties["message"] as? JsonPrimitive)?.content ?: presentation.id
-    Surface(
-        modifier = Modifier.padding(24.dp).widthIn(max = 480.dp),
-        tonalElevation = 6.dp,
-        shadowElevation = 6.dp,
+private fun DynamicFailure(onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(presentation.kind.name, style = MaterialTheme.typography.labelMedium)
-            Text(message, style = MaterialTheme.typography.bodyLarge)
-            Button(onClick = onDismiss) { Text("Dismiss") }
-        }
+        Text("Unable to load this screen")
+        Button(onClick = onRetry) { Text("Retry") }
     }
 }
