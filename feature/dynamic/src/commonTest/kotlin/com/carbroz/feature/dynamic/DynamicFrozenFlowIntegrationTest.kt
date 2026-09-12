@@ -79,7 +79,9 @@ class DynamicFrozenFlowIntegrationTest {
         assertEquals("auth_otp", loginResult.destination.screenId)
         assertEquals("form_template", loginResult.destination.templateType)
         assertEquals(SduiNavigationMode.PUSH, loginResult.mode)
-        assertEquals(JsonPrimitive("challenge-1"), flow.snapshot().response?.get("data")?.let { (it as JsonObject)["challengeId"] })
+        val loginResponse = assertIs<JsonObject>(flow.snapshot().response)
+        val loginData = assertIs<JsonObject>(loginResponse["data"])
+        assertEquals(JsonPrimitive("challenge-1"), loginData["challengeId"])
 
         val otpResult = assertIs<SduiActionResult.Navigate>(
             executor.execute(
