@@ -47,7 +47,11 @@ sealed interface SduiActionResult {
         val update: NodeRuntimeStateUpdate,
     ) : SduiActionResult
 
-    data class OverlayChanged(val overlay: SduiOverlay?) : SduiActionResult
+    data class OverlayChanged(
+        val overlay: SduiOverlay?,
+        val dismissTargetId: String? = null,
+    ) : SduiActionResult
+
     data class Sequence(val results: List<SduiActionResult>) : SduiActionResult
     data class Failure(val reason: String) : SduiActionResult
 }
@@ -81,9 +85,12 @@ class SduiActionExecutor(
             mode = action.navigationMode,
         )
         is SduiAction.Present -> SduiActionResult.OverlayChanged(
-            SduiOverlay(action.targetId, action.payload.presentation),
+            overlay = SduiOverlay(action.targetId, action.payload.presentation),
         )
-        is SduiAction.Dismiss -> SduiActionResult.OverlayChanged(null)
+        is SduiAction.Dismiss -> SduiActionResult.OverlayChanged(
+            overlay = null,
+            dismissTargetId = action.targetId,
+        )
         is SduiAction.State -> SduiActionResult.NodeStateChanged(
             targetId = action.targetId,
             update = NodeRuntimeStateUpdate(
