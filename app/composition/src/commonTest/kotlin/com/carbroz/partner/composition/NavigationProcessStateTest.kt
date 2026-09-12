@@ -1,19 +1,12 @@
 package com.carbroz.partner.composition
 
 import com.carbroz.feature.dynamic.DynamicDestination
-import com.carbroz.feature.dynamic.DynamicRestorePolicy
-import com.carbroz.feature.dynamic.DynamicScreenInstruction
-import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
-import com.carbroz.feature.dynamic.DynamicScreenRequest
 import com.carbroz.feature.splash.SplashDestination
 import com.carbroz.foundation.navigation.NavigationState
 import com.carbroz.foundation.navigation.NavigationStore
 import com.carbroz.foundation.navigation.RestoredDestination
-import com.carbroz.runtime.sdui.model.NodeType
-import com.carbroz.runtime.sdui.model.RequestMethod
-import com.carbroz.runtime.sdui.model.ScreenDestination
-import com.carbroz.runtime.sdui.model.ScreenTransition
-import kotlinx.serialization.json.JsonObject
+import com.carbroz.sdui.model.SduiAuthentication
+import com.carbroz.sdui.model.SduiRequestMethod
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
@@ -24,9 +17,9 @@ import kotlin.test.assertNull
 
 class ApplicationNavigationPersistenceTest {
     @Test
-    fun safeDynamicDestinationRoundTripsThroughProcessRestorationContract() {
+    fun dynamicDestinationRoundTripsThroughProcessRestorationContract() {
         val persistence = ApplicationNavigationPersistence()
-        val original = DynamicDestination(instruction())
+        val original = destination()
         val persisted = persistence.persist(original) ?: error("destination must be persistable")
         val restored = assertIs<DynamicDestination>(persistence.restore(persisted))
 
@@ -35,25 +28,29 @@ class ApplicationNavigationPersistenceTest {
     }
 
     @Test
-    fun cacheOnlyDestinationIsNeverPersistedBecauseRestorationCouldReplayMutation() {
-        val persistence = ApplicationNavigationPersistence()
-        val destination = DynamicDestination(
-            instruction().copy(
-                request = DynamicScreenRequest(RequestMethod.POST, "/api/v1/action"),
-                restorePolicy = DynamicRestorePolicy.CACHE_ONLY,
-            ),
+    fun fullDestinationFieldsSurviveRoundTrip() {
+        val codec = DynamicDestinationCodec()
+        val original = destination(
+            screenId = "partner_dashboard",
+            templateId = "partner_dashboard_template",
+            templateType = "default_template",
+            endpoint = "/api/v1/partner/sdui/registry/partner_dashboard",
+            authentication = SduiAuthentication.SESSION,
         )
-        assertNull(persistence.persist(destination))
+
+        assertEquals(original, codec.decode(codec.encode(original)))
     }
 
     @Test
     fun restorationFailsClosedWhenIdentityDoesNotMatchPayload() {
         val persistence = ApplicationNavigationPersistence()
-        val payload = DynamicScreenInstructionCodec().encode(instruction())
+        val original = destination()
+        val payload = DynamicDestinationCodec().encode(original)
+
         assertNull(
             persistence.restore(
                 RestoredDestination(
-                    navigationId = "dynamic:tampered:screen-1:template-7",
+                    navigationId = "dynamic:tampered:template-7:/api/v1/screen/next",
                     payload = payload,
                 ),
             ),
@@ -63,12 +60,14 @@ class ApplicationNavigationPersistenceTest {
     @Test
     fun processStateCodecRoundTripsSemanticRestorationData() {
         val codec = NavigationProcessStateCodec()
+        val original = destination()
         val expected = listOf(
             RestoredDestination(
-                navigationId = "dynamic:instance-9:screen-1:template-7",
-                payload = DynamicScreenInstructionCodec().encode(instruction()),
+                navigationId = original.navigationId,
+                payload = DynamicDestinationCodec().encode(original),
             ),
         )
+
         assertEquals(expected, codec.decode(codec.encode(expected)))
     }
 
@@ -80,8 +79,7 @@ class ApplicationNavigationPersistenceTest {
     @Test
     fun capturedDynamicStateIsNotAppliedBeforeFreshBootstrap() {
         withNavigationStore { store ->
-            val saved = encodedState(DynamicDestination(instruction()))
-            NavigationProcessStateBridge.restore(saved)
+            NavigationProcessStateBridge.restore(encodedState(destination()))
 
             assertEquals(SplashDestination, store.state.value.current)
         }
@@ -90,7 +88,7 @@ class ApplicationNavigationPersistenceTest {
     @Test
     fun compatibleSavedRootIsRestoredOnlyAfterFreshBootstrap() {
         withNavigationStore { store ->
-            val fresh = DynamicDestination(instruction())
+            val fresh = destination()
             NavigationProcessStateBridge.restore(encodedState(fresh))
 
             NavigationProcessStateBridge.applyAfterBootstrap(fresh)
@@ -100,14 +98,40 @@ class ApplicationNavigationPersistenceTest {
     }
 
     @Test
+    fun compatibleSavedStackPreservesFullDynamicDestinations() {
+        withNavigationStore { store ->
+            val root = destination()
+            val dashboard = destination(
+                screenId = "partner_dashboard",
+                templateId = "partner_dashboard_template",
+                templateType = "default_template",
+                endpoint = "/api/v1/partner/sdui/registry/partner_dashboard",
+                authentication = SduiAuthentication.SESSION,
+            )
+            val persistence = ApplicationNavigationPersistence()
+            val encoded = NavigationProcessStateCodec().encode(
+                listOf(
+                    persistence.persist(root) ?: error("root must persist"),
+                    persistence.persist(dashboard) ?: error("dashboard must persist"),
+                ),
+            )
+            NavigationProcessStateBridge.restore(encoded)
+
+            NavigationProcessStateBridge.applyAfterBootstrap(root)
+
+            assertEquals(listOf(root, dashboard), store.state.value.backStack)
+        }
+    }
+
+    @Test
     fun incompatibleSavedRootIsDiscardedInFavorOfFreshBootstrapRoot() {
         withNavigationStore { store ->
-            val saved = DynamicDestination(instruction())
-            val fresh = DynamicDestination(
-                instruction().copy(
-                    destination = ScreenDestination("screen-fresh", "template-fresh", NodeType("FORM_TEMPLATE")),
-                    backStackKey = "fresh",
-                ),
+            val saved = destination()
+            val fresh = destination(
+                screenId = "screen-fresh",
+                templateId = "template-fresh",
+                templateType = "form_template",
+                endpoint = "/api/v1/screen/fresh",
             )
             NavigationProcessStateBridge.restore(encodedState(saved))
 
@@ -116,6 +140,18 @@ class ApplicationNavigationPersistenceTest {
             assertEquals(fresh, store.state.value.current)
             assertEquals(1, store.state.value.backStack.size)
         }
+    }
+
+    @Test
+    fun malformedDynamicPayloadFailsClosed() {
+        assertNull(
+            ApplicationNavigationPersistence().restore(
+                RestoredDestination(
+                    navigationId = destination().navigationId,
+                    payload = "not-json",
+                ),
+            ),
+        )
     }
 
     private fun encodedState(destination: DynamicDestination): String {
@@ -135,11 +171,18 @@ class ApplicationNavigationPersistenceTest {
         }
     }
 
-    private fun instruction() = DynamicScreenInstruction(
-        destination = ScreenDestination("screen-1", "template-7", NodeType("FORM_TEMPLATE")),
-        request = DynamicScreenRequest(RequestMethod.GET, "/api/v1/screen/next", JsonObject(emptyMap())),
-        transition = ScreenTransition.PUSH,
-        backStackKey = "instance-9",
-        restorePolicy = DynamicRestorePolicy.CACHE_FIRST,
+    private fun destination(
+        screenId: String = "screen-1",
+        templateId: String = "template-7",
+        templateType: String = "form_template",
+        endpoint: String = "/api/v1/screen/next",
+        authentication: SduiAuthentication = SduiAuthentication.NONE,
+    ) = DynamicDestination(
+        screenId = screenId,
+        templateId = templateId,
+        templateType = templateType,
+        endpoint = endpoint,
+        method = SduiRequestMethod.GET,
+        authentication = authentication,
     )
 }
