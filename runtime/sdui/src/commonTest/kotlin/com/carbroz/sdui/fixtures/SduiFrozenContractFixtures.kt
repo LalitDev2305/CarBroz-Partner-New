@@ -63,7 +63,7 @@ object SduiFrozenContractFixtures {
             "components":[{
               "id":"root","type":"stack_component","properties":{"axis":"vertical"},
               "elements":[
-                {"id":"text","type":"text","properties":{"text":"Hello","leading":{"type":"divider","properties":{"orientation":"vertical"}},"trailing":{"type":"icon","properties":{"name":"arrow_forward"}}}},
+                {"id":"text","type":"text","properties":{"spans":[{"text":"Read "},{"text":"Terms","underline":true,"onClick":{"type":"external_uri","payload":{"uri":{"__REF_CONTEXT__":"legal.termsUri"}}}}],"leading":{"type":"divider","properties":{"orientation":"vertical"}},"trailing":{"type":"icon","properties":{"name":"arrow_forward"}}}},
                 {"id":"image","type":"image","properties":{"url":"https://cdn.example.com/image.png","width":120,"height":80}},
                 {"id":"input","type":"input","binding":{"key":"value"},"properties":{"value":"","maxLength":6,"leading":{"type":"icon","properties":{"name":"edit"}},"presentation":{"type":"segmented","count":6}}},
                 {"id":"button","type":"button","properties":{"text":"Continue","trailing":{"type":"icon","properties":{"name":"arrow_forward"}}}}
@@ -76,7 +76,7 @@ object SduiFrozenContractFixtures {
             }]
           }
         }
-    """.trimIndent()
+    """.trimIndent().wireRefs()
 
     val allActionTypes: String = """
         {
@@ -120,6 +120,21 @@ object SduiFrozenContractFixtures {
           "schemaVersion":"3.0",
           "targetApp":"PARTNER",
           "template":{"id":"unsupported_template","type":"unknown_template","components":[]}
+        }
+    """.trimIndent()
+
+    val unsupportedSpanAction: String = """
+        {
+          "screenId":"unsupported_span_action",
+          "schemaVersion":"3.0",
+          "targetApp":"PARTNER",
+          "template":{
+            "id":"unsupported_span_template","type":"stack_template","properties":{"axis":"vertical"},
+            "components":[{
+              "id":"root","type":"stack_component","properties":{"axis":"vertical"},
+              "elements":[{"id":"legal","type":"text","properties":{"spans":[{"text":"Terms","onClick":{"type":"future_action","payload":{}}}]}}]
+            }]
+          }
         }
     """.trimIndent()
 
