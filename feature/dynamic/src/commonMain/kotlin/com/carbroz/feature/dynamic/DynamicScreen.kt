@@ -54,10 +54,10 @@ fun DynamicScreen(
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             state.loading && state.screen == null -> CircularProgressIndicator()
+            state.screen != null -> renderer.Render(state.screen, renderContext)
             state.failure != null -> DynamicFailure(
                 onRetry = { onIntent(DynamicScreenIntent.Retry) },
             )
-            state.screen != null -> renderer.Render(state.screen, renderContext)
         }
 
         if (state.actionInFlight) CircularProgressIndicator()
