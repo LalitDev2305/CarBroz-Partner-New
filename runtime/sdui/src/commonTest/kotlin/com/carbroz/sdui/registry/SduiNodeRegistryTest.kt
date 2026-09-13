@@ -1,7 +1,6 @@
 package com.carbroz.sdui.registry
 
 import com.carbroz.sdui.render.element.TextElementRenderer
-import com.carbroz.sdui.render.template.FormTemplateRenderer
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
@@ -27,18 +26,20 @@ class SduiNodeRegistryTest {
     @Test
     fun lookup_returnsTheRegisteredRenderer() {
         val registry = SduiNodeRegistration.createRegistry()
+        val expectedFormRenderer = TemplateDefinitions.all.single { it.type == "form_template" }
 
-        assertSame(FormTemplateRenderer, registry.template("form_template"))
+        assertSame(expectedFormRenderer, registry.template("form_template"))
         assertSame(TextElementRenderer, registry.element("text"))
     }
 
     @Test
     fun duplicateTemplateRegistration_failsFast() {
         val registry = SduiNodeRegistry()
-        registry.registerTemplates(listOf(FormTemplateRenderer))
+        val renderer = TemplateDefinitions.all.single { it.type == "form_template" }
+        registry.registerTemplates(listOf(renderer))
 
         assertFailsWith<IllegalArgumentException> {
-            registry.registerTemplates(listOf(FormTemplateRenderer))
+            registry.registerTemplates(listOf(renderer))
         }
     }
 

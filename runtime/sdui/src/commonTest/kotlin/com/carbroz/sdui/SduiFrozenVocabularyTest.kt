@@ -17,6 +17,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class SduiFrozenVocabularyTest {
     private val decoder = SduiDecoder()
@@ -63,6 +64,21 @@ class SduiFrozenVocabularyTest {
         assertIs<JsonObject>(text.properties["leading"])
         assertIs<JsonObject>(elements.single { it.type == "input" }.properties["leading"])
         assertIs<JsonObject>(elements.single { it.type == "button" }.properties["trailing"])
+    }
+
+    @Test
+    fun componentAndSectionPreserveBothAllowedChildBranches() {
+        val screen = assertIs<SduiDecodeResult.Success>(
+            decoder.decode(Json.parseToJsonElement(SduiFrozenContractFixtures.allNodeTypes)),
+        ).screen
+        val component = screen.template.components.single()
+        val section = component.sections.orEmpty().single()
+
+        assertTrue(component.elements.orEmpty().isNotEmpty())
+        assertTrue(component.sections.orEmpty().isNotEmpty())
+        assertTrue(section.elements.orEmpty().isNotEmpty())
+        assertTrue(section.groups.orEmpty().isNotEmpty())
+        assertIs<SduiSupportResult.Supported>(checker.check(screen))
     }
 
     @Test

@@ -1,34 +1,38 @@
 package com.carbroz.sdui.registry
 
-import com.carbroz.sdui.render.component.StackComponentRenderer
 import com.carbroz.sdui.render.element.ButtonElementRenderer
 import com.carbroz.sdui.render.element.ImageElementRenderer
 import com.carbroz.sdui.render.element.InputElementRenderer
 import com.carbroz.sdui.render.element.TextElementRenderer
-import com.carbroz.sdui.render.group.StackGroupRenderer
-import com.carbroz.sdui.render.section.StackSectionRenderer
-import com.carbroz.sdui.render.template.DefaultTemplateRenderer
-import com.carbroz.sdui.render.template.FormTemplateRenderer
-import com.carbroz.sdui.render.template.StackTemplateRenderer
+import com.carbroz.sdui.render.structuralComponentRenderer
+import com.carbroz.sdui.render.structuralGroupRenderer
+import com.carbroz.sdui.render.structuralSectionRenderer
+import com.carbroz.sdui.render.structuralTemplateRenderer
 
 object TemplateDefinitions {
     val all: List<TemplateRenderer> = listOf(
-        StackTemplateRenderer,
-        FormTemplateRenderer,
-        DefaultTemplateRenderer,
+        structuralTemplateRenderer("stack_template"),
+        structuralTemplateRenderer("form_template"),
+        structuralTemplateRenderer("default_template"),
     )
 }
 
 object ComponentDefinitions {
-    val all: List<ComponentRenderer> = listOf(StackComponentRenderer)
+    val all: List<ComponentRenderer> = listOf(
+        structuralComponentRenderer("stack_component"),
+    )
 }
 
 object SectionDefinitions {
-    val all: List<SectionRenderer> = listOf(StackSectionRenderer)
+    val all: List<SectionRenderer> = listOf(
+        structuralSectionRenderer("stack_section"),
+    )
 }
 
 object GroupDefinitions {
-    val all: List<GroupRenderer> = listOf(StackGroupRenderer)
+    val all: List<GroupRenderer> = listOf(
+        structuralGroupRenderer("stack_group"),
+    )
 }
 
 object ElementDefinitions {
