@@ -9,9 +9,11 @@ import com.carbroz.sdui.model.SduiRequestMethod
 import com.carbroz.sdui.model.SduiScreen
 import com.carbroz.sdui.model.SduiTargetApp
 import com.carbroz.sdui.model.SduiTemplate
+import com.carbroz.sdui.model.SduiTheme
 import com.carbroz.sdui.registry.SduiNodeRegistration
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -100,6 +102,25 @@ class SduiDecoderSupportCheckerTest {
     }
 
     @Test
+    fun globalTarget_isSupported() {
+        assertIs<SduiSupportResult.Supported>(checker.check(screen().copy(targetApp = SduiTargetApp.GLOBAL)))
+    }
+
+    @Test
+    fun customerTarget_isRejectedByPartnerRuntime() {
+        val result = checker.check(screen().copy(targetApp = SduiTargetApp.CUSTOMER))
+
+        assertEquals(SduiSupportResult.Unsupported("unsupported_target_app:CUSTOMER"), result)
+    }
+
+    @Test
+    fun decodedButUnconsumedTheme_isRejected() {
+        val result = checker.check(screen().copy(theme = SduiTheme()))
+
+        assertEquals(SduiSupportResult.Unsupported("unsupported_theme"), result)
+    }
+
+    @Test
     fun unsupportedSchema_isRejectedAsCapabilityMismatch() {
         val result = checker.check(screen().copy(schemaVersion = "99.0"))
 
@@ -125,6 +146,50 @@ class SduiDecoderSupportCheckerTest {
     }
 
     @Test
+    fun explicitUnknownLayoutVocabulary_isRejectedInsteadOfFallingBack() {
+        val base = screen()
+        val result = checker.check(
+            base.copy(
+                template = base.template.copy(
+                    properties = JsonObject(mapOf("axis" to JsonPrimitive("diagonal"))),
+                ),
+            ),
+        )
+
+        assertEquals(SduiSupportResult.Unsupported("unsupported_layout_axis:diagonal"), result)
+    }
+
+    @Test
+    fun unsupportedAccessoryType_isRejectedInsteadOfDisappearing() {
+        val base = screen()
+        val element = base.template.components.single().elements.orEmpty().single().copy(
+            properties = JsonObject(
+                mapOf(
+                    "leading" to JsonObject(mapOf("type" to JsonPrimitive("future_accessory"))),
+                ),
+            ),
+        )
+        val component = base.template.components.single().copy(elements = listOf(element))
+        val result = checker.check(base.copy(template = base.template.copy(components = listOf(component))))
+
+        assertEquals(SduiSupportResult.Unsupported("unsupported_accessory:future_accessory"), result)
+    }
+
+    @Test
+    fun unsupportedInputWeight_isRejectedInsteadOfBeingMisreadAsFillWidth() {
+        val base = screen()
+        val input = SduiElement(
+            id = "input",
+            type = "input",
+            properties = JsonObject(mapOf("weight" to JsonPrimitive(1))),
+        )
+        val component = base.template.components.single().copy(elements = listOf(input))
+        val result = checker.check(base.copy(template = base.template.copy(components = listOf(component))))
+
+        assertEquals(SduiSupportResult.Unsupported("unsupported_input_weight"), result)
+    }
+
+    @Test
     fun absoluteRequestEndpoint_isRejectedAtSecurityBoundary() {
         val base = screen()
         val request = SduiAction.Request(
@@ -146,7 +211,7 @@ class SduiDecoderSupportCheckerTest {
     private fun screen(): SduiScreen = SduiScreen(
         screenId = "test_screen",
         schemaVersion = "3.0",
-        targetApp = SduiTargetApp.CUSTOMER,
+        targetApp = SduiTargetApp.PARTNER,
         template = SduiTemplate(
             id = "test_template",
             type = "form_template",

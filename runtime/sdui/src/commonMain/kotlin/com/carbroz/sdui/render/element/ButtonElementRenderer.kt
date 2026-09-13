@@ -3,7 +3,6 @@ package com.carbroz.sdui.render.element
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -19,9 +18,11 @@ import com.carbroz.sdui.render.SduiInteraction
 import com.carbroz.sdui.render.SduiRenderContext
 import com.carbroz.sdui.render.accessories
 import com.carbroz.sdui.render.accessory.AccessoryRenderer
+import com.carbroz.sdui.render.boolean
 import com.carbroz.sdui.render.float
 import com.carbroz.sdui.render.modifier.applySduiProperties
 import com.carbroz.sdui.render.modifier.parseSduiColor
+import com.carbroz.sdui.render.resolvedContent
 import com.carbroz.sdui.render.string
 
 object ButtonElementRenderer : ElementRenderer {
@@ -31,7 +32,7 @@ object ButtonElementRenderer : ElementRenderer {
     override fun Render(node: SduiElement, context: SduiRenderContext) {
         val runtime = context.nodeStates[node.id]
         if (runtime?.visible == false) return
-        val enabled = runtime?.enabled ?: true
+        val enabled = runtime?.enabled ?: node.properties.boolean("enabled") ?: true
         val loading = runtime?.loading == true
         val action = node.actions["onClick"]
         val modifier = Modifier
@@ -39,7 +40,6 @@ object ButtonElementRenderer : ElementRenderer {
             .clickable(enabled = enabled && !loading && action != null) {
                 action?.let { context.onInteraction(SduiInteraction.ActionTriggered(node.id, "onClick", it)) }
             }
-            .padding(horizontal = 16.dp, vertical = 10.dp)
 
         Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
             node.properties.accessories("leading").forEach {
@@ -50,7 +50,7 @@ object ButtonElementRenderer : ElementRenderer {
                 CircularProgressIndicator(modifier = Modifier.width(20.dp))
             } else {
                 Text(
-                    text = node.properties.string("text").orEmpty(),
+                    text = node.properties["text"].resolvedContent(context).orEmpty(),
                     color = node.properties.string("textColor")?.let(::parseSduiColor)
                         ?: androidx.compose.ui.graphics.Color.Unspecified,
                     fontSize = (node.properties.float("fontSize") ?: 16f).sp,

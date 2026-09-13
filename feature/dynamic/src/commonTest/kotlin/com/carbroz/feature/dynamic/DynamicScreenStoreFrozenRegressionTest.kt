@@ -80,7 +80,7 @@ class DynamicScreenStoreFrozenRegressionTest {
     }
 
     @Test
-    fun runtimeNodeStateDoesNotMutateImmutableServerScreen() = runTest {
+    fun boundStateValueUsesCanonicalFieldWithoutMutatingImmutableServerScreen() = runTest {
         val store = loadedStore()
         val original = store.state.value.screen!!
 
@@ -107,7 +107,49 @@ class DynamicScreenStoreFrozenRegressionTest {
             JsonPrimitive("server-value"),
             original.template.components.single().elements.orEmpty().single().properties["value"],
         )
-        assertEquals(JsonPrimitive("runtime-value"), store.state.value.nodeStates["phone_input"]?.value)
+        assertEquals(JsonPrimitive("runtime-value"), store.state.value.fields["phone"]?.value)
+        assertNull(store.state.value.nodeStates["phone_input"]?.value)
+        assertFalse(store.state.value.fields["phone"]?.touched == true)
+
+        store.dispatch(
+            DynamicScreenIntent.Interaction(
+                SduiInteraction.ValueChanged(
+                    elementId = "phone_input",
+                    bindingKey = "phone",
+                    value = JsonPrimitive("user-value"),
+                ),
+            ),
+        )
+
+        assertEquals(JsonPrimitive("user-value"), store.state.value.fields["phone"]?.value)
+        assertTrue(store.state.value.fields["phone"]?.touched == true)
+        assertNull(store.state.value.nodeStates["phone_input"]?.value)
+    }
+
+    @Test
+    fun unboundStateValueRemainsNodeRuntimeState() = runTest {
+        val store = loadedStore()
+
+        store.dispatch(
+            DynamicScreenIntent.Interaction(
+                SduiInteraction.ActionTriggered(
+                    sourceId = "test",
+                    event = "onClick",
+                    action = SduiAction.State(
+                        targetId = "unbound_target",
+                        payload = StatePayload(
+                            operation = SduiStateOperation.SET,
+                            property = SduiStateProperty.VALUE,
+                            value = JsonPrimitive("runtime-only"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(JsonPrimitive("runtime-only"), store.state.value.nodeStates["unbound_target"]?.value)
+        assertEquals(JsonPrimitive("server-value"), store.state.value.fields["phone"]?.value)
     }
 
     @Test

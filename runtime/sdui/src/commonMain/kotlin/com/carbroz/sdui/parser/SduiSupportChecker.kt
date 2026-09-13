@@ -1,12 +1,16 @@
 package com.carbroz.sdui.parser
 
 import com.carbroz.sdui.model.SduiAction
+import com.carbroz.sdui.model.SduiAccessory
 import com.carbroz.sdui.model.SduiElement
 import com.carbroz.sdui.model.SduiRequestMethod
 import com.carbroz.sdui.model.SduiScreen
+import com.carbroz.sdui.model.SduiTargetApp
+import com.carbroz.sdui.model.walk
 import com.carbroz.sdui.registry.SduiNodeRegistry
+import com.carbroz.sdui.render.accessory.AccessoryRenderer
+import com.carbroz.sdui.render.layout.linearChildLayoutSupportError
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 
 sealed interface SduiSupportResult {
     data object Supported : SduiSupportResult
@@ -22,56 +26,89 @@ class SduiSupportChecker(
         if (!versionPolicy.supports(screen.schemaVersion)) {
             return SduiSupportResult.Unsupported("unsupported_schema:${screen.schemaVersion}")
         }
+        if (screen.targetApp != SduiTargetApp.PARTNER && screen.targetApp != SduiTargetApp.GLOBAL) {
+            return SduiSupportResult.Unsupported("unsupported_target_app:${screen.targetApp}")
+        }
+        if (screen.theme != null) {
+            return SduiSupportResult.Unsupported("unsupported_theme")
+        }
         if (!registry.supportsTemplate(screen.template.type)) {
             return SduiSupportResult.Unsupported("unsupported_template:${screen.template.type}")
         }
-        screen.template.components.forEach { component ->
-            if (!registry.supportsComponent(component.type)) {
-                return SduiSupportResult.Unsupported("unsupported_component:${component.type}")
-            }
-            component.elements.orEmpty().forEach { element ->
-                supportElement(element)?.let { return it }
-            }
-            component.sections.orEmpty().forEach { section ->
-                if (!registry.supportsSection(section.type)) {
-                    return SduiSupportResult.Unsupported("unsupported_section:${section.type}")
-                }
-                section.elements.orEmpty().forEach { element ->
-                    supportElement(element)?.let { return it }
-                }
-                section.groups.orEmpty().forEach { group ->
-                    if (!registry.supportsGroup(group.type)) {
-                        return SduiSupportResult.Unsupported("unsupported_group:${group.type}")
-                    }
-                    group.elements.forEach { element ->
-                        supportElement(element)?.let { return it }
-                    }
-                }
-            }
+        linearChildLayoutSupportError(screen.template.properties)?.let {
+            return SduiSupportResult.Unsupported(it)
         }
-        return SduiSupportResult.Supported
+
+        var failure: SduiSupportResult.Unsupported? = null
+        screen.template.walk(
+            onComponent = { component ->
+                if (failure == null && !registry.supportsComponent(component.type)) {
+                    failure = SduiSupportResult.Unsupported("unsupported_component:${component.type}")
+                }
+                if (failure == null) {
+                    linearChildLayoutSupportError(component.properties)?.let {
+                        failure = SduiSupportResult.Unsupported(it)
+                    }
+                }
+            },
+            onSection = { section ->
+                if (failure == null && !registry.supportsSection(section.type)) {
+                    failure = SduiSupportResult.Unsupported("unsupported_section:${section.type}")
+                }
+                if (failure == null) {
+                    linearChildLayoutSupportError(section.properties)?.let {
+                        failure = SduiSupportResult.Unsupported(it)
+                    }
+                }
+            },
+            onGroup = { group ->
+                if (failure == null && !registry.supportsGroup(group.type)) {
+                    failure = SduiSupportResult.Unsupported("unsupported_group:${group.type}")
+                }
+                if (failure == null) {
+                    linearChildLayoutSupportError(group.properties)?.let {
+                        failure = SduiSupportResult.Unsupported(it)
+                    }
+                }
+            },
+            onElement = { element ->
+                if (failure == null) failure = supportElement(element)
+            },
+        )
+        return failure ?: SduiSupportResult.Supported
     }
 
     private fun supportElement(element: SduiElement): SduiSupportResult.Unsupported? {
         if (!registry.supportsElement(element.type)) {
             return SduiSupportResult.Unsupported("unsupported_element:${element.type}")
         }
+        if (element.type == "input" && "weight" in element.properties) {
+            return SduiSupportResult.Unsupported("unsupported_input_weight")
+        }
         element.actions.values.forEach { action -> supportAction(action)?.let { return it } }
-        if (element.type == "text") supportTextSpanActions(element)?.let { return it }
+        val embedded = element.readEmbeddedActions(decoder)
+        if (embedded.invalid) return SduiSupportResult.Unsupported("unsupported_action")
+        embedded.actions.forEach { action -> supportAction(action)?.let { return it } }
+        supportPropertyAccessories(element)?.let { return it }
         return null
     }
 
-    private fun supportTextSpanActions(element: SduiElement): SduiSupportResult.Unsupported? {
-        val spans = element.properties["spans"] as? JsonArray ?: return null
-        spans.forEach { item ->
-            val span = item as? JsonObject ?: return@forEach
-            val rawAction = span["onClick"] ?: return@forEach
-            val action = decoder.decodeAction(rawAction)
-                ?: return SduiSupportResult.Unsupported("unsupported_action")
-            supportAction(action)?.let { return it }
+    private fun supportPropertyAccessories(element: SduiElement): SduiSupportResult.Unsupported? {
+        listOf("leading", "trailing").forEach { key ->
+            val raw = element.properties[key] ?: return@forEach
+            val encodedAccessories = if (raw is JsonArray) raw else JsonArray(listOf(raw))
+            encodedAccessories.forEach { encoded ->
+                val accessory = decoder.decodeAccessory(encoded)
+                    ?: return SduiSupportResult.Unsupported("unsupported_accessory")
+                supportAccessory(accessory)?.let { return it }
+            }
         }
         return null
     }
+
+    private fun supportAccessory(accessory: SduiAccessory): SduiSupportResult.Unsupported? =
+        if (AccessoryRenderer.supports(accessory.type)) null
+        else SduiSupportResult.Unsupported("unsupported_accessory:${accessory.type}")
 
     private fun supportAction(action: SduiAction): SduiSupportResult.Unsupported? = when (action) {
         is SduiAction.Request -> unsafeEndpoint(action.payload.endpoint)

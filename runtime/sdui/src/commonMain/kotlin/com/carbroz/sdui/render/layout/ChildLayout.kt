@@ -38,6 +38,31 @@ internal data class LinearChildLayoutSpec(
     val crossAxisAlignment: LinearCrossAxisAlignment = LinearCrossAxisAlignment.START,
 )
 
+private val supportedAxes = LinearAxis.entries.mapTo(hashSetOf()) { it.name }
+private val supportedMainAxisAlignments = LinearMainAxisAlignment.entries.mapTo(hashSetOf()) { it.name }
+private val supportedCrossAxisAlignments = LinearCrossAxisAlignment.entries.mapTo(hashSetOf()) { it.name }
+
+internal fun linearChildLayoutSupportError(properties: JsonObject): String? {
+    properties.string("axis")?.let { raw ->
+        if (raw.normalizedLayoutToken() !in supportedAxes) return "unsupported_layout_axis:$raw"
+    }
+    properties.string("mainAxisAlignment")?.let { raw ->
+        if (raw.normalizedLayoutToken() !in supportedMainAxisAlignments) {
+            return "unsupported_main_axis_alignment:$raw"
+        }
+    }
+    properties.string("crossAxisAlignment")?.let { raw ->
+        if (raw.normalizedLayoutToken() !in supportedCrossAxisAlignments) {
+            return "unsupported_cross_axis_alignment:$raw"
+        }
+    }
+    if ("spacing" in properties) {
+        val spacing = properties.float("spacing") ?: return "unsupported_layout_spacing"
+        if (!spacing.isFinite() || spacing < 0f) return "unsupported_layout_spacing:$spacing"
+    }
+    return null
+}
+
 internal fun resolveLinearChildLayout(properties: JsonObject): LinearChildLayoutSpec = LinearChildLayoutSpec(
     axis = when (properties.string("axis").normalizedLayoutToken()) {
         "HORIZONTAL" -> LinearAxis.HORIZONTAL
@@ -139,7 +164,7 @@ private fun verticalAlignment(value: LinearCrossAxisAlignment): Alignment.Vertic
     LinearCrossAxisAlignment.START -> Alignment.Top
 }
 
-private fun String?.normalizedLayoutToken(): String? = this
+internal fun String?.normalizedLayoutToken(): String? = this
     ?.replace("-", "_")
     ?.replace(" ", "_")
     ?.let { raw ->

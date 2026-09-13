@@ -15,7 +15,9 @@ import com.carbroz.sdui.render.SduiInteraction
 import com.carbroz.sdui.render.SduiRenderContext
 import com.carbroz.sdui.render.accessories
 import com.carbroz.sdui.render.accessory.AccessoryRenderer
+import com.carbroz.sdui.render.boolean
 import com.carbroz.sdui.render.modifier.applySduiProperties
+import com.carbroz.sdui.render.resolvedContent
 import com.carbroz.sdui.render.string
 
 object ImageElementRenderer : ElementRenderer {
@@ -25,14 +27,15 @@ object ImageElementRenderer : ElementRenderer {
     override fun Render(node: SduiElement, context: SduiRenderContext) {
         val runtime = context.nodeStates[node.id]
         if (runtime?.visible == false) return
-        val enabled = runtime?.enabled ?: true
+        val enabled = runtime?.enabled ?: node.properties.boolean("enabled") ?: true
         val action = node.actions["onClick"]
         val imageModifier = Modifier
             .applySduiProperties(node.properties)
             .then(if (enabled && action != null) Modifier.clickable {
                 context.onInteraction(SduiInteraction.ActionTriggered(node.id, "onClick", action))
             } else Modifier)
-        val url = node.properties.string("url") ?: return
+        val url = node.properties["url"].resolvedContent(context) ?: return
+        val contentDescription = node.accessibility?.get("label").resolvedContent(context)
         Row {
             node.properties.accessories("leading").forEach {
                 AccessoryRenderer.Render(it, context)
@@ -40,7 +43,7 @@ object ImageElementRenderer : ElementRenderer {
             }
             AsyncImage(
                 model = context.resolveAssetUrl(url),
-                contentDescription = node.accessibility?.get("label")?.toString()?.trim('"'),
+                contentDescription = contentDescription,
                 modifier = imageModifier,
                 contentScale = when (node.properties.string("contentScale")) {
                     "crop" -> ContentScale.Crop

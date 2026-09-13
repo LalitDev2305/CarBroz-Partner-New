@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.carbroz.sdui.model.SduiElement
 import com.carbroz.sdui.parser.SduiDecoder
+import com.carbroz.sdui.parser.decodeTextSpanAction
 import com.carbroz.sdui.registry.ElementRenderer
 import com.carbroz.sdui.render.SduiInteraction
 import com.carbroz.sdui.render.SduiRenderContext
@@ -53,12 +55,11 @@ object TextElementRenderer : ElementRenderer {
                     spans.forEachIndexed { index, item ->
                         val span = item as? JsonObject ?: return@forEachIndexed
                         val text = span["text"].resolvedContent(context).orEmpty()
-                        val action = span["onClick"]?.let(decoder::decodeAction)
+                        val action = node.decodeTextSpanAction(index, decoder)
                         Text(
                             text = text,
                             color = span.string("color")?.let(::parseSduiColor)
-                                ?: node.properties.string(if (enabled) "color" else "disabledColor")?.let(::parseSduiColor)
-                                ?: androidx.compose.ui.graphics.Color.Unspecified,
+                                ?: node.properties.textColor(enabled),
                             fontSize = (node.properties.float("fontSize") ?: 14f).sp,
                             fontWeight = FontWeight((span.float("fontWeight") ?: node.properties.float("fontWeight") ?: 400f).toInt()),
                             textDecoration = if (span.boolean("underline") == true) TextDecoration.Underline else null,
@@ -73,8 +74,7 @@ object TextElementRenderer : ElementRenderer {
                 val action = node.actions["onClick"]
                 Text(
                     text = text,
-                    color = node.properties.string(if (enabled) "color" else "disabledColor")?.let(::parseSduiColor)
-                        ?: androidx.compose.ui.graphics.Color.Unspecified,
+                    color = node.properties.textColor(enabled),
                     fontSize = (node.properties.float("fontSize") ?: 14f).sp,
                     fontWeight = FontWeight((node.properties.float("fontWeight") ?: 400f).toInt()),
                     lineHeight = (node.properties.float("lineHeight") ?: 0f).takeIf { it > 0f }?.sp ?: TextUnit.Unspecified,
@@ -91,6 +91,11 @@ object TextElementRenderer : ElementRenderer {
             }
         }
     }
+
+    private fun JsonObject.textColor(enabled: Boolean): Color =
+        (if (enabled) string("color") else string("disabledColor") ?: string("color"))
+            ?.let(::parseSduiColor)
+            ?: Color.Unspecified
 
     private fun String?.toTextAlign(): TextAlign = when (this) {
         "center" -> TextAlign.Center

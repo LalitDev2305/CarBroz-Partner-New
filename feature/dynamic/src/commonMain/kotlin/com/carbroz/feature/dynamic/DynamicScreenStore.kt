@@ -10,12 +10,13 @@ import com.carbroz.foundation.navigation.NavigationCommand
 import com.carbroz.foundation.navigation.NavigationStore
 import com.carbroz.sdui.model.SduiAction
 import com.carbroz.sdui.model.SduiAuthentication
-import com.carbroz.sdui.model.SduiElement
 import com.carbroz.sdui.model.SduiNavigationMode
 import com.carbroz.sdui.model.SduiRequestMethod
 import com.carbroz.sdui.model.SduiScreen
 import com.carbroz.sdui.model.SduiStateOperation
 import com.carbroz.sdui.model.SduiStateProperty
+import com.carbroz.sdui.model.elementsInOrder
+import com.carbroz.sdui.model.findElement
 import com.carbroz.sdui.parser.SduiDecodeResult
 import com.carbroz.sdui.parser.SduiDecoder
 import com.carbroz.sdui.parser.SduiSupportChecker
@@ -228,8 +229,27 @@ class DynamicScreenStore(
 
     private fun applyNodeState(result: SduiActionResult.NodeStateChanged) {
         mutableState.update { current ->
-            val previous = current.nodeStates[result.targetId] ?: NodeRuntimeState()
             val update = result.update
+            if (update.property == SduiStateProperty.VALUE) {
+                val bindingKey = current.screen
+                    ?.template
+                    ?.findElement(result.targetId)
+                    ?.binding
+                    ?.key
+                if (bindingKey != null) {
+                    val previousField = current.fields[bindingKey] ?: FieldState()
+                    return@update current.copy(
+                        fields = current.fields + (
+                            bindingKey to previousField.copy(
+                                value = update.value ?: JsonNull,
+                                error = null,
+                            )
+                        ),
+                    )
+                }
+            }
+
+            val previous = current.nodeStates[result.targetId] ?: NodeRuntimeState()
             val next = when (update.property) {
                 SduiStateProperty.VISIBLE -> previous.copy(
                     visible = update.booleanValue(previous.visible ?: true),
@@ -266,7 +286,7 @@ class DynamicScreenStore(
         val screen = state.value.screen ?: return false
         var valid = true
         val updated = state.value.fields.toMutableMap()
-        allElements(screen).forEach { element ->
+        screen.template.elementsInOrder().forEach { element ->
             val key = element.binding?.key ?: return@forEach
             val rule = element.validation ?: return@forEach
             val field = updated[key] ?: FieldState()
@@ -288,19 +308,9 @@ class DynamicScreenStore(
     }
 
     private fun initialFields(screen: SduiScreen): Map<String, FieldState> = buildMap {
-        allElements(screen).forEach { element ->
+        screen.template.elementsInOrder().forEach { element ->
             val key = element.binding?.key ?: return@forEach
             put(key, FieldState(value = element.properties["value"] ?: JsonPrimitive("")))
-        }
-    }
-
-    private fun allElements(screen: SduiScreen): List<SduiElement> = buildList {
-        screen.template.components.forEach { component ->
-            component.elements?.let(::addAll)
-            component.sections?.forEach { section ->
-                section.elements?.let(::addAll)
-                section.groups?.forEach { group -> addAll(group.elements) }
-            }
         }
     }
 

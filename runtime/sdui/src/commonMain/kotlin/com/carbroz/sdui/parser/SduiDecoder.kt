@@ -3,7 +3,6 @@ package com.carbroz.sdui.parser
 import com.carbroz.sdui.model.SduiAction
 import com.carbroz.sdui.model.SduiAccessory
 import com.carbroz.sdui.model.SduiScreen
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -27,7 +26,4 @@ class SduiDecoder(
 
     fun decodeAccessory(element: JsonElement): SduiAccessory? =
         runCatching { json.decodeFromJsonElement<SduiAccessory>(element) }.getOrNull()
-
-    internal fun decodeAction(text: String): SduiAction? =
-        runCatching { json.decodeFromString<SduiAction>(text) }.getOrNull()
 }

@@ -19,9 +19,14 @@ import com.carbroz.sdui.model.SduiAccessory
 import com.carbroz.sdui.render.SduiRenderContext
 import com.carbroz.sdui.render.float
 import com.carbroz.sdui.render.modifier.parseSduiColor
+import com.carbroz.sdui.render.resolvedContent
 import com.carbroz.sdui.render.string
 
 object AccessoryRenderer {
+    private val supportedTypes = setOf("icon", "divider", "image")
+
+    fun supports(type: String): Boolean = type in supportedTypes
+
     @Composable
     fun Render(accessory: SduiAccessory, context: SduiRenderContext) {
         when (accessory.type) {
@@ -83,7 +88,7 @@ object ImageAccessoryRenderer {
     @Composable
     fun Render(accessory: SduiAccessory, context: SduiRenderContext) {
         val properties = accessory.properties
-        val url = properties.string("url") ?: return
+        val url = properties["url"].resolvedContent(context) ?: return
         AsyncImage(
             model = context.resolveAssetUrl(url),
             contentDescription = null,

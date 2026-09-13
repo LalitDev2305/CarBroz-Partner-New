@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,11 +26,13 @@ import com.carbroz.sdui.render.SduiInteraction
 import com.carbroz.sdui.render.SduiRenderContext
 import com.carbroz.sdui.render.accessories
 import com.carbroz.sdui.render.accessory.AccessoryRenderer
+import com.carbroz.sdui.render.boolean
 import com.carbroz.sdui.render.float
 import com.carbroz.sdui.render.int
 import com.carbroz.sdui.render.modifier.applySduiProperties
 import com.carbroz.sdui.render.modifier.parseSduiColor
 import com.carbroz.sdui.render.objectValue
+import com.carbroz.sdui.render.resolvedContent
 import com.carbroz.sdui.render.string
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -45,9 +46,8 @@ object InputElementRenderer : ElementRenderer {
         if (runtime?.visible == false) return
         val bindingKey = node.binding?.key ?: return
         val field = context.fields[bindingKey]
-        val runtimeValue = runtime?.value as? JsonPrimitive
-        val value = runtimeValue?.contentOrNull ?: (field?.value as? JsonPrimitive)?.contentOrNull.orEmpty()
-        val enabled = runtime?.enabled ?: true
+        val value = (field?.value as? JsonPrimitive)?.contentOrNull.orEmpty()
+        val enabled = runtime?.enabled ?: node.properties.boolean("enabled") ?: true
         val maxLength = node.properties.int("maxLength")
         val keyboardType = when (node.properties.string("keyboardType")) {
             "phone" -> KeyboardType.Phone
@@ -66,9 +66,7 @@ object InputElementRenderer : ElementRenderer {
                 ),
             )
         }
-        val modifier = Modifier
-            .applySduiProperties(node.properties)
-            .then(if (node.properties.float("weight") != null) Modifier.fillMaxWidth() else Modifier)
+        val modifier = Modifier.applySduiProperties(node.properties)
 
         Column(modifier = modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -93,7 +91,7 @@ object InputElementRenderer : ElementRenderer {
                         onValueChange = onValueChange,
                         enabled = enabled,
                         singleLine = true,
-                        placeholder = node.properties.string("placeholder")?.let { { Text(it) } },
+                        placeholder = node.properties["placeholder"].resolvedContent(context)?.let { { Text(it) } },
                         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                         visualTransformation = if (keyboardType == KeyboardType.Password) PasswordVisualTransformation() else VisualTransformation.None,
                         isError = field?.error != null,
