@@ -1,8 +1,8 @@
 # CarBroz Partner Frontend — Dynamic Feature Architecture
 
-> **Status:** REVIEW DRAFT — SDUI architecture re-audit open; not frozen and not an implementation mandate yet.
+> **Status:** ACTIVE ARCHITECTURE — Dynamic ownership is established; remaining SDUI audit corrections and executable CI still block final freeze.
 >
-> **Purpose:** explain the `feature:dynamic` module in simple app-flow language. This module owns the live lifecycle of every backend-driven Partner screen after Splash. It does not define the SDUI protocol itself; that belongs to the SDUI module.
+> **Purpose:** explain the `feature:dynamic` module in simple app-flow language. This module owns the live lifecycle of every backend-driven Partner screen after Splash. It does not define the SDUI protocol or choose concrete SDUI renderers; that belongs to `runtime:sdui`.
 
 ---
 
@@ -30,9 +30,9 @@ Organization employees
 Emergency transfer
 ```
 
-The backend tells the app which screen to load and how that screen is built.
+The backend tells the app which destination to load and returns the SDUI tree for that screen.
 
-`feature:dynamic` is the frontend feature that keeps one dynamic screen alive.
+`feature:dynamic` keeps one dynamic screen alive.
 
 Its complete job is:
 
@@ -43,29 +43,38 @@ call that destination endpoint
     ↓
 receive SDUI JSON
     ↓
-ask SDUI module to decode/check/render
+unwrap envelope.data
     ↓
-keep the user's current field/runtime state
+ask SDUI module to decode + support-check
     ↓
-receive interactions from renderer
+store SduiScreen in DynamicScreenState
+    ↓
+DynamicScreen passes SduiScreen + SduiRenderContext to SduiRenderer
+    ↓
+SDUI registry resolves concrete Template/Component/Section/Group/Element renderers
+    ↓
+receive SduiInteraction back
     ↓
 execute backend actions
     ↓
-update state or NavigationStore
+update DynamicScreenState or NavigationStore
 ```
 
-It must not contain Login-specific, OTP-specific, Dashboard-specific, or Booking-specific branching.
+Dynamic must not contain Login-specific, OTP-specific, Dashboard-specific, Booking-specific, or renderer-type branching.
 
 Forbidden examples:
 
 ```kotlin
 if (screenId == "partner_login") { ... }
 if (templateType == "form_template") navigateToOtp()
+if (templateType == "form_template") FormTemplateRenderer.Render(...)
 ```
+
+Renderer lookup belongs entirely to `runtime:sdui`.
 
 ---
 
-# 2. Proposed package structure
+# 2. Package structure
 
 ```text
 feature/dynamic/
@@ -102,32 +111,34 @@ NavigationStore.ResetTo(DynamicDestination(partner_login))
   ↓
 Navigation3Host displays DynamicDestination
   ↓
-DynamicFeatureFactory creates DynamicScreenStore for that destination
+DynamicFeatureFactory creates DynamicScreenStore
   ↓
 DynamicScreenStore.load()
   ↓
-GET /api/v1/partner/screen/auth_login
+GET destination.endpoint
   ↓
 NetworkResponse
   ↓
-unwrap API envelope.data
+API envelope.data
   ↓
 SduiDecoder
   ↓
 SduiSupportChecker
   ↓
-SduiScreen(partner_login)
+SduiScreen
   ↓
-DynamicScreenState.screen = login screen
+DynamicScreenState.screen
   ↓
-DynamicScreen composable
+DynamicScreen
   ↓
 SduiRenderer
   ↓
-Login appears
+Template registry → concrete TemplateRenderer
+  ↓
+Component/Section/Group/Element registries → concrete renderers
 ```
 
-User types phone number:
+User types:
 
 ```text
 InputElementRenderer
@@ -136,96 +147,34 @@ SduiInteraction.ValueChanged
   ↓
 DynamicScreenStore
   ↓
-fields["mobileNumber"] updated
+fields[binding] updated
   ↓
 state emits
   ↓
 Compose recomposes
 ```
 
-User taps Continue:
+User triggers a backend action:
 
 ```text
-ButtonElementRenderer
+Element renderer
   ↓
-SduiInteraction.ActionTriggered(RequestAction)
+SduiInteraction.ActionTriggered(actual SduiAction)
   ↓
 DynamicScreenStore
   ↓
 SduiActionExecutor
   ↓
-validate mobileNumber if requested
-  ↓
-resolve request values
-  ↓
-NetworkDataSource
-  ↓
-Send OTP response
-  ↓
-store response/auth-flow context as defined by final auth-flow ownership
-  ↓
-backend destination to partner_otp
-  ↓
-NavigationStore.Push(full DynamicDestination)
-  ↓
-OTP screen loads dynamically
+network/navigation/state/presentation/capability behavior
 ```
 
-Nothing in this flow hardcodes Login → OTP.
-
-The same flow works for:
-
-```text
-Dashboard → Booking Details
-Booking Details → Start Service
-Earnings → Payout Details
-Profile → KYC
-```
+Nothing in this flow hardcodes Login → OTP. The same mechanism handles Dashboard → Booking Details, Booking Details → Start Service, Earnings → Payout Details, Profile → KYC, and future dynamic screens.
 
 ---
 
 # 4. `DynamicDestination.kt`
 
-## Simple meaning
-
-This class answers:
-
-> **Which backend-driven screen is this navigation-stack entry?**
-
-It stores the complete backend destination needed to load that screen.
-
-Suggested shape:
-
-```kotlin
-@Serializable
-data class DynamicDestination(
-    val screenId: String,
-    val templateId: String,
-    val templateType: String,
-    val endpoint: String,
-    val method: RequestMethod,
-    val authentication: Authentication,
-) : NavigationDestination {
-    override val navigationId: String = "$screenId:$templateId"
-}
-```
-
-The exact stable `navigationId` can be finalized during implementation, but it must not throw away the destination information.
-
-## Why full destination is needed
-
-Example stack:
-
-```text
-partner_login
-partner_otp
-partner_dashboard
-booking_details_421
-```
-
-Each stack entry needs enough information to load/restore itself.
-
-Therefore store:
+`DynamicDestination` stores the complete backend destination needed to load/restore a dynamic screen:
 
 ```text
 screenId
@@ -236,57 +185,23 @@ method
 authentication
 ```
 
-Do not store only `templateId`.
+`templateType` is render identity metadata for SDUI consistency. It is not a navigation rule and Dynamic does not use it to instantiate renderer classes.
 
-## What `templateType` does
-
-Only tells SDUI which renderer should render the target template.
-
-It never decides where to navigate.
-
-## Back example
-
-Current stack:
-
-```text
-Login → OTP → Dashboard → Booking Details
-```
-
-System Back:
+Normal Back remains:
 
 ```text
 NavigationStore.Pop
-    ↓
-Dashboard DynamicDestination becomes current
 ```
 
-No server screen rule is needed for normal stack Back.
-
-## Refresh example
-
-Current destination already contains:
-
-```text
-endpoint
-method
-authentication
-```
-
-Refresh can reload that same destination.
+Refresh reloads the current complete destination.
 
 ---
 
 # 5. `DynamicScreenState.kt`
 
-## Simple meaning
+One `DynamicScreenStore` owns one canonical `StateFlow<DynamicScreenState>`.
 
-This class answers:
-
-> **What is currently visible/known for this dynamic screen?**
-
-One `DynamicScreenStore` owns one `StateFlow<DynamicScreenState>`.
-
-Suggested conceptual shape:
+Conceptual state:
 
 ```kotlin
 data class DynamicScreenState(
@@ -302,226 +217,91 @@ data class DynamicScreenState(
 )
 ```
 
-The exact fields can be refined, but there must be one canonical mutable state owner.
-
-## Live Login example
-
-Before API returns:
-
-```text
-loading = true
-screen = null
-```
-
-After Login SDUI arrives:
-
-```text
-loading = false
-screen = partner_login
-fields["mobileNumber"] = ""
-```
-
-After typing:
-
-```text
-fields["mobileNumber"] = "9876543210"
-```
-
-If button request is running:
-
-```text
-actionInFlight = true
-```
-
-## Live booking example
-
-Backend state action marks Accept button loading:
-
-```text
-nodeStates["accept_booking"].loading = true
-```
-
-The immutable server `SduiScreen` is not modified.
+There must be one canonical mutable owner. The current audit finding about `FieldState.value` vs `NodeRuntimeState.value` remains a separate correction and is not changed by renderer registration work.
 
 ---
 
 # 6. `DynamicScreenIntent.kt`
 
-## Simple meaning
+Intents represent events entering the feature boundary, for example:
 
-An Intent means:
-
-> **Something happened that the Store must handle.**
-
-Use intents only for events entering the feature boundary.
-
-Suggested examples:
-
-```kotlin
-sealed interface DynamicScreenIntent {
-    data object Load : DynamicScreenIntent
-    data object Retry : DynamicScreenIntent
-    data object Refresh : DynamicScreenIntent
-    data class Interaction(val value: SduiInteraction) : DynamicScreenIntent
-    data object BackRequested : DynamicScreenIntent
-}
+```text
+Load
+Retry
+Refresh
+Interaction(SduiInteraction)
+BackRequested
 ```
 
 Do not create dozens of intents for internal helper methods.
-
-## Live example
-
-```text
-DynamicScreen first appears
-    ↓
-Load
-    ↓
-Store loads backend screen
-```
-
-```text
-User changes mobile input
-    ↓
-Interaction(ValueChanged)
-    ↓
-Store updates field state
-```
-
-```text
-User taps Retry after network failure
-    ↓
-Retry
-    ↓
-Store reloads current destination
-```
 
 ---
 
 # 7. `DynamicScreenEffect.kt`
 
-## Simple meaning
+Effects are only for genuine one-time feature/platform events that should not live as persistent screen state.
 
-An Effect is for a one-time UI/platform event that should not be stored as permanent screen state.
-
-Use it only when necessary.
-
-Possible examples:
-
-```kotlin
-sealed interface DynamicScreenEffect {
-    data class ShowTransientMessage(val message: String) : DynamicScreenEffect
-}
-```
-
-Navigation should normally go directly through the injected `NavigationStore`/navigation owner from action execution instead of creating a second navigation state machine.
-
-External URI can similarly delegate to the capability owner.
-
-If after implementation no true one-time feature effect remains, this class should be deleted instead of kept just because MVI examples often contain an Effect type.
-
-This is an intentional anti-overengineering rule.
+Navigation goes through `NavigationStore`; external URI goes through the capability owner. Delete `DynamicScreenEffect` if no true effect remains after final convergence.
 
 ---
 
 # 8. `DynamicScreenStore.kt`
 
-## Simple meaning
+This is the brain of one displayed dynamic screen.
 
-This is the **brain of one currently displayed dynamic screen**.
-
-It owns state and coordinates existing owners.
-
-It does not render Compose itself.
-
-It does not implement network transport.
-
-It does not know Login/OTP business names.
-
-## Main responsibilities
+Responsibilities:
 
 ```text
 load current destination
-unwrap screen API envelope
+unwrap API envelope
 ask SDUI decoder/support checker for screen
 initialize bound field state
 receive SduiInteraction
 update field state
 invoke SduiActionExecutor
-apply returned state updates
+apply returned state changes
 retry/refresh
-cancel jobs when feature closes/background policy requires
+cancel feature-owned jobs
 ```
 
-## Load flow
+What Store must not do:
 
 ```text
-Store receives Load
-    ↓
-state.loading = true
-    ↓
-create NetworkRequest from DynamicDestination
-    ↓
-NetworkDataSource.execute
-    ↓
-Success?
-    ├── No  → state.failure
-    └── Yes
-         ↓
-       unwrap envelope.data
-         ↓
-       SduiDecoder
-         ↓
-       SduiSupportChecker
-         ↓
-       initialize fields from bound elements
-         ↓
-       state.screen = decoded screen
-       state.loading = false
-```
-
-## Interaction flow
-
-```text
-Store receives SduiInteraction
-    ↓
-ValueChanged?
-    ├── Yes → update fields
-    └── No, ActionTriggered
-            ↓
-          SduiActionExecutor.execute
-```
-
-## What Store must not do
-
-Do not place inside Store:
-
-```text
-Ktor transport details
-JSON union serializers
 Compose rendering
-per-element rendering logic
-Navigation3 classes
-device platform APIs
+per-node renderer selection
+Template/Component/Section/Group layout logic
+Ktor transport internals
+Navigation3 implementation internals
 backend screen-name rules
 ```
 
-## Why not split Store immediately
+Load flow:
 
-First simplify current architecture.
-
-If the final Store remains understandable, keep it as one class.
-
-Only extract another collaborator when there is a real second responsibility.
+```text
+DynamicDestination
+  ↓
+NetworkDataSource
+  ↓
+envelope.data
+  ↓
+SduiDecoder
+  ↓
+SduiSupportChecker
+  ↓
+SduiScreen
+  ↓
+initialize fields
+  ↓
+DynamicScreenState.screen
+```
 
 ---
 
 # 9. `DynamicScreen.kt`
 
-## Simple meaning
+Compose entry point for one dynamic screen.
 
-This is the Compose entry point for one dynamic screen.
-
-It takes state and draws the correct high-level state:
+It handles high-level states:
 
 ```text
 loading
@@ -530,55 +310,21 @@ content
 overlay
 ```
 
-Suggested flow:
-
-```kotlin
-@Composable
-fun DynamicScreen(
-    state: DynamicScreenState,
-    onIntent: (DynamicScreenIntent) -> Unit,
-    renderer: SduiRenderer,
-)
-```
-
-Conceptually:
+For content:
 
 ```text
-if first load → loading UI
-if failure    → error/retry UI
-if screen     → SduiRenderer
-if overlay    → render presentation over content
+state.screen
+  ↓
+SduiRenderer.Render(screen, renderContext)
 ```
 
-## Login example
-
-```text
-state.screen = partner_login
-    ↓
-DynamicScreen
-    ↓
-SduiRenderer.Render(partner_login)
-```
-
-## Booking example
-
-```text
-state.overlay = booking_cancel_sheet
-    ↓
-DynamicScreen keeps booking screen underneath
-    ↓
-presents cancel sheet target
-```
-
-`DynamicScreen` should not call the network or inspect backend action types.
+`DynamicScreen` does not inspect backend node types and does not call a specific Template/Component/Section/Group/Element renderer itself.
 
 ---
 
 # 10. `DynamicContextProvider.kt`
 
-## Simple meaning
-
-Backend actions may ask for values that do not belong to the current input fields.
+Produces a safe read-only SDUI context projection from existing application/session/flow owners.
 
 Examples:
 
@@ -589,63 +335,25 @@ $context(legal.termsUri)
 $context(partner.id)
 ```
 
-`DynamicContextProvider` supplies those frontend/app values in one predictable JSON object.
-
-Suggested API:
-
-```kotlin
-fun interface DynamicContextProvider {
-    fun current(): JsonObject
-}
-```
-
-## OTP example
-
-OTP screen backend asks:
-
-```text
-$context(authFlow.phoneNumber)
-```
-
-Provider returns:
-
-```json
-{
-  "authFlow": {
-    "phoneNumber": "9876543210"
-  }
-}
-```
-
-## Future booking example
-
-A backend request may ask for:
-
-```text
-$context(partner.id)
-```
-
-Provider can expose current authenticated partner ID.
-
-## Important ownership rule
-
-The provider does not become a second Store.
-
-Long-lived data such as auth-flow data/session data should remain in their proper owner. The provider only creates the SDUI-visible context snapshot from those owners.
+It is not another Store.
 
 ---
 
 # 11. `SduiActionExecutor.kt`
 
-## Simple meaning
+Executes exactly the seven backend actions:
 
-This class answers:
+```text
+request
+navigate
+present
+dismiss
+state
+external_uri
+sequence
+```
 
-> **Backend gave us this action. What should happen now?**
-
-It executes the seven backend SDUI action types.
-
-Suggested dependencies:
+Dependencies can include:
 
 ```text
 NetworkDataSource
@@ -655,214 +363,76 @@ SduiValueResolver
 DynamicContextProvider
 ```
 
-For state/overlay updates, prefer returning an execution result for the Store to reduce rather than secretly owning a second state object.
+It does not render UI and does not choose node renderers.
 
-Example result model:
+Request navigation is explicit through `responseMode=destination`; `request` and `navigate` remain distinct.
 
-```kotlin
-sealed interface SduiActionResult {
-    data object Completed : SduiActionResult
-    data class Response(val body: JsonElement?) : SduiActionResult
-    data class Navigate(val destination: DynamicDestination) : SduiActionResult
-    data class NodeStateChanged(...) : SduiActionResult
-    data class OverlayChanged(...) : SduiActionResult
-    data class Failure(val reason: String) : SduiActionResult
-}
-```
-
-Exact result shape should stay as small as implementation allows.
-
-## 11.1 Request action
-
-Live Login example:
-
-```text
-Continue clicked
-    ↓
-RequestAction
-    ↓
-if validate=true, validate bound fields
-    ↓
-resolve:
-  phoneNumber = $binding(mobileNumber)
-  deviceId    = $context(deviceId)
-    ↓
-NetworkRequest
-    ↓
-NetworkDataSource
-```
-
-`responseMode = none`:
-
-```text
-store response as lastResponse/context owner as required
-stay on current screen
-```
-
-`responseMode = destination`:
-
-```text
-read destination from response
-convert to DynamicDestination
-navigate
-```
-
-## 11.2 Navigate action
-
-```text
-backend sends full destination
-    ↓
-executor converts payload to DynamicDestination
-    ↓
-NavigationStore.Push(destination)
-```
-
-No template-based routing.
-
-## 11.3 Present action
-
-```text
-present(targetId = cancel_sheet, bottom_sheet)
-    ↓
-return overlay state change
-    ↓
-DynamicScreenStore updates state.overlay
-```
-
-## 11.4 Dismiss action
-
-```text
-dismiss
-    ↓
-clear requested/current overlay
-```
-
-## 11.5 State action
-
-```text
-state(targetId = resend, set enabled = true)
-    ↓
-return NodeRuntimeState update
-    ↓
-Store updates nodeStates
-```
-
-## 11.6 External URI
-
-```text
-Terms text clicked
-    ↓
-external_uri($context(legal.termsUri))
-    ↓
-SduiValueResolver
-    ↓
-CapabilityRegistry(EXTERNAL_URI)
-```
-
-The wire action remains `external_uri`; we do not expose a generic server `CAPABILITY` action just because capability infrastructure exists internally.
-
-## 11.7 Sequence
-
-```text
-sequence
-  ↓
-action 1
-  ↓
-action 2
-  ↓
-action 3
-```
-
-Children are normal `SduiAction`s.
-
-No ParentAction/ChildAction classes.
+SESSION destinations establish session before navigation. Flow response/context updates commit only after the full requested action contract succeeds.
 
 ---
 
 # 12. `DynamicFeatureFactory.kt`
 
-## Simple meaning
-
-The navigation host should not manually know every dependency required to create a DynamicScreenStore.
-
-The factory does that construction in one place.
-
-Example:
-
-```text
-Navigation3Host sees DynamicDestination
-    ↓
-DynamicFeature
-    ↓
-DynamicFeatureFactory.create(destination, scope)
-    ↓
-DynamicScreenStore
-```
-
-Possible constructor dependencies:
-
-```text
-SduiDecoder
-SduiSupportChecker
-SduiRenderer/SduiRegistry reference where needed
-NetworkDataSource
-SduiActionExecutor
-DynamicContextProvider
-```
-
-The factory has no state machine and no business logic.
-
-Its only job is object creation/wiring.
+Constructs/wires one `DynamicScreenStore` for the supplied destination. It has no state machine and no business logic.
 
 ---
 
-# 13. How this connects to the SDUI module
+# 13. Dependency direction and SDUI renderer boundary
 
-`feature:dynamic` depends on SDUI contracts.
-
-SDUI must not depend on `feature:dynamic`.
+Dependency direction is one-way:
 
 ```text
 feature:dynamic
     ↓
-sdui
+runtime:sdui
 ```
 
-Examples:
+Dynamic may depend on:
 
 ```text
-DynamicScreenState contains SduiScreen
-DynamicScreen uses SduiRenderer
-DynamicScreenStore receives SduiInteraction
-SduiActionExecutor executes SduiAction
-SduiActionExecutor uses SduiValueResolver
+SduiScreen
+SduiDecoder
+SduiSupportChecker
+SduiRenderer
+SduiRenderContext
+SduiInteraction
+SduiAction
+SduiValueResolver
+FieldState / NodeRuntimeState / SduiOverlay
 ```
 
-But SDUI classes know nothing about:
+SDUI must not depend on:
 
 ```text
+DynamicScreenStore
 NavigationStore
 NetworkDataSource
-Partner session
-Koin
-DynamicScreenStore
+Partner session implementation
+Dynamic feature intents/effects
 ```
+
+Most importantly:
+
+```text
+Dynamic does NOT do:
+  form_template -> FormTemplateRenderer
+  stack_component -> StackComponentRenderer
+
+SDUI does:
+  template.type -> Template registry -> concrete TemplateRenderer
+  component.type -> Component registry -> concrete ComponentRenderer
+  section.type -> Section registry -> concrete SectionRenderer
+  group.type -> Group registry -> concrete GroupRenderer
+  element.type -> Element registry -> concrete ElementRenderer
+```
+
+This makes renderer extension a pure SDUI concern.
 
 ---
 
-# 14. How this connects to NavigationStore
+# 14. NavigationStore ownership
 
-NavigationStore remains the one application back-stack owner.
-
-```text
-NavigationStore
-  ↓ current destination
-Navigation3Host
-  ↓
-DynamicFeature
-```
-
-Backend navigation action:
+`NavigationStore` remains the one application back-stack owner.
 
 ```text
 SduiAction.Navigate
@@ -875,50 +445,24 @@ NavigationStore.Push(full DynamicDestination)
 System Back:
 
 ```text
-Navigation3/back callback
-    ↓
 NavigationStore.Pop
 ```
 
-The dynamic module must not create another private back stack.
+No private Dynamic back stack.
 
 ---
 
 # 15. Refresh behavior
 
-Refresh is not navigation inference.
+Refresh reloads the current `DynamicDestination`. It does not infer a new screen from `templateType`.
 
-The currently displayed `DynamicDestination` already knows how to load itself.
-
-```text
-Refresh intent
-    ↓
-DynamicScreenStore
-    ↓
-load current destination.endpoint again
-```
-
-Example Booking Details:
-
-```text
-booking details screen currently showing booking 421
-    ↓
-pull-to-refresh / backend-driven refresh policy when introduced
-    ↓
-GET same booking-details destination endpoint
-    ↓
-new SDUI screen replaces current rendered server model
-```
-
-Field/runtime-state preservation policy must be explicit per refresh behavior; do not silently merge old and new server trees.
+Field/runtime-state preservation policy must remain explicit; do not silently merge old and new server trees.
 
 ---
 
 # 16. Back-stack restoration
 
-For process restoration, persist enough data to reconstruct every dynamic stack entry.
-
-Minimum dynamic destination data:
+Persist enough information to reconstruct full dynamic destinations:
 
 ```text
 screenId
@@ -929,27 +473,13 @@ method
 authentication
 ```
 
-Restored flow:
-
-```text
-process state contains dynamic destinations
-    ↓
-app restarts
-    ↓
-Splash/bootstrap establishes fresh authoritative root
-    ↓
-restore previous stack only if compatible with fresh root policy
-    ↓
-NavigationStore owns restored full destinations
-```
-
-Do not persist only a template ID and then guess an endpoint later.
+Do not persist only a template ID and guess an endpoint later.
 
 ---
 
 # 17. Failure handling
 
-Suggested failure categories:
+Useful categories remain:
 
 ```text
 Network
@@ -958,378 +488,213 @@ UnsupportedContract
 Action
 ```
 
-Avoid creating many failure classes unless UI behavior differs.
-
-Examples:
-
-```text
-Network → Retry
-Decode → safe protocol error
-UnsupportedContract → update/unsupported screen path as product decides
-Action → action-specific error without corrupting current screen state
-```
-
-Do not expose raw exception text to production UI.
+Action failure must not corrupt or replace already valid loaded content.
 
 ---
 
 # 18. Lifecycle/coroutine rules
 
-`DynamicScreenStore` may own:
-
-```text
-loadJob
-actionJob
-```
+`DynamicScreenStore` may own load/action jobs.
 
 Rules:
 
-1. entering a different destination cancels obsolete work for the previous feature instance;
-2. repeated action taps respect `actionInFlight`/element loading policy;
+1. obsolete destination work is cancelled;
+2. repeated actions respect action-in-flight/loading policy;
 3. cancellation is not converted into an error;
 4. `close()` cancels feature-owned jobs;
-5. never use global scope;
+5. no global scope;
 6. network/session implementations remain outside this feature.
 
 ---
 
-# 19. Tests for every dynamic class
+# 19. Tests for Dynamic
 
-## `DynamicDestinationTest`
-
-```text
-navigationId stable
-full destination data retained
-serialization/restoration retains all load fields
-endpoint safety inherited/checked at correct boundary
-```
-
-## `DynamicScreenStateTest`
+Core coverage includes:
 
 ```text
-default loading/content state
-field update preserves other fields
-node state update preserves server screen
-lastResponse update
-failure transitions
+full DynamicDestination serialization/restoration
+load success/network/decode/unsupported failures
+Retry/Refresh
+ValueChanged updates canonical field state
+ActionTriggered invokes executor
+request flow commit semantics
+Navigate uses exact backend destination
+state/present/dismiss reduction
+Back = NavigationStore.Pop
+lifecycle cancellation
+repeated-action suppression
 ```
 
-## `DynamicScreenIntentTest`
-
-Usually no heavy tests unless intent mapping contains logic. Prefer testing Store behavior from intents.
-
-## `DynamicScreenEffectTest`
-
-Only if effects remain after simplification. Delete the type if there is no genuine effect.
-
-## `DynamicScreenStoreTest`
-
-Use fake/mocked network + decoder + support checker + action executor.
-
-Cover:
-
-```text
-Load success
-Load network failure
-Decode failure
-Unsupported node/schema
-Retry
-Refresh same destination
-ValueChanged updates binding
-ActionTriggered calls executor
-request result updates lastResponse
-navigate result updates NavigationStore
-state action updates node state
-present/dismiss updates overlay
-close cancels jobs
-```
-
-## `DynamicScreenTest`
-
-Compose tests:
-
-```text
-loading displayed
-failure/retry displayed
-screen delegates to SduiRenderer
-overlay displayed
-interaction forwarded to Store/intent callback
-```
-
-## `DynamicContextProviderTest`
-
-```text
-deviceId available
-authFlow.phoneNumber available when owner has it
-legal URI paths available
-missing optional context behaves predictably
-no secret values exposed unless protocol requires them
-```
-
-## `SduiActionExecutorTest`
-
-Cover every action and every dynamic reference combination.
-
-## `DynamicFeatureFactoryTest`
-
-Verify each created Store receives correct destination and required dependencies. Do not over-test DI framework internals.
+Renderer registration tests belong to `runtime:sdui`, not `feature:dynamic`.
 
 ---
 
-# 20. Complete mock dynamic flow tests
+# 20. Complete mock dynamic flows
 
-## Test A — Login → OTP → Dashboard
+## Login → OTP → Dashboard
 
-```text
-Bootstrap returns Login destination
-    ↓
-Login screen loads
-    ↓
-user types mobile
-    ↓
-Continue request resolves binding/context
-    ↓
-Send OTP succeeds
-    ↓
-OTP destination pushed
-    ↓
-OTP screen loads
-    ↓
-Verify action resolves otp + context + challenge response
-    ↓
-Dashboard destination pushed/reset according to backend response contract
-    ↓
-Dashboard loads
-```
+Used as generic action/destination/context proof only. There must be no screen-specific production branch.
 
-Assertions:
+## Dashboard → Booking Details → Back
 
-```text
-no hardcoded screen switch
-full destinations in NavigationStore
-correct endpoint each time
-correct auth mode each time
-field state is one owner
-correct response/context data survives where required
-```
+Proves exact backend Navigate destination and `NavigationStore.Pop`.
 
-## Test B — Dashboard → Booking Details → Back
+## Presentation / action sequence / refresh
 
-```text
-Dashboard booking card emits Navigate
-    ↓
-full booking-details destination pushed
-    ↓
-Booking Details API loads
-    ↓
-system Back
-    ↓
-NavigationStore.Pop
-    ↓
-Dashboard destination becomes current
-```
-
-Assert no `templateType` routing occurs.
-
-## Test C — Booking Details action sequence
-
-```text
-Accept Job
-    ↓
-state(button.loading=true)
-    ↓
-request accept API
-    ↓
-state/button or navigation according to returned actions/result
-```
-
-Assert sequence order and failure stopping policy.
-
-## Test D — Presentation
-
-```text
-Cancel booking
-    ↓
-present cancellation bottom sheet
-    ↓
-confirm/dismiss
-    ↓
-overlay state correct
-```
-
-## Test E — Refresh
-
-```text
-Current screen = Earnings
-    ↓
-Refresh
-    ↓
-same DynamicDestination endpoint called
-    ↓
-new SduiScreen replaces current content
-```
+Remain generic protocol-flow tests.
 
 ---
 
-# 21. New-developer checklist for `feature:dynamic`
+# 21. New-developer rule for `feature:dynamic`
 
-When adding a new backend-driven screen:
-
-```text
-Usually: do nothing in feature:dynamic.
-```
-
-If its template/elements already exist, backend simply returns the new screen and the existing dynamic flow handles it.
-
-Example:
+When backend adds a new screen whose existing SDUI vocabulary is already supported:
 
 ```text
-new screen = partner_payout_history
-existing template = default_template
-existing nodes = stack/text/image/button
-existing actions = request/navigate
+Usually: change NOTHING in feature:dynamic.
 ```
 
-Frontend dynamic module should need **zero new screen-specific classes**.
+When backend adds a new Template/Component/Section/Group/Element type:
 
-When adding a new SDUI element/action, follow the SDUI implementation plan. Only change dynamic feature if the new action requires a genuinely new application-side effect.
+```text
+change runtime:sdui renderer package + registration + tests
+not feature:dynamic
+```
+
+When backend adds a genuinely new action type, update the SDUI action contract and Dynamic executor only after the backend protocol defines it.
 
 ---
 
 # 22. Anti-overengineering rules
 
 1. No screen-specific Dynamic Stores.
-2. No separate Login/OTP/Dashboard navigation logic.
+2. No Login/OTP/Dashboard routing logic.
 3. No second back stack.
-4. No ActionRegistry/PreparedAction layer inside this feature.
+4. No ActionRegistry/PreparedAction layer.
 5. No FormStore beside DynamicScreenState.
-6. No cache policy framework until a real product requirement needs one.
-7. No realtime coordinator in the core dynamic path until backend/product contract requires it.
-8. No background/capability SDUI actions unless backend defines them.
-9. No class kept only because an architecture pattern says every MVI feature must have it.
-10. Delete `DynamicScreenEffect` if there is no real effect after implementation.
-11. Prefer one understandable Store over many tiny managers.
-12. Use existing Network/Navigation/Capability owners instead of wrapping them repeatedly.
+6. No cache policy framework until required.
+7. No child-layout algorithm in Dynamic.
+8. No renderer registry or renderer factory in Dynamic.
+9. No class kept solely because an MVI pattern suggests it.
+10. Prefer one understandable Store over many tiny coordinators.
 
 ---
 
-# 23. Final class connection diagram
+# 23. Final connection diagram
 
 ```text
-                         ┌─────────────────────┐
-                         │   NavigationStore   │
-                         └──────────┬──────────┘
-                                    │ current DynamicDestination
-                                    ▼
-                         ┌─────────────────────┐
-                         │ DynamicFeatureFactory│
-                         └──────────┬──────────┘
-                                    │ creates
-                                    ▼
-                         ┌─────────────────────┐
-                         │ DynamicScreenStore  │
-                         └──────┬───────┬──────┘
-                                │       │
-                     load screen│       │execute action
-                                ▼       ▼
-                    ┌──────────────┐  ┌──────────────────┐
-                    │NetworkDataSrc│  │SduiActionExecutor│
-                    └──────┬───────┘  └──────┬───────────┘
-                           │                 │
-                           ▼                 ├── NetworkDataSource
-                    API envelope             ├── NavigationStore
-                           │                 ├── CapabilityRegistry
-                           ▼                 └── SduiValueResolver
-                    SduiDecoder
-                           │
-                           ▼
-                    SupportChecker
-                           │
-                           ▼
-                      SduiScreen
-                           │
-                           ▼
-                DynamicScreenState
-                           │
-                           ▼
-                    DynamicScreen
-                           │
-                           ▼
-                    SduiRenderer
-                           │
-                           ▼
-                  SduiInteraction
-                           │
-                           └──────────────► DynamicScreenStore
+NavigationStore
+      ↓ current DynamicDestination
+DynamicFeatureFactory
+      ↓
+DynamicScreenStore
+      ├── load → NetworkDataSource → envelope.data → SduiDecoder → SupportChecker
+      └── action → SduiActionExecutor
+      ↓
+DynamicScreenState(screen, fields, nodeStates, overlay)
+      ↓
+DynamicScreen
+      ↓
+SduiRenderer
+      ↓
+SDUI hierarchy registries
+      ↓
+concrete Template/Component/Section/Group/Element renderers
+      ↓
+SduiInteraction
+      └────────────────────────────→ DynamicScreenStore
 ```
 
 ---
 
-# 24. Freeze checklist for dynamic feature
+# 24. Dynamic freeze checklist
 
 ```text
-[ ] full DynamicDestination stored in navigation stack
-[ ] no templateType-based routing
-[ ] normal Back uses NavigationStore.Pop
-[ ] refresh reloads current destination
-[ ] DynamicScreenState is sole mutable screen-state owner
-[ ] no FormStore duplicate owner
-[ ] no local input value competing with Store state
-[ ] Store does not render Compose
-[ ] renderer does not call network/navigation
-[ ] ActionExecutor supports exact backend action vocabulary
-[ ] DynamicContextProvider exposes only required safe context
-[ ] Login→OTP→Dashboard mock flow green
-[ ] Dashboard→Booking Details→Back mock flow green
-[ ] request/state/present/dismiss/external-uri/sequence tests green
-[ ] lifecycle cancellation tests green
-[ ] real Desktop integration green
-[ ] Android/iOS/Desktop CI green
+[x] full DynamicDestination model exists and is used in current baseline
+[x] no templateType-based routing
+[x] normal Back uses NavigationStore.Pop
+[x] Refresh uses current destination
+[x] DynamicScreenState is sole mutable screen-state container
+[x] no active FormStore duplicate owner
+[x] Store does not render Compose
+[x] Dynamic does not choose concrete hierarchy renderers
+[x] renderer does not call network/navigation
+[x] exact seven-action executor exists
+[x] generic Login→OTP→Dashboard mock flow exists
+[x] generic Dashboard→Booking Details→Back mock flow exists
+[~] bound field value vs NodeRuntimeState.value remains a separate audit item
+[ ] remaining approved audit corrections complete
+[ ] configured JVM/Android + published-foundation + iOS CI actually executes green
+[~] real backend/manual validation deferred by owner
 ```
-
-Only after these are green should `feature:dynamic` be marked frozen.
 
 ---
 
-# 25. Architecture amendment — SDUI child-layout ownership boundary
+# 25. Frozen SDUI renderer/layout ownership boundary
 
-> **Status:** review direction recorded; exact SDUI implementation names remain pending the runtime/sdui class audit discussion.
+> **Status:** FROZEN FOR THE CURRENT RENDERER CORRECTION.
 
-This Dynamic document intentionally does **not** own the structural layout algorithm. `feature:dynamic` owns destination loading, live screen state, interaction orchestration and action execution. `runtime:sdui` owns how the backend SDUI node properties are interpreted for rendering.
+`feature:dynamic` owns destination loading, live mutable state, interaction orchestration and action execution.
 
-The following distinction is now mandatory:
+`runtime:sdui` owns:
 
 ```text
-DynamicDestination.templateType
-        ↓
-semantic/render-capability identity of the target Template
-
-Template/Component/Section/Group properties
-        ↓
-SDUI-owned self presentation + child arrangement
+backend node type recognition
+hierarchy-specific registry lookup
+concrete renderer selection
+node property interpretation
+self-presentation modifiers
+child-layout mechanics
+Element rendering
 ```
 
-Therefore `feature:dynamic` must never contain logic such as:
+The exact runtime path is:
+
+```text
+DynamicScreen
+  ↓
+SduiRenderer
+  ↓
+Template.type
+  ↓
+Template registry
+  ↓
+concrete TemplateRenderer
+  ↓
+Component.type
+  ↓
+Component registry
+  ↓
+concrete ComponentRenderer
+  ↓
+Element(s) AND/OR Section(s)
+  ↓
+Section registry / Element registry
+  ↓
+Section child Element(s) AND/OR Group(s)
+  ↓
+Group registry / Element registry
+```
+
+Shared helpers such as `ChildLayout` are internal SDUI mechanics. They are not backend node registrations and are never selected by Dynamic.
+
+Therefore Dynamic must never contain:
 
 ```text
 if stack_template -> Column
-if form_template -> Column
+if form_template -> FormTemplateRenderer
+if stack_component -> StackComponentRenderer
 if grid_component -> LazyGrid
 ```
 
-and it must never infer a layout algorithm from a navigation rule.
+Future new render node types are added to `runtime:sdui` through concrete renderer class + hierarchy registration + tests. Dynamic changes only if the backend introduces a genuinely new application-side action/effect contract.
 
-`axis`, `spacing`, `mainAxisAlignment` and `crossAxisAlignment` are currently treated as reusable SDUI child-layout properties. Their rendering belongs below the Dynamic boundary and should not require separate Dynamic behavior for Template, Component, Section or Group.
-
-Future layout algorithms such as grid/overlay/flow also remain SDUI concerns. They must not create new Dynamic Stores, intents, effects, destinations or action-executor branches.
-
-The exact SDUI class names (`ChildLayoutRenderer`, `LinearLayoutRenderer`, `AxisLayoutRenderer`, or another final design) are deliberately **not frozen here**. They will be chosen only after owner review of the completed class-by-class SDUI audit.
-
-The Dynamic freeze checklist therefore gains these gates:
+Additional freeze gates:
 
 ```text
-[ ] feature:dynamic contains no child-layout algorithm or stack/grid/overlay branching
-[ ] bound UI values and action $binding values have one canonical owner
-[ ] shared SDUI hierarchy traversal does not get reimplemented independently in Dynamic
-[ ] agreed runtime/sdui audit corrections are implemented before final freeze
+[x] feature:dynamic contains no child-layout algorithm
+[x] feature:dynamic contains no concrete node-renderer selection
+[ ] corrected runtime:sdui explicit-renderer architecture is implemented
+[ ] registry regression proves concrete renderer mapping
+[~] canonical bound-value ownership remains separate audit work
+[ ] exact-head executable CI is green before final freeze
 ```
