@@ -9,7 +9,7 @@ plugins {
 
 kotlin {
     android {
-        namespace = "com.carbroz.runtime.sdui"
+        namespace = "com.carbroz.sdui"
         compileSdk = 37
         minSdk = 24
         withHostTest {}
@@ -27,10 +27,11 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
             implementation(libs.compose.ui)
+            implementation(compose.materialIconsExtended)
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor3)
             implementation(project(":foundation:adaptive"))
             implementation(project(":foundation:design-system"))
-            // FormTemplate runtime exposes BindingValueSource through its public binding adapter.
-            api(project(":runtime:binding"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

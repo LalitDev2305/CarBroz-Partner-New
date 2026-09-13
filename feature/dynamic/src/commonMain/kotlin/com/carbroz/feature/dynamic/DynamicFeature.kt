@@ -7,47 +7,46 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import com.carbroz.data.network.NetworkDataSource
 import com.carbroz.foundation.lifecycle.AppLifecycle
 import com.carbroz.foundation.lifecycle.AppLifecycleState
 import com.carbroz.foundation.navigation.NavigationStore
-import com.carbroz.runtime.action.ActionPreparer
-import com.carbroz.runtime.sdui.SduiRuntime
-import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
+import com.carbroz.sdui.parser.SduiDecoder
+import com.carbroz.sdui.parser.SduiSupportChecker
+import com.carbroz.sdui.render.SduiRenderer
+import com.carbroz.sdui.value.SduiValueResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collectLatest
 
-/** Process-provided dependencies for the one generic post-Splash feature. */
+/** Process-provided construction boundary for the one generic post-Splash feature. */
 class DynamicFeatureFactory(
-    private val sduiRuntime: SduiRuntime,
-    private val actionPreparer: ActionPreparer,
-    private val networkActions: NetworkActionExecutor,
-    private val capabilityActions: CapabilityActionExecutor,
-    private val backgroundActions: BackgroundActionExecutor,
+    private val decoder: SduiDecoder,
+    private val supportChecker: SduiSupportChecker,
+    private val renderer: SduiRenderer,
+    private val valueResolver: SduiValueResolver,
+    private val network: NetworkDataSource,
+    private val actionExecutor: SduiActionExecutor,
+    private val contextProvider: DynamicContextProvider,
+    private val flowContext: DynamicFlowContext,
     private val navigation: NavigationStore,
-    private val bindingContexts: DynamicBindingContextFactory,
-    private val formRuntime: FormTemplateRuntimeFactory,
-    private val cache: DynamicScreenCache,
+    private val resolveAssetUrl: (String) -> String,
 ) {
-    fun create(scope: CoroutineScope): DynamicFeatureStore = DynamicFeatureStore(
+    fun create(scope: CoroutineScope): DynamicScreenStore = DynamicScreenStore(
         scope = scope,
-        sduiRuntime = sduiRuntime,
-        actionPreparer = actionPreparer,
-        networkActions = networkActions,
-        capabilityActions = capabilityActions,
+        decoder = decoder,
+        supportChecker = supportChecker,
+        network = network,
+        actionExecutor = actionExecutor,
+        contextProvider = contextProvider,
+        flowContext = flowContext,
         navigation = navigation,
-        bindingContexts = bindingContexts,
-        formRuntime = formRuntime,
-        backgroundActions = backgroundActions,
-        cache = cache,
     )
 
-    internal fun sduiRuntime(): SduiRuntime = sduiRuntime
+    internal fun renderer(): SduiRenderer = renderer
+    internal fun valueResolver(): SduiValueResolver = valueResolver
+    internal fun resolveAssetUrl(): (String) -> String = resolveAssetUrl
 }
 
-/**
- * Single feature host for every backend-driven screen. It owns loading, screen lifecycle,
- * background suspension, SDUI rendering and dynamic action dispatch after Splash handoff.
- */
 @Composable
 fun DynamicFeature(
     destination: DynamicDestination,
@@ -69,12 +68,14 @@ fun DynamicFeature(
     }
 
     LaunchedEffect(destination.navigationId) {
-        store.show(destination)
+        store.dispatch(DynamicScreenIntent.Show(destination))
     }
 
     DynamicScreen(
         state = state,
-        sduiRuntime = factory.sduiRuntime(),
-        store = store,
+        renderer = factory.renderer(),
+        valueResolver = factory.valueResolver(),
+        resolveAssetUrl = factory.resolveAssetUrl(),
+        onIntent = store::dispatch,
     )
 }

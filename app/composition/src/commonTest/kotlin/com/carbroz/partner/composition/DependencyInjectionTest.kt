@@ -22,13 +22,10 @@ import com.carbroz.data.realtime.KtorRealtimeTransport
 import com.carbroz.data.realtime.RealtimeDeliveryGate
 import com.carbroz.data.realtime.RealtimeStream
 import com.carbroz.data.realtime.RealtimeTransport
-import com.carbroz.feature.dynamic.BackgroundActionExecutor
-import com.carbroz.feature.dynamic.CapabilityActionExecutor
-import com.carbroz.feature.dynamic.DynamicBindingContextFactory
+import com.carbroz.feature.dynamic.DynamicContextProvider
 import com.carbroz.feature.dynamic.DynamicFeatureFactory
-import com.carbroz.feature.dynamic.DynamicScreenCache
-import com.carbroz.feature.dynamic.DynamicScreenInstructionCodec
-import com.carbroz.feature.dynamic.NetworkActionExecutor
+import com.carbroz.feature.dynamic.DynamicFlowContext
+import com.carbroz.feature.dynamic.SduiActionExecutor
 import com.carbroz.foundation.configuration.AppConfiguration
 import com.carbroz.foundation.configuration.AppEnvironment
 import com.carbroz.foundation.configuration.BuildInformation
@@ -56,12 +53,14 @@ import com.carbroz.platform.background.ContinuousExecutionController
 import com.carbroz.platform.background.ContinuousExecutionRequest
 import com.carbroz.platform.background.ContinuousExecutionStartResult
 import com.carbroz.platform.background.ContinuousExecutionState
-import com.carbroz.runtime.action.ActionPreparer
 import com.carbroz.runtime.application.startup.BootstrapRepository
 import com.carbroz.runtime.application.startup.PartnerConfigStore
 import com.carbroz.runtime.application.startup.ResolveStartupUseCase
-import com.carbroz.runtime.sdui.SduiRuntime
-import com.carbroz.runtime.sdui.template.form.runtime.FormTemplateRuntimeFactory
+import com.carbroz.sdui.parser.SduiDecoder
+import com.carbroz.sdui.parser.SduiSupportChecker
+import com.carbroz.sdui.registry.SduiNodeRegistry
+import com.carbroz.sdui.render.SduiRenderer
+import com.carbroz.sdui.value.SduiValueResolver
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.test.Test
@@ -136,15 +135,14 @@ class DependencyInjectionTest {
             assertSame(partnerConfigStore, koin.get<PartnerConfigStore>())
             assertSame(resolveStartup, koin.get<ResolveStartupUseCase>())
 
-            koin.get<NetworkActionExecutor>()
-            koin.get<CapabilityActionExecutor>()
-            koin.get<BackgroundActionExecutor>()
-            koin.get<DynamicScreenInstructionCodec>()
-            koin.get<SduiRuntime>()
-            koin.get<ActionPreparer>()
-            koin.get<DynamicBindingContextFactory>()
-            koin.get<FormTemplateRuntimeFactory>()
-            koin.get<DynamicScreenCache>()
+            koin.get<SduiNodeRegistry>()
+            koin.get<SduiDecoder>()
+            koin.get<SduiSupportChecker>()
+            koin.get<SduiValueResolver>()
+            koin.get<SduiRenderer>()
+            koin.get<DynamicFlowContext>()
+            koin.get<DynamicContextProvider>()
+            koin.get<SduiActionExecutor>()
             koin.get<DynamicFeatureFactory>()
 
             assertSame(realtimeTransport, koin.get<RealtimeTransport>())
