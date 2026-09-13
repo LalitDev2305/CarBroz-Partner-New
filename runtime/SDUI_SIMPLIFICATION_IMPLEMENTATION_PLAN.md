@@ -1,6 +1,6 @@
 # CarBroz Partner Frontend — SDUI Simplification & Implementation Plan
 
-> **Status:** ACTIVE IMPLEMENTATION PLAN — frozen hierarchy and explicit renderer-registration architecture are implemented in source; complete SDUI + Dynamic freeze still waits on remaining approved audit items and runner-executed green CI.
+> **Status:** FREEZE CANDIDATE — frozen hierarchy, explicit renderer registration and all approved A–I source-audit corrections are implemented. Source convergence commit: `1ac4909613e68c3524633fef982c4dda34650ef0`. Exact-head executable multiplatform CI is the only remaining freeze activation gate.
 >
 > **Goal:** build one simple, scalable, fully dynamic SDUI runtime for the whole CarBroz Partner app. The frontend must render and execute what the backend sends; it must not hardcode Login/OTP behavior or infer product navigation from template types.
 
@@ -15,7 +15,7 @@ The frontend only needs to do these jobs:
 1. call the endpoint for the current dynamic destination;
 2. unwrap the API `data` field;
 3. decode the SDUI screen JSON;
-4. check that the frontend knows the schema/node/action types it received;
+4. check that the frontend knows the schema/node/action/capability vocabulary it received;
 5. render the screen;
 6. keep current field/runtime state;
 7. when the user interacts, execute the exact backend action;
@@ -62,7 +62,7 @@ SduiActionExecutor
   ├── navigate      → NavigationStore
   ├── present       → DynamicScreenState overlay
   ├── dismiss       → DynamicScreenState overlay
-  ├── state         → DynamicScreenState node state
+  ├── state         → DynamicScreenState field/node state
   ├── external_uri  → CapabilityRegistry internally
   └── sequence      → execute child actions in order
 ```
@@ -287,7 +287,7 @@ The frontend must preserve every present valid branch; it must not reinterpret t
 
 Frontend still needs a very small runtime support check because client and server versions can differ.
 
-The class should therefore be called:
+The class is:
 
 ```text
 SduiSupportChecker
@@ -295,21 +295,25 @@ SduiSupportChecker
 
 not a large `SduiValidator`.
 
-Its job is only:
+Its job is client capability/security only:
 
 ```text
 Is schemaVersion supported by this app build?
+Is targetApp supported by the Partner app?
+Is supplied theme capability actually consumed?
 Is this template type registered?
 Are all component/section/group/element types registered?
-Are all received action types supported?
+Are all received direct/embedded action types supported?
+Are accessory types supported?
+Is explicit layout vocabulary supported?
 Are endpoints/URIs safe for client execution?
 ```
 
 Why this is still needed:
 
 ```text
-Backend may deploy a new element type today
-but an older mobile app may not know how to render it.
+Backend may deploy a new element/accessory/layout capability today
+but an older mobile app may not know how to render it safely.
 ```
 
 That is a client capability problem, not duplicate structural validation.
@@ -344,15 +348,16 @@ sdui/
     │   ├── SduiGroup.kt
     │   ├── SduiElement.kt
     │   ├── SduiAction.kt
-    │   ├── SduiValueReference.kt
     │   ├── SduiDestination.kt
     │   ├── SduiValidationRule.kt
     │   ├── SduiAccessory.kt
-    │   └── SduiTheme.kt
+    │   ├── SduiTheme.kt
+    │   └── SduiHierarchyTraversal.kt
     │
     ├── parser/
     │   ├── SduiDecoder.kt
     │   ├── SduiDecodeResult.kt
+    │   ├── SduiEmbeddedActionReader.kt
     │   ├── SduiSupportChecker.kt
     │   └── SduiVersionPolicy.kt
     │
@@ -419,6 +424,8 @@ Shared implementation helpers live outside those semantic packages:
 render/layout/      → reusable child-arrangement mechanics
 render/modifier/    → reusable self-presentation modifiers
 render/accessory/   → reusable accessory rendering
+model traversal     → reusable non-render hierarchy inspection
+action reader       → reusable embedded-action extraction/decoding
 ```
 
 A helper is never registered as a backend node type and must not hide which concrete class owns that backend type.
@@ -534,9 +541,9 @@ sequence
 
 Do not create `Command`, `PreparedAction`, `ParentAction`, or `ChildAction` copies.
 
-## 6.8 `SduiValueReference.kt`
+## 6.8 Runtime value-reference wire forms
 
-Represents the current typed frontend model for backend runtime references:
+The frozen backend runtime-reference behavior is:
 
 ```json
 { "$binding": "mobileNumber" }
@@ -545,7 +552,7 @@ Represents the current typed frontend model for backend runtime references:
 { "$literal": "PARTNER" }
 ```
 
-Whether this class remains necessary is a separate audit item; the four reference behaviors themselves are frozen.
+There is intentionally no parallel typed `SduiValueReference` production model after the approved cleanup. `SduiValueResolver` directly recognizes/resolves the exact four structured wire forms recursively. Removing the duplicate model does not change the backend JSON contract.
 
 ## 6.9 `SduiDestination.kt`
 
@@ -576,11 +583,44 @@ message
 
 ## 6.11 `SduiAccessory.kt`
 
-Leading/trailing accessory data is generic and reusable across elements that support it. Accessory capability-check ownership remains a separate audit item.
+Leading/trailing accessory data is generic and reusable across elements that support it.
 
-## 6.12 `SduiTheme.kt`
+Current supported accessory vocabulary is explicit:
 
-Represents theme values sent by backend. Whether every currently decoded theme field is actively consumed remains a separate audit item.
+```text
+icon
+divider
+image
+```
+
+`SduiSupportChecker` decodes/checks leading/trailing accessory payloads and rejects unsupported types before rendering instead of allowing an unknown accessory to disappear silently.
+
+## 6.12 `SduiTheme.kt` and target-app capability
+
+`SduiScreen` can decode theme/target metadata, but the client must never claim a capability it does not implement.
+
+Current Partner-runtime support policy:
+
+```text
+targetApp = PARTNER  → supported
+targetApp = GLOBAL   → supported
+targetApp = CUSTOMER → unsupported in Partner runtime
+non-null screen theme → unsupported until theme is actually consumed
+```
+
+This is intentionally fail-closed. Future theme support must first add real rendering/host consumption and focused tests, then relax the support check.
+
+## 6.13 `SduiHierarchyTraversal.kt`
+
+Provides one canonical non-render traversal of the frozen additive hierarchy for tasks such as:
+
+```text
+support checking
+bound-field discovery
+target element lookup
+```
+
+It preserves both Component branches and both Section branches. Compose rendering keeps its nested traversal because parent renderer/layout composition is a different responsibility.
 
 ---
 
@@ -598,6 +638,8 @@ Rules:
 - keep backend field names;
 - decode action unions explicitly.
 
+The unused String action-decoder overload is removed. JsonElement action decoding remains active for embedded actions; accessory decoding remains active for capability checking.
+
 ## 7.2 `SduiDecodeResult.kt`
 
 Makes decode success/failure explicit.
@@ -606,7 +648,23 @@ Makes decode success/failure explicit.
 
 Checks whether this frontend build can execute/render what backend sent. It does **not** repeat backend structural validation.
 
-Current responsibility includes registered hierarchy types, supported schema/action vocabulary and endpoint/URI safety. Concrete embedded-action/accessory/layout capability ownership remains under separate audit unless already explicitly approved.
+Current responsibility includes:
+
+```text
+supported schema
+PARTNER/GLOBAL target capability
+fail-closed unconsumed theme
+registered hierarchy renderer vocabulary
+direct actions
+embedded Text-span actions via normalized parser helper
+supported leading/trailing accessories
+explicit layout vocabulary
+unsupported Input weight capability
+safe request/navigate endpoints
+GET-only dynamic navigation destination loading
+```
+
+It does not directly parse Text visual span structure; embedded-action discovery/decoding is owned by `SduiEmbeddedActionReader` and reused by Text rendering/support checking.
 
 ## 7.4 `SduiVersionPolicy.kt`
 
@@ -631,6 +689,8 @@ $response
 $literal
 ```
 
+No second reference model is required.
+
 ## 8.3 `JsonPathResolver.kt`
 
 Resolves small dotted paths such as `authFlow.phoneNumber` or `data.challengeId`.
@@ -643,9 +703,27 @@ Resolves small dotted paths such as `authFlow.phoneNumber` or `data.challengeId`
 
 Owns current value/error/touched state for one bound input through `DynamicScreenState.fields`.
 
+For a bound element this is the sole mutable value source used by rendering, validation and `$binding` action resolution.
+
 ## 9.2 `NodeRuntimeState.kt`
 
-Holds client-side state-action overrides without mutating the immutable backend screen. The exact relationship between a bound field value and `NodeRuntimeState.value` remains a separate audit item and must not be silently changed as part of renderer registration work.
+Holds client-side state-action overrides without mutating the immutable backend screen.
+
+Current ownership rule:
+
+```text
+state(target = bound element, property = value)
+    → resolve binding
+    → update FieldState.value
+
+state(target = unbound element, property = value)
+    → NodeRuntimeState.value
+
+visible/enabled/selected/expanded/checked/loading
+    → NodeRuntimeState
+```
+
+Input rendering does not prefer `NodeRuntimeState.value` over its bound `FieldState`. This prevents a displayed value from diverging from the value submitted through `$binding`.
 
 ## 9.3 `SduiOverlay.kt`
 
@@ -785,10 +863,12 @@ Its job is only:
 read node type
 find correct registered renderer
 call it
-walk every allowed child branch
+walk every allowed child branch for compositional rendering
 ```
 
 A missing registered type should already have been rejected by `SduiSupportChecker`; renderer fallback remains defensive rather than a place to guess unsupported behavior.
+
+`RenderTarget` may traverse the hierarchy to render an overlay target because it must preserve the correct concrete renderer entry point; non-render inspection elsewhere uses `SduiHierarchyTraversal`.
 
 ## 11.2 `SduiRenderContext.kt`
 
@@ -819,6 +899,8 @@ shape
 
 It is separate from child arrangement.
 
+Renderers must not add conflicting hardcoded self-padding/size semantics on top of this ownership unless the component contract explicitly defines them.
+
 ## 11.5 `ChildLayout.kt`
 
 Owns reusable **child-arrangement mechanics** for the currently supported linear contract:
@@ -832,7 +914,9 @@ crossAxisAlignment
 
 It may choose Row/Column and resolve alignment/spacing behavior. It is an implementation helper, not a backend node renderer and not a registry entry.
 
-The helper must preserve both spacing and main-axis alignment semantics where Compose permits that contract.
+The helper preserves both spacing and main-axis alignment semantics where Compose permits that contract.
+
+Omitted layout properties use the frozen defaults. Explicit unknown axis/alignment values and invalid spacing fail client capability checking rather than silently defaulting.
 
 ---
 
@@ -842,7 +926,17 @@ Accessory rendering is reusable across supported elements. The owner element dec
 
 Do not create Text-specific copies of generic accessory rendering.
 
-Capability-check behavior for unsupported accessories remains a separate audit item until explicitly approved.
+Current supported accessory types are:
+
+```text
+icon
+divider
+image
+```
+
+`SduiSupportChecker` validates leading/trailing accessory payloads against that capability before rendering. Unsupported accessory vocabulary fails closed.
+
+Accessory image URL values use the existing runtime value-resolution path where applicable; accessory rendering remains a rendering concern, not a network/action owner.
 
 ---
 
@@ -951,6 +1045,16 @@ render Compose button
     ↓
 onClick emits SduiInteraction.ActionTriggered
 ```
+
+Common approved consistency rules:
+
+- runtime enabled state overrides property enabled; property enabled falls back to true;
+- bound Input value comes only from the canonical FieldState;
+- resolvable Text/Button/Image/Input/accessory content uses the existing value-resolution ownership where supported;
+- disabled Text falls back to normal color when `disabledColor` is absent;
+- Image accessibility label resolves through the same content path rather than raw JSON stringification;
+- Input `weight` is not guessed as `fillMaxWidth`; the currently unsupported capability is rejected by support checking;
+- Button does not add hidden hardcoded padding after the common modifier resolver.
 
 No renderer directly executes network/navigation.
 
@@ -1072,6 +1176,8 @@ GridSectionRenderer.kt
 
 Those concrete renderers can delegate the common Grid mechanics to the one shared Grid helper. The architecture removes duplicated mechanics, not explicit backend-type ownership.
 
+New layout vocabulary must be capability-checked. Do not silently map an unknown backend value to an unrelated default.
+
 ---
 
 # 15. Complete action execution flow
@@ -1110,6 +1216,8 @@ NavigationStore.Push(full destination)
 
 These reduce through the canonical Dynamic screen state owner. Targeted dismiss semantics and runtime visibility remain as already implemented.
 
+For `state(property=value)`, the Dynamic Store routes a bound target to `FieldState.value`; an unbound target can use `NodeRuntimeState.value`.
+
 ## External URI
 
 Resolved through `SduiValueResolver` and delegated to the platform capability owner.
@@ -1122,11 +1230,27 @@ Executes child `SduiAction`s in order and stops according to the frozen failure 
 
 # 16. Field/binding state — one owner only
 
-Bound input values are intended to have one canonical mutable owner through `DynamicScreenState.fields`.
+Bound input values have one canonical mutable owner through `DynamicScreenState.fields`.
 
-The current audit found a possible divergence because `NodeRuntimeState.value` can also influence Input display. That specific correction is **not authorized by this renderer-registration change** and remains a separate owner discussion item.
+```text
+Input binding key = mobileNumber
+    ↓
+fields["mobileNumber"].value
+```
 
-Do not add a third value owner.
+All bound-value paths converge there:
+
+```text
+Input renderer reads fields[binding]
+user ValueChanged writes fields[binding]
+backend state(value) for a bound target writes fields[binding]
+validation reads fields[binding]
+$binding action resolution reads fields[binding]
+```
+
+`NodeRuntimeState.value` must not shadow a bound Input value. It remains only for unbound node-value state.
+
+The immutable `SduiScreen` received from backend remains unchanged.
 
 ---
 
@@ -1193,6 +1317,8 @@ SduiInteraction returns to DynamicScreenStore
 SduiActionExecutor performs action
 ```
 
+SDUI may provide pure hierarchy/value/capability helpers used by Dynamic without reversing the dependency direction.
+
 ---
 
 # 19. Testing strategy
@@ -1201,13 +1327,30 @@ SduiActionExecutor performs action
 
 Maintain realistic backend-shaped fixtures for Login, OTP, Dashboard, Booking Details, all-node, all-action, all-value-reference and unsupported vocabulary.
 
+Canonical product fixtures remain compatible with the final capability pass: they use `PARTNER`, no unconsumed screen theme, supported accessory/layout vocabulary, and no unsupported Input weight.
+
 ## 19.2 Decoder tests
 
 Cover valid/malformed data and exact supported action/value-reference decoding.
 
 ## 19.3 Support-checker tests
 
-Cover supported schema plus unsupported Template/Component/Section/Group/Element/action/endpoints. Do not duplicate backend structural validation.
+Cover client capability concerns only:
+
+```text
+supported schema
+PARTNER/GLOBAL target supported
+CUSTOMER target rejected by Partner runtime
+non-null unconsumed theme rejected
+unknown Template/Component/Section/Group/Element rejected
+unknown direct/embedded action rejected
+unsafe endpoint rejected
+unsupported accessory rejected
+unsupported explicit layout vocabulary rejected
+unsupported Input weight rejected
+```
+
+Do not duplicate backend structural validation.
 
 ## 19.4 Registry tests
 
@@ -1236,6 +1379,7 @@ Component preserves direct Elements + Sections
 Section preserves direct Elements + Groups
 vertical/horizontal linear layout
 spacing + main-axis alignment together
+all supported alignment vocabulary
 self modifier and child-layout responsibilities remain separate
 ```
 
@@ -1245,7 +1389,18 @@ Cover all four reference forms and nested recursion.
 
 ## 19.7 Field-state tests
 
-Cover binding changes and validation behavior. Bound-value/runtime-value divergence remains a separate audit target.
+Cover:
+
+```text
+ValueChanged updates one canonical FieldState
+required/pattern validation
+valid field clears error
+bound state(value) updates the same field owner
+bound state(value) leaves immutable server screen unchanged
+bound state(value) does not create NodeRuntimeState.value shadow state
+later user edit still updates the same field
+unbound state(value) remains NodeRuntimeState
+```
 
 ## 19.8 Action-executor tests
 
@@ -1259,6 +1414,10 @@ Cover full destination persistence/restoration, Push/Pop/Refresh and no template
 
 Keep generic Login → OTP → Dashboard and Dashboard → Booking Details → Back coverage as protocol-flow proof, not product-specific runtime branches.
 
+## 19.11 Hierarchy traversal tests
+
+Cover canonical non-render traversal order and both additive branches, plus element target lookup used by Dynamic state ownership.
+
 ---
 
 # 20. Code-writing rules
@@ -1270,47 +1429,50 @@ Keep generic Login → OTP → Dashboard and Dashboard → Booking Details → B
 5. No UI renderer calls network/navigation directly.
 6. No backend screen-name checks such as `if (screenId == "partner_login")` inside generic SDUI.
 7. No navigation decisions based on `templateType`.
-8. No second form state owner.
+8. No second form/bound-value state owner.
 9. No `JsonElement → String → JsonElement` round trips.
 10. No duplicate Command/PreparedAction models.
-11. No speculative action types not defined by backend.
-12. No generic manager/coordinator class without a concrete responsibility.
-13. Prefer immutable models and exhaustive `when` for action types.
-14. Reusable properties/accessories/layout mechanics belong in shared helpers, not copied into every renderer.
-15. Every new renderer must have registration + unit test + representative fixture coverage.
-16. Every new action must originate in backend protocol first, then frontend model/executor/tests.
-17. Unknown/unsupported server vocabulary must fail cleanly; never silently guess.
-18. Keep Dynamic and SDUI responsibilities separate.
-19. Preserve all valid additive hierarchy branches: Component Elements + Sections; Section Elements + Groups.
+11. No duplicate typed runtime-reference model when the resolver already owns the wire forms.
+12. No speculative action types not defined by backend.
+13. No generic manager/coordinator class without a concrete responsibility.
+14. Prefer immutable models and exhaustive `when` for action types.
+15. Reusable properties/accessories/layout mechanics belong in shared helpers, not copied into every renderer.
+16. Non-render hierarchy inspection uses the canonical traversal; renderer nesting remains compositional.
+17. Every new renderer must have registration + unit test + representative fixture coverage.
+18. Every new action must originate in backend protocol first, then frontend model/executor/tests.
+19. Unknown/unsupported server vocabulary must fail cleanly; never silently guess.
+20. Keep Dynamic and SDUI responsibilities separate.
+21. Preserve all valid additive hierarchy branches: Component Elements + Sections; Section Elements + Groups.
+22. Do not claim target/theme/accessory/layout capability until the client actually implements it.
 
 ---
 
 # 21. Implementation order
 
-The historical phases remain; the explicit renderer correction inside Phase 8 is now implemented in source.
+The historical phases remain. The explicit renderer correction and approved A–I convergence are now implemented in source.
 
 ```text
-Phase 1  Capture canonical backend JSON fixtures
-Phase 2  Fix backend destination inconsistencies
-Phase 3  Define exact frontend SDUI models/actions/value references
-Phase 4  Unwrap API envelope correctly and implement SduiDecoder
-Phase 5  Replace deep frontend validation with SduiSupportChecker
-Phase 6  Build separated hierarchy registry + clear registration entry point
-Phase 7  Implement common properties/accessories/render context/interaction
-Phase 8  Implement explicit template/component/section/group/element renderer classes using shared helpers
-Phase 9  Move bound field/runtime state to one DynamicScreenState owner
-Phase 10 Implement SduiValueResolver
-Phase 11 Implement exact seven-action SduiActionExecutor
-Phase 12 Simplify DynamicDestination/navigation/back/refresh handling
-Phase 13 Remove obsolete Command/PreparedAction/ActionRegistry/FormStore/etc.
-Phase 14 Run complete mock vocabulary tests
-Phase 15 Run generic dynamic-flow integration tests
-Phase 16 Real backend/manual app validation (deferred by owner)
-Phase 17 Android/iOS/Desktop full verification + architecture gates
-Phase 18 Freeze only after all approved audit corrections and executable CI are green
+Phase 1  Capture canonical backend JSON fixtures                         COMPLETE
+Phase 2  Fix backend destination inconsistencies                        COMPLETE
+Phase 3  Define exact frontend SDUI models/actions/value references     COMPLETE
+Phase 4  Unwrap API envelope correctly and implement SduiDecoder        COMPLETE
+Phase 5  Replace deep frontend validation with SduiSupportChecker       COMPLETE
+Phase 6  Build separated hierarchy registry + clear registration        COMPLETE
+Phase 7  Implement common properties/accessories/render context         COMPLETE
+Phase 8  Implement explicit hierarchy/element renderer classes          COMPLETE
+Phase 9  Move bound field/runtime state to one DynamicScreenState owner COMPLETE
+Phase 10 Implement SduiValueResolver                                     COMPLETE
+Phase 11 Implement exact seven-action SduiActionExecutor                 COMPLETE
+Phase 12 Simplify DynamicDestination/navigation/back/refresh             COMPLETE
+Phase 13 Remove obsolete legacy/duplicate runtime layers                 COMPLETE
+Phase 14 Run complete mock vocabulary/source regressions                 SOURCE COMPLETE / CI PENDING
+Phase 15 Run generic dynamic-flow integration tests                      SOURCE COMPLETE / CI PENDING
+Phase 16 Real backend/manual app validation                              DEFERRED BY OWNER
+Phase 17 Android/iOS/Desktop full verification + architecture gates      CI PENDING
+Phase 18 Freeze                                                          ACTIVATES AFTER EXACT-HEAD CI GREEN
 ```
 
-Completed explicit-renderer correction:
+Renderer correction:
 
 ```text
 [x] keep ChildLayout as shared mechanics
@@ -1321,7 +1483,20 @@ Completed explicit-renderer correction:
 [x] keep existing Element renderers concrete
 [x] add registry tests proving exact concrete lookup
 [x] retain hierarchy coexistence and layout regressions
-[x] do not modify unrelated audit findings in this pass
+```
+
+Approved final A–I convergence:
+
+```text
+[x] A embedded Text action ownership
+[x] B accessory capability handling
+[x] C bound Input displayed/submitted value ownership
+[x] D non-render hierarchy traversal deduplication
+[x] E SduiValueReference duplication cleanup
+[x] F unused decoder helper cleanup
+[x] G approved common renderer consistency fixes
+[x] H theme/targetApp capability policy
+[x] I explicit layout vocabulary validation
 ```
 
 Source evidence:
@@ -1329,13 +1504,16 @@ Source evidence:
 ```text
 e55ded9721d06261d7880c8a9833510f95ac6c12
 refactor(sdui): restore explicit hierarchy renderers
+
+1ac4909613e68c3524633fef982c4dda34650ef0
+fix(sdui): converge frozen runtime ownership and support
 ```
 
 ---
 
 # 22. Freeze checklist
 
-Do not mark SDUI frozen until all answers are yes:
+Do not activate the final freeze until all answers are yes:
 
 ```text
 [x] frontend consumes canonical API envelope/data in current baseline
@@ -1354,15 +1532,27 @@ Do not mark SDUI frozen until all answers are yes:
 [x] registry regression proves concrete renderer lookup
 [x] reusable ChildLayout owns current linear child-arrangement mechanics
 [x] spacing + alignment behavior has focused regression coverage
+[x] invalid explicit layout vocabulary fails closed
 [x] exact seven backend actions work in current baseline
 [x] exact four value-reference behaviors work in current baseline
+[x] duplicate SduiValueReference production model removed
+[x] canonical non-render hierarchy traversal implemented
+[x] embedded action ownership converged
+[x] accessory capability ownership converged
+[x] bound Input value has one canonical mutable owner
+[x] approved element consistency corrections implemented
+[x] targetApp/theme capability explicit and fail-closed
+[x] unused decoder String-action helper removed
 [x] baseline full-vocabulary fixture tests exist
 [x] legacy SDUI runtime removed
+[x] audited stale production files absent from exact source tree
 [x] resend/cooldown remains outside current implementation
-[ ] remaining separately approved audit corrections complete
-[ ] configured JVM/Android + published-foundation + iOS CI actually executes green
+[x] all separately approved A–I audit corrections complete
+[ ] final documentation-closeout HEAD has executed-green jvm-android + published-foundation-boundary + ios
 [~] real backend/manual visual/auth validation is explicitly deferred
 ```
+
+Once the final exact HEAD satisfies the one unchecked CI line, the conditional freeze declaration in Section 26 activates without another evidence-only commit.
 
 ---
 
@@ -1406,6 +1596,29 @@ use shared ChildLayout when the type uses that common arrangement contract
 render child content supplied by SduiRenderer
 ```
 
+For non-render hierarchy inspection:
+
+```text
+SduiHierarchyTraversal
+  ↓
+visit Component direct Elements + Sections
+  ↓
+visit Section direct Elements + Groups
+  ↓
+visit Group Elements
+```
+
+For a bound value:
+
+```text
+FieldState.value
+  ├── Input display
+  ├── validation
+  ├── user editing
+  ├── backend state(value)
+  └── $binding submission
+```
+
 When backend adds a new Template:
 
 ```text
@@ -1416,13 +1629,13 @@ add tests/fixture
 
 When backend adds a new Component/Section/Group/Element, follow the identical hierarchy-specific pattern.
 
-This is the standard: **one obvious implementation object per backend type, one obvious registration location, shared mechanics without hidden semantic indirection.**
+This is the standard: **one obvious implementation object per backend type, one obvious registration location, one bound-value owner, shared mechanics without hidden semantic indirection.**
 
 ---
 
 # 24. Frozen renderer ownership and child-layout architecture
 
-> **Status:** IMPLEMENTED IN SOURCE FOR THE CURRENT VOCABULARY — final engine freeze still waits on remaining audit work and executable CI.
+> **Status:** SOURCE COMPLETE FOR THE CURRENT VOCABULARY — final engine freeze activation waits only on exact-head executable CI.
 >
 > **Supersedes:** the previous review wording that allowed generic `structural*Renderer("wire_type")` factories to replace concrete hierarchy renderer classes.
 
@@ -1464,7 +1677,7 @@ button           → ButtonElementRenderer
 
 A backend type must be discoverable by file/object name and explicit registry entry.
 
-The generic form below is not the desired architecture and is now removed from production source:
+The generic form below is forbidden and absent from production source:
 
 ```kotlin
 structuralTemplateRenderer("form_template")
@@ -1525,7 +1738,7 @@ explicit renderer ownership for every backend type
 
 - spacing and positional main-axis alignment must not silently disable one another;
 - Component and Section must preserve every additive child branch;
-- unsupported vocabulary must fail through capability checking rather than guessing;
+- explicit unsupported layout vocabulary must fail through capability checking rather than guessing;
 - helpers must not become hidden registries or product-specific routing layers;
 - `templateType` remains render identity only, never navigation logic.
 
@@ -1542,15 +1755,19 @@ explicit renderer ownership for every backend type
 [x] registry tests prove exact concrete renderer lookup
 [x] hierarchy-coexistence regression retained
 [x] spacing + alignment regression retained
-[x] no unrelated audit finding bundled into this pass
-[ ] runner-executed multiplatform CI green
+[x] explicit invalid layout vocabulary fails closed
+[x] approved remaining A–I audit corrections implemented
+[ ] exact-head runner-executed multiplatform CI green
 ```
 
-Implementation commit:
+Implementation evidence:
 
 ```text
 e55ded9721d06261d7880c8a9833510f95ac6c12
 refactor(sdui): restore explicit hierarchy renderers
+
+1ac4909613e68c3524633fef982c4dda34650ef0
+fix(sdui): converge frozen runtime ownership and support
 ```
 
 ---
@@ -1590,7 +1807,49 @@ Regression requirements:
 [x] fixture contains Component with direct Elements + Sections
 [x] fixture contains Section with direct Elements + Groups
 [x] decoder preserves both branches
-[x] support checking visits both branches
-[x] SduiRenderer source traverses both branches
-[ ] final executable CI confirms the complete regression suite on the corrected exact SHA
+[x] support checking visits both branches through canonical non-render traversal
+[x] SduiRenderer source traverses both branches compositionally
+[x] focused hierarchy traversal regression covers the additive order
+[ ] final exact-head executable CI confirms the complete regression suite
 ```
+
+---
+
+# 26. Final approved audit convergence and freeze activation
+
+Approved source-audit closure is implemented in:
+
+```text
+1ac4909613e68c3524633fef982c4dda34650ef0
+fix(sdui): converge frozen runtime ownership and support
+```
+
+Closed audit set:
+
+```text
+A  Embedded Text action ownership                    CLOSED
+B  Accessory capability handling                     CLOSED
+C  Bound Input display/submission value ownership    CLOSED
+D  Duplicate non-render hierarchy traversal          CLOSED
+E  SduiValueReference duplication                    CLOSED
+F  Unused decoder APIs                                CLOSED
+G  Approved renderer consistency findings            CLOSED
+H  Theme/targetApp capability                        CLOSED
+I  Explicit layout vocabulary validation             CLOSED
+```
+
+Exact-tree audit at that source commit confirms no legacy `com/carbroz/runtime/sdui/**`, `StructuralNodeRenderers.kt`, `SduiValueReference.kt`, or old `DynamicScreenInstructionCodec.kt` is present.
+
+The documentation-closeout commit that contains this section is intentionally the final content change before CI. Once that exact final HEAD has executed-green results for:
+
+```text
+jvm-android
+published-foundation-boundary
+ios
+```
+
+then, with no additional evidence-only source/document commit, declare:
+
+**`SDUI + DYNAMIC GENERIC ENGINE — FROZEN GREEN`**
+
+Real backend/manual visual/auth validation remains explicitly deferred as agreed. PR #11 must remain unmerged until explicit owner approval.

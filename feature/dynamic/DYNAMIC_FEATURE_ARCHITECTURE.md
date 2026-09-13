@@ -1,6 +1,6 @@
 # CarBroz Partner Frontend — Dynamic Feature Architecture
 
-> **Status:** ACTIVE ARCHITECTURE — Dynamic ownership is established; the explicit SDUI renderer-registration boundary is implemented in source, while remaining audit corrections and executable CI still block final freeze.
+> **Status:** FREEZE CANDIDATE — Dynamic ownership and the explicit SDUI renderer boundary are implemented; all approved A–I source audits are converged at `1ac4909613e68c3524633fef982c4dda34650ef0`. Exact-head executable multiplatform CI is the only remaining freeze gate.
 >
 > **Purpose:** explain the `feature:dynamic` module in simple app-flow language. This module owns the live lifecycle of every backend-driven Partner screen after Splash. It does not define the SDUI protocol or choose concrete SDUI renderers; that belongs to `runtime:sdui`.
 
@@ -76,18 +76,20 @@ Renderer lookup belongs entirely to `runtime:sdui`.
 
 # 2. Package structure
 
+Current production ownership surface:
+
 ```text
 feature/dynamic/
 └── src/commonMain/kotlin/com/carbroz/feature/dynamic/
     ├── DynamicDestination.kt
     ├── DynamicScreenState.kt
     ├── DynamicScreenIntent.kt
-    ├── DynamicScreenEffect.kt
     ├── DynamicScreenStore.kt
     ├── DynamicScreen.kt
     ├── DynamicContextProvider.kt
+    ├── DynamicFlowContext.kt
     ├── SduiActionExecutor.kt
-    └── DynamicFeatureFactory.kt
+    └── DynamicFeature.kt / factory wiring
 ```
 
 Keep this module small.
@@ -212,12 +214,39 @@ data class DynamicScreenState(
     val fields: Map<String, FieldState> = emptyMap(),
     val nodeStates: Map<String, NodeRuntimeState> = emptyMap(),
     val overlay: SduiOverlay? = null,
-    val lastResponse: JsonElement? = null,
+    val response: JsonElement? = null,
     val failure: DynamicScreenFailure? = null,
 )
 ```
 
-There must be one canonical mutable owner. The current audit finding about `FieldState.value` vs `NodeRuntimeState.value` remains a separate correction and is not changed by renderer registration work.
+There is one canonical mutable owner for a bound value:
+
+```text
+bound element value
+    ↓
+DynamicScreenState.fields[bindingKey].value
+```
+
+The approved ownership correction in `1ac4909613e68c3524633fef982c4dda34650ef0` makes all bound-value paths converge on that owner:
+
+```text
+user ValueChanged
+    → FieldState.value
+
+backend state(targetId = bound input, property = value)
+    → resolve element binding
+    → FieldState.value
+
+Input rendering
+    → FieldState.value
+
+$binding submission
+    → FieldState.value
+```
+
+`NodeRuntimeState.value` remains available for an unbound target only. It is not a shadow value source for a bound Input.
+
+The immutable backend `SduiScreen` is never mutated to apply runtime state.
 
 ---
 
@@ -226,7 +255,7 @@ There must be one canonical mutable owner. The current audit finding about `Fiel
 Intents represent events entering the feature boundary, for example:
 
 ```text
-Load
+Show/Load
 Retry
 Refresh
 Interaction(SduiInteraction)
@@ -237,11 +266,11 @@ Do not create dozens of intents for internal helper methods.
 
 ---
 
-# 7. `DynamicScreenEffect.kt`
+# 7. One-time behavior
 
-Effects are only for genuine one-time feature/platform events that should not live as persistent screen state.
+The converged feature does not keep a generic `DynamicScreenEffect` merely to satisfy an MVI shape.
 
-Navigation goes through `NavigationStore`; external URI goes through the capability owner. Delete `DynamicScreenEffect` if no true effect remains after final convergence.
+Navigation goes through `NavigationStore`; external URI goes through the capability owner; persistent UI state belongs in `DynamicScreenState`. A separate effect type should be introduced only if a genuine one-time feature event appears that cannot be represented by those existing owners.
 
 ---
 
@@ -290,10 +319,12 @@ SduiSupportChecker
   ↓
 SduiScreen
   ↓
-initialize fields
+initialize fields through canonical SDUI hierarchy traversal
   ↓
 DynamicScreenState.screen
 ```
+
+For `state(value)` reduction, Store resolves a bound target through the shared SDUI hierarchy traversal and writes its `FieldState`. Non-value node properties and unbound values remain `NodeRuntimeState` concerns.
 
 ---
 
@@ -319,6 +350,8 @@ SduiRenderer.Render(screen, renderContext)
 ```
 
 `DynamicScreen` does not inspect backend node types and does not call a specific Template/Component/Section/Group/Element renderer itself.
+
+The render execution context projects bindings from `state.fields`, so rendered bound state and `$binding` action resolution share the same source.
 
 ---
 
@@ -371,9 +404,9 @@ SESSION destinations establish session before navigation. Flow response/context 
 
 ---
 
-# 12. `DynamicFeatureFactory.kt`
+# 12. Dynamic feature construction
 
-Constructs/wires one `DynamicScreenStore` for the supplied destination. It has no state machine and no business logic.
+Dynamic feature/factory wiring constructs one `DynamicScreenStore` for the supplied destination. It has no separate state machine and no business logic.
 
 ---
 
@@ -399,6 +432,7 @@ SduiInteraction
 SduiAction
 SduiValueResolver
 FieldState / NodeRuntimeState / SduiOverlay
+shared non-render hierarchy traversal helpers
 ```
 
 SDUI must not depend on:
@@ -408,7 +442,7 @@ DynamicScreenStore
 NavigationStore
 NetworkDataSource
 Partner session implementation
-Dynamic feature intents/effects
+Dynamic feature intents
 ```
 
 Most importantly:
@@ -490,6 +524,8 @@ Action
 
 Action failure must not corrupt or replace already valid loaded content.
 
+Unsupported SDUI client capability—including target app, unconsumed theme, accessory type or invalid explicit layout vocabulary—is surfaced through the SDUI support boundary as `UnsupportedContract`; Dynamic does not guess a fallback.
+
 ---
 
 # 18. Lifecycle/coroutine rules
@@ -516,6 +552,10 @@ full DynamicDestination serialization/restoration
 load success/network/decode/unsupported failures
 Retry/Refresh
 ValueChanged updates canonical field state
+bound state(value) updates the same FieldState without mutating server JSON
+bound state(value) does not create NodeRuntimeState.value shadow state
+later user editing continues through the same FieldState
+unbound state(value) remains NodeRuntimeState
 ActionTriggered invokes executor
 request flow commit semantics
 Navigate uses exact backend destination
@@ -525,7 +565,7 @@ lifecycle cancellation
 repeated-action suppression
 ```
 
-Renderer registration tests belong to `runtime:sdui`, not `feature:dynamic`.
+Renderer registration/support/layout tests belong to `runtime:sdui`, not `feature:dynamic`.
 
 ---
 
@@ -576,6 +616,8 @@ When backend adds a genuinely new action type, update the SDUI action contract a
 8. No renderer registry or renderer factory in Dynamic.
 9. No class kept solely because an MVI pattern suggests it.
 10. Prefer one understandable Store over many tiny coordinators.
+11. Bound value state has one owner: `DynamicScreenState.fields`.
+12. Do not reintroduce duplicate hierarchy traversal inside Dynamic; use the shared SDUI non-render traversal.
 
 ---
 
@@ -604,6 +646,17 @@ SduiInteraction
       └────────────────────────────→ DynamicScreenStore
 ```
 
+For bound values:
+
+```text
+backend/user value change
+      ↓
+DynamicScreenState.fields
+      ├──→ Input rendering
+      ├──→ validation
+      └──→ $binding request/action resolution
+```
+
 ---
 
 # 24. Dynamic freeze checklist
@@ -614,16 +667,19 @@ SduiInteraction
 [x] normal Back uses NavigationStore.Pop
 [x] Refresh uses current destination
 [x] DynamicScreenState is sole mutable screen-state container
+[x] bound mutable values are canonical in DynamicScreenState.fields
+[x] bound state(value) uses FieldState rather than NodeRuntimeState shadow value
 [x] no active FormStore duplicate owner
+[x] no unnecessary DynamicScreenEffect production type
 [x] Store does not render Compose
 [x] Dynamic does not choose concrete hierarchy renderers
 [x] renderer does not call network/navigation
 [x] exact seven-action executor exists
+[x] shared non-render hierarchy traversal is reused
 [x] generic Login→OTP→Dashboard mock flow exists
 [x] generic Dashboard→Booking Details→Back mock flow exists
-[~] bound field value vs NodeRuntimeState.value remains a separate audit item
-[ ] remaining approved audit corrections complete
-[ ] configured JVM/Android + published-foundation + iOS CI actually executes green
+[x] all approved Dynamic-side A–I audit corrections complete
+[ ] configured JVM/Android + published-foundation + iOS CI actually executes green on the final documentation-closeout HEAD
 [~] real backend/manual validation deferred by owner
 ```
 
@@ -631,7 +687,7 @@ SduiInteraction
 
 # 25. Frozen SDUI renderer/layout ownership boundary
 
-> **Status:** IMPLEMENTED IN `runtime:sdui` FOR THE CURRENT VOCABULARY — source commit `e55ded9721d06261d7880c8a9833510f95ac6c12`; final engine freeze still waits on remaining audit work and executable CI.
+> **Status:** SOURCE COMPLETE FOR THE CURRENT VOCABULARY — renderer correction `e55ded9721d06261d7880c8a9833510f95ac6c12`; remaining approved source-audit convergence `1ac4909613e68c3524633fef982c4dda34650ef0`. Exact-head executable CI is the only remaining activation gate.
 
 `feature:dynamic` owns destination loading, live mutable state, interaction orchestration and action execution.
 
@@ -645,6 +701,8 @@ node property interpretation
 self-presentation modifiers
 child-layout mechanics
 Element rendering
+client capability checking
+canonical non-render hierarchy traversal
 ```
 
 The exact runtime path is:
@@ -693,6 +751,9 @@ Implementation evidence:
 ```text
 e55ded9721d06261d7880c8a9833510f95ac6c12
 refactor(sdui): restore explicit hierarchy renderers
+
+1ac4909613e68c3524633fef982c4dda34650ef0
+fix(sdui): converge frozen runtime ownership and support
 ```
 
 Additional freeze gates:
@@ -702,6 +763,27 @@ Additional freeze gates:
 [x] feature:dynamic contains no concrete node-renderer selection
 [x] corrected runtime:sdui explicit-renderer architecture is implemented
 [x] registry regression proves concrete renderer mapping
-[~] canonical bound-value ownership remains separate audit work
-[ ] exact-head executable CI is green before final freeze
+[x] canonical bound-value ownership is implemented and regression-covered
+[x] approved A–I audit convergence is implemented
+[ ] exact-head executable CI is green before final freeze activation
 ```
+
+---
+
+# 26. Freeze activation rule
+
+The source architecture and approved audit corrections are complete. The documentation-closeout commit is intentionally the final content change before CI.
+
+When that exact final HEAD has executed-green results for:
+
+```text
+jvm-android
+published-foundation-boundary
+ios
+```
+
+then, without another evidence-only source/doc commit, this architecture is declared:
+
+**`SDUI + DYNAMIC GENERIC ENGINE — FROZEN GREEN`**
+
+PR #11 remains unmerged until explicit owner approval.
