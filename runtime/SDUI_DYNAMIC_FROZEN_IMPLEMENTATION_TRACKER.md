@@ -1,6 +1,6 @@
 # SDUI + Dynamic Frozen Convergence — Implementation Tracker
 
-> **Status:** APPROVED RENDERER-ARCHITECTURE CORRECTION READY FOR IMPLEMENTATION — configured CI remains blocked by GitHub runner allocation.
+> **Status:** EXPLICIT RENDERER ARCHITECTURE IMPLEMENTED IN SOURCE / EXECUTABLE CI STILL RUNNER-BLOCKED.
 >
 > **Authority 1:** `runtime/SDUI_SIMPLIFICATION_IMPLEMENTATION_PLAN.md`
 >
@@ -15,22 +15,22 @@
 - Base: `development`
 - PR: `#11` (draft, open, not merged)
 - Frontend only. Backend is not modified by this SDUI/Dynamic convergence.
-- Login/OTP are not reimplemented as product-specific frontend flows; existing fixtures/mock flow remain protocol proof only.
+- Login/OTP remain generic protocol fixtures/mock-flow proof only; no product-specific production branch was introduced.
 - **Resend/cooldown/timer remains deferred** until the real OTP/auth contract.
 - Real backend/manual visual/auth validation remains post-engine validation.
 - Do not merge to `development` without explicit owner approval.
 
-Approved current correction:
+The owner-approved renderer correction is now implemented in source:
 
-1. keep the frozen additive hierarchy contract;
-2. keep separate hierarchy registries;
-3. keep reusable `ChildLayout` mechanics;
-4. restore one concrete renderer class per supported backend Template/Component/Section/Group type;
-5. keep Element renderers concrete;
-6. register concrete renderer objects explicitly;
-7. remove the anonymous/generic `structural*Renderer("wire_type")` factory layer;
-8. add regression proof for exact concrete renderer lookup;
-9. do not bundle the other open audit findings into this pass.
+1. frozen additive hierarchy retained;
+2. separate hierarchy registries retained;
+3. reusable `ChildLayout` retained;
+4. one concrete renderer object restored for every current backend Template/Component/Section/Group type;
+5. Element renderers remain concrete;
+6. concrete renderer objects are registered explicitly;
+7. generic `structural*Renderer("wire_type")` factory layer removed;
+8. registry regression now proves exact concrete renderer lookup;
+9. unrelated audit findings were not bundled.
 
 Other audit findings remain discussion-only unless separately approved.
 
@@ -66,14 +66,14 @@ JSON node.type
     ↓
 hierarchy-specific registry
     ↓
-concrete renderer class for that backend type
+concrete renderer object for that backend type
     ↓
 shared modifier/layout/accessory helpers where applicable
     ↓
 Compose
 ```
 
-Current required mappings:
+Current mappings now implemented:
 
 ```text
 form_template    -> FormTemplateRenderer
@@ -97,7 +97,7 @@ mainAxisAlignment
 crossAxisAlignment
 ```
 
-It is **not** a registered backend node renderer.
+It is not a registered backend node renderer.
 
 Dynamic ownership remains:
 
@@ -139,9 +139,9 @@ $response
 $literal
 ```
 
-## 3. Authority-document update evidence
+## 3. Authority-document evidence
 
-Approved renderer architecture was written into the authorities before source changes:
+The authorities were updated before source implementation:
 
 ```text
 cf8aba53aed1d6dfa74b47774dc8cf8b9640c6e6
@@ -149,24 +149,51 @@ docs(sdui): freeze explicit renderer registration architecture
 
 18fcb6695d61d31e2c9a83c66196e98d81ad3e69
 docs(dynamic): align with explicit SDUI renderer registration
+
+140ba56ed3b6ac538818433d501589a35acf6a7f
+docs(runtime): track explicit renderer correction before implementation
 ```
 
-Authority 1 now explicitly requires:
+Authority 1 requires:
 
 - hierarchy packages `render/template`, `render/component`, `render/section`, `render/group`, `render/element`;
-- one concrete renderer class per supported backend type;
+- one concrete renderer object/class per supported backend type;
 - explicit concrete object registration;
 - `ChildLayout` as shared mechanics only;
-- no `structuralTemplateRenderer("...")` / `structuralComponentRenderer("...")` registration indirection;
-- exact new-type workflow: create class -> register -> test/fixture.
+- no generic structural factory registration indirection;
+- new-type workflow: create renderer -> register -> test/fixture.
 
-Authority 2 now explicitly requires:
+Authority 2 requires:
 
 - Dynamic does not choose concrete SDUI renderers;
 - Dynamic passes decoded screen/context into `SduiRenderer`;
-- renderer selection and child layout stay entirely inside `runtime:sdui`.
+- renderer selection and child layout stay inside `runtime:sdui`.
 
-## 4. Phase status
+## 4. Source implementation evidence
+
+Implementation commit:
+
+```text
+e55ded9721d06261d7880c8a9833510f95ac6c12
+refactor(sdui): restore explicit hierarchy renderers
+```
+
+That commit:
+
+- removes `render/StructuralNodeRenderers.kt`;
+- restores `render/template/StackTemplateRenderer.kt`;
+- restores `render/template/FormTemplateRenderer.kt`;
+- restores `render/template/DefaultTemplateRenderer.kt`;
+- restores `render/component/StackComponentRenderer.kt`;
+- restores `render/section/StackSectionRenderer.kt`;
+- restores `render/group/StackGroupRenderer.kt`;
+- changes `SduiDefinitions.kt` back to explicit concrete renderer registration;
+- keeps `render/layout/ChildLayout.kt` unchanged as the shared layout mechanism;
+- extends `SduiNodeRegistryTest` to assert exact concrete renderer objects for all current wire types.
+
+Exact-tree verification after the commit confirmed `StructuralNodeRenderers.kt` is absent and `SduiDefinitions.kt` directly imports/registers the concrete hierarchy renderers.
+
+## 5. Phase status
 
 | Phase | Requirement | State | Evidence |
 |---|---|---|---|
@@ -175,71 +202,23 @@ Authority 2 now explicitly requires:
 | 3 | Exact SDUI models/actions/value refs | RE-AUDIT OPEN | Hierarchy model is accepted/frozen; typed `SduiValueReference` duplication remains separate discussion. |
 | 4 | API envelope + decoder | RE-AUDIT OPEN | Direct `JsonElement` decode is baseline-correct; unused helpers remain separate discussion. |
 | 5 | Capability/security support checker | RE-AUDIT OPEN | Existing hierarchy/action/endpoint checks remain; embedded action/accessory capability ownership remains separate discussion. |
-| 6 | Separated hierarchy registry | VERIFIED DESIGN / CORRECTION PENDING | Registry separation and duplicate rejection stay; concrete renderer registration must be restored. |
-| 7 | Common rendering/helpers | PARTIALLY VERIFIED | `ChildLayout` exists and spacing/alignment regression exists; unsupported layout vocabulary remains separate capability audit. |
-| 8 | Template/component/section/group/element renderers | APPROVED CORRECTION PENDING | Replace generic structural factory layer with concrete hierarchy renderer files delegating to shared helpers. |
+| 6 | Separated hierarchy registry | VERIFIED IN SOURCE | Hierarchy registry separation, duplicate rejection and explicit concrete renderer registration are present. |
+| 7 | Common rendering/helpers | VERIFIED FOR APPROVED LAYOUT PASS | `ChildLayout` exists; spacing/alignment regression exists; other capability concerns remain separate audit items. |
+| 8 | Template/component/section/group/element renderers | VERIFIED IN SOURCE / CI PENDING | Explicit structural renderer files restored and Elements remain concrete. |
 | 9 | One Dynamic screen-state owner | RE-AUDIT OPEN | Bound value vs runtime node value remains separate discussion. |
 | 10 | Structured value resolver | VERIFIED BEHAVIOR / CLEANUP OPEN | Four behaviors work; duplicate typed model under review. |
 | 11 | Seven-action executor | VERIFIED IN SOURCE/TESTS | Atomic request flow, SESSION, no-body none, targeted dismiss, nested validation, sequence covered. |
 | 12 | Full destination/navigation/lifecycle | VERIFIED | Back/Refresh/restoration/full destination covered. |
 | 13 | Legacy convergence/removal | VERIFIED STRUCTURALLY | old `com.carbroz.runtime.sdui.*` tree removed. |
-| 14 | Vocabulary regression | PARTIALLY VERIFIED | hierarchy coexistence + child-layout regressions exist; exact concrete renderer mapping regression must be added. |
+| 14 | Vocabulary regression | SOURCE TESTS UPDATED / CI PENDING | hierarchy coexistence + child-layout regressions retained; concrete renderer mapping regression added. |
 | 15 | Dynamic + mock flow tests | VERIFIED BASELINE | generic auth-shaped and booking navigation/back flows exist. |
 | 16 | Real backend/manual app integration | DEFERRED BY OWNER | post-engine validation. |
-| 17 | Configured multiplatform/architecture CI | WAITING ON RUNNER | Linux jobs repeatedly fail before runner allocation; iOS skips. |
-| 18 | Documentation freeze | WAITING | Authorities now match approved renderer direction, but implementation + remaining approved audit work + executable CI still required. |
+| 17 | Configured multiplatform/architecture CI | WAITING ON RUNNER | exact implementation commit again failed before any Linux job steps; iOS skipped. |
+| 18 | Documentation freeze | WAITING | renderer authorities now match source, but remaining approved audit items + executable green CI still required. |
 
-## 5. Current source state before this correction
+## 6. Regression inventory for this pass
 
-Current source head before implementation still contains the previous generic factory approach introduced by:
-
-```text
-b9a35a1426b971a9578d37058e3568f91566b179
-refactor(sdui): separate structural nodes from child layout
-```
-
-Useful part to keep from that commit:
-
-```text
-runtime/sdui/.../render/layout/ChildLayout.kt
-```
-
-Useful tests to keep:
-
-```text
-ChildLayoutTest
-hierarchy coexistence assertions in SduiFrozenVocabularyTest
-```
-
-Part to replace:
-
-```text
-runtime/sdui/.../render/StructuralNodeRenderers.kt
-
-structuralTemplateRenderer("stack_template")
-structuralTemplateRenderer("form_template")
-structuralTemplateRenderer("default_template")
-structuralComponentRenderer("stack_component")
-structuralSectionRenderer("stack_section")
-structuralGroupRenderer("stack_group")
-```
-
-Concrete files to restore:
-
-```text
-render/template/StackTemplateRenderer.kt
-render/template/FormTemplateRenderer.kt
-render/template/DefaultTemplateRenderer.kt
-render/component/StackComponentRenderer.kt
-render/section/StackSectionRenderer.kt
-render/group/StackGroupRenderer.kt
-```
-
-Each restored class should delegate common mechanics to `ChildLayout` rather than reintroducing duplicated Row/Column logic.
-
-## 6. Regression requirements for this implementation pass
-
-Must retain/prove:
+Must remain true:
 
 ```text
 Component direct Elements + Sections coexist
@@ -250,13 +229,32 @@ horizontal ChildLayout
 spacing + positional main-axis alignment
 separate hierarchy registry
 no duplicate registration
-exact concrete renderer object/type returned for every current structural wire type
+exact concrete renderer object returned for each current wire type
 no generic structural renderer factory registration remains
 ```
 
-No new product-specific Login/OTP logic.
+Current source/test evidence:
 
-No changes in this pass to:
+`SduiFrozenVocabularyTest`
+- Component has direct Elements + Sections;
+- Section has direct Elements + Groups;
+- decoded screen passes support checker.
+
+`ChildLayoutTest`
+- default vertical layout contract;
+- horizontal resolution;
+- spacing and positional main-axis alignment resolved independently;
+- distributed main-axis alignment parsed.
+
+`SduiNodeRegistryTest`
+- current Template/Component/Section/Group/Element vocabulary registered;
+- exact concrete renderer object asserted for every current wire type;
+- definitions expose the same concrete objects;
+- duplicate Template/Element registration fails fast.
+
+## 7. Explicitly untouched audit items
+
+This renderer correction did not change:
 
 ```text
 SduiSupportChecker text-span capability design
@@ -269,34 +267,7 @@ element common-modifier/default inconsistencies
 theme/targetApp decisions
 ```
 
-unless the owner separately approves one of them.
-
-## 7. Existing executable proof inventory
-
-### SDUI runtime
-
-`SduiNodeRegistryTest`
-- hierarchy definitions register;
-- lookup works;
-- duplicate registration fails.
-
-`SduiFrozenVocabularyTest`
-- current fixtures decode/support-check;
-- Component contains both direct Elements + Sections;
-- Section contains both direct Elements + Groups;
-- exact seven actions;
-- exact four reference behaviors;
-- unsupported vocabulary fails.
-
-`ChildLayoutTest`
-- current defaults;
-- horizontal resolution;
-- spacing and positional main-axis alignment are independently preserved;
-- distributed main-axis alignment parses correctly.
-
-### Dynamic feature
-
-`DynamicDestinationFlowContextTest`, `DynamicContextProviderTest`, `SduiActionExecutorTest`, `DynamicScreenStoreTest`, `DynamicScreenStoreFrozenRegressionTest`, `DynamicFrozenFlowIntegrationTest` provide the existing generic orchestration/navigation/action proof.
+These remain owner-discussion items.
 
 ## 8. Legacy/stale-code proof
 
@@ -335,7 +306,7 @@ ba7fe66d... successful no-body request commits
 560f0d40... responseMode none supports no body
 ```
 
-These are not being redone by the current renderer correction.
+These were not redone by the renderer correction.
 
 ## 10. CI evidence
 
@@ -355,23 +326,31 @@ ios
   KMP iOS compile/link + native host/published-foundation checks
 ```
 
-Last meaningful executable evidence before runner-allocation failure:
+Last meaningful executable evidence before the runner-allocation incident:
 
 ```text
 8b78a0cc87b263b7514bdc53d7192dc008330ca5 / run 34706115457
 ```
 
-Later Linux jobs repeatedly show the pre-runner pattern (`steps=[]`, previously confirmed `runner_id=0`, empty runner name), so those failures are not treated as source compile/test conclusions.
-
-For the previous child-layout source commit:
+Previous child-layout source commit:
 
 ```text
 b9a35a1426b971a9578d37058e3568f91566b179 / run 34742504145
+published-foundation-boundary: failure, steps=null
+jvm-android: failure, steps=null
+ios: skipped
 ```
 
-both Linux jobs again completed as failure with no steps and iOS skipped.
+Current explicit-renderer implementation commit:
 
-Final freeze still requires a run where jobs actually acquire runners and execute.
+```text
+e55ded9721d06261d7880c8a9833510f95ac6c12 / run 34743762761
+published-foundation-boundary: failure, steps=null
+jvm-android: failure, steps=null
+ios: skipped
+```
+
+No compile/test conclusion is inferred from jobs that never execute any steps. Final freeze still requires a run where configured jobs acquire runners and actually execute.
 
 ## 11. Freeze checklist
 
@@ -391,14 +370,14 @@ Final freeze still requires a run where jobs actually acquire runners and execut
 - [x] duplicate registration fails
 - [x] reusable `ChildLayout` exists
 - [x] spacing + alignment regression exists
-- [ ] remove generic `StructuralNodeRenderers` factory layer
-- [ ] restore concrete Template renderer classes
-- [ ] restore concrete Component renderer class
-- [ ] restore concrete Section renderer class
-- [ ] restore concrete Group renderer class
-- [x] Element renderers are concrete
-- [ ] SduiDefinitions registers concrete renderer objects
-- [ ] registry test proves exact concrete renderer mapping
+- [x] generic `StructuralNodeRenderers` factory layer removed
+- [x] concrete Template renderer objects restored
+- [x] concrete Component renderer restored
+- [x] concrete Section renderer restored
+- [x] concrete Group renderer restored
+- [x] Element renderers remain concrete
+- [x] `SduiDefinitions` registers concrete renderer objects
+- [x] registry test proves exact concrete renderer mapping
 - [x] exact seven wire actions baseline
 - [x] exact four reference behaviors baseline
 - [x] generic mock flows baseline
@@ -427,21 +406,18 @@ Final freeze still requires a run where jobs actually acquire runners and execut
 
 ## 12. Remaining sequence to `FROZEN GREEN`
 
-1. Implement only the approved concrete-renderer correction described above.
-2. Add exact concrete-renderer registry regression.
-3. Audit the resulting diff for no generic factory residue and no unrelated changes.
-4. Update this tracker with the source/test commit evidence.
-5. Review the next open audit finding with the owner before changing production source.
-6. Continue remaining approved audit corrections one by one.
-7. Obtain GitHub Actions runners that actually execute the configured jobs.
-8. Fix only concrete failures from executable CI.
-9. Require `jvm-android`, `published-foundation-boundary`, and dependent `ios` green.
-10. Perform final exact-SHA stale/dead-code/architecture audit.
-11. Keep real backend/manual visual/auth validation explicitly deferred as agreed.
-12. Do not merge PR #11 without owner approval.
-13. Only then declare: **`SDUI + DYNAMIC GENERIC ENGINE — FROZEN GREEN`**.
+1. Review the next open audit finding with the owner before changing production source.
+2. Continue remaining approved audit corrections one by one; do not bundle them.
+3. Re-run exact-tree stale/dead-code/architecture audit after those corrections.
+4. Obtain GitHub Actions runners that actually execute configured jobs.
+5. Fix only concrete failures from executable CI.
+6. Require `jvm-android`, `published-foundation-boundary`, and dependent `ios` green.
+7. Perform final exact-SHA stale/dead-code/architecture audit.
+8. Keep real backend/manual visual/auth validation explicitly deferred as agreed.
+9. Do not merge PR #11 without owner approval.
+10. Only then declare: **`SDUI + DYNAMIC GENERIC ENGINE — FROZEN GREEN`**.
 
-## 13. Open class-audit items after this renderer correction
+## 13. Open class-audit items after renderer correction
 
 1. `SduiSupportChecker` Text-span embedded-action capability ownership — discussion-only.
 2. Accessory vocabulary/capability checking — discussion-only.
