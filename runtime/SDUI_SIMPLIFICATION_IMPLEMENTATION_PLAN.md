@@ -1,6 +1,6 @@
 # CarBroz Partner Frontend — SDUI Simplification & Implementation Plan
 
-> **Status:** ACTIVE IMPLEMENTATION PLAN — hierarchy contract and explicit renderer-registration architecture are approved; the complete SDUI + Dynamic engine is not frozen until remaining audit items and executable CI are complete.
+> **Status:** ACTIVE IMPLEMENTATION PLAN — frozen hierarchy and explicit renderer-registration architecture are implemented in source; complete SDUI + Dynamic freeze still waits on remaining approved audit items and runner-executed green CI.
 >
 > **Goal:** build one simple, scalable, fully dynamic SDUI runtime for the whole CarBroz Partner app. The frontend must render and execute what the backend sends; it must not hardcode Login/OTP behavior or infer product navigation from template types.
 
@@ -874,7 +874,7 @@ apply shared ChildLayout when that template uses the common linear contract
 render children supplied by SduiRenderer
 ```
 
-`FormTemplateRenderer` remains a real class even if its current implementation delegates entirely to shared helpers. That class is the explicit implementation point for `form_template` and can later gain form-template-specific behavior without changing the registration architecture.
+`FormTemplateRenderer` remains a real class/object even if its current implementation delegates entirely to shared helpers. That object is the explicit implementation point for `form_template` and can later gain form-template-specific behavior without changing the registration architecture.
 
 ## Component renderer
 
@@ -1063,7 +1063,7 @@ grid_component
 grid_section
 ```
 
-then each supported backend type still gets its concrete hierarchy renderer class:
+then each supported backend type still gets its concrete hierarchy renderer class/object:
 
 ```text
 GridComponentRenderer.kt
@@ -1223,7 +1223,7 @@ lookup returns the expected concrete renderer instance/type
 duplicate registration fails
 ```
 
-The registry regression must prevent a future return to anonymous `structural*Renderer("type")` factories for supported semantic node types.
+The registry regression prevents a future return to anonymous `structural*Renderer("type")` factories for supported semantic node types.
 
 ## 19.5 Renderer/layout tests
 
@@ -1263,8 +1263,8 @@ Keep generic Login → OTP → Dashboard and Dashboard → Booking Details → B
 
 # 20. Code-writing rules
 
-1. One class = one clear reason to change.
-2. Every supported backend Template/Component/Section/Group/Element type has one concrete renderer class in its matching hierarchy package.
+1. One class/object = one clear reason to change.
+2. Every supported backend Template/Component/Section/Group/Element type has one concrete renderer in its matching hierarchy package.
 3. Registration lists concrete renderer objects; do not hide semantic backend types behind generic renderer factories.
 4. Shared layout/modifier/accessory helpers remove duplicated mechanics but never replace concrete backend-type renderers.
 5. No UI renderer calls network/navigation directly.
@@ -1287,7 +1287,7 @@ Keep generic Login → OTP → Dashboard and Dashboard → Booking Details → B
 
 # 21. Implementation order
 
-The historical phases remain, but the current approved correction is specifically inside Phase 8.
+The historical phases remain; the explicit renderer correction inside Phase 8 is now implemented in source.
 
 ```text
 Phase 1  Capture canonical backend JSON fixtures
@@ -1310,18 +1310,25 @@ Phase 17 Android/iOS/Desktop full verification + architecture gates
 Phase 18 Freeze only after all approved audit corrections and executable CI are green
 ```
 
-Current approved Phase-8 correction sequence:
+Completed explicit-renderer correction:
 
 ```text
-1. keep ChildLayout as shared mechanics;
-2. remove StructuralNodeRenderers generic factory layer;
-3. restore concrete FormTemplateRenderer / StackTemplateRenderer / DefaultTemplateRenderer;
-4. restore concrete StackComponentRenderer / StackSectionRenderer / StackGroupRenderer;
-5. register those concrete objects explicitly in SduiDefinitions;
-6. keep the existing Element renderers concrete;
-7. add/update registry tests proving exact concrete lookup;
-8. retain hierarchy coexistence and layout regressions;
-9. do not modify unrelated audit findings in this pass.
+[x] keep ChildLayout as shared mechanics
+[x] remove StructuralNodeRenderers generic factory layer
+[x] restore FormTemplateRenderer / StackTemplateRenderer / DefaultTemplateRenderer
+[x] restore StackComponentRenderer / StackSectionRenderer / StackGroupRenderer
+[x] register those concrete objects explicitly in SduiDefinitions
+[x] keep existing Element renderers concrete
+[x] add registry tests proving exact concrete lookup
+[x] retain hierarchy coexistence and layout regressions
+[x] do not modify unrelated audit findings in this pass
+```
+
+Source evidence:
+
+```text
+e55ded9721d06261d7880c8a9833510f95ac6c12
+refactor(sdui): restore explicit hierarchy renderers
 ```
 
 ---
@@ -1343,8 +1350,8 @@ Do not mark SDUI frozen until all answers are yes:
 [x] Component may contain direct Elements + Sections together
 [x] Section may contain direct Elements + Groups together
 [x] Group contains Elements
-[ ] every current backend structural type maps to an explicit concrete renderer class after this correction
-[ ] registry regression proves concrete renderer lookup after this correction
+[x] every current backend structural type maps to an explicit concrete renderer object
+[x] registry regression proves concrete renderer lookup
 [x] reusable ChildLayout owns current linear child-arrangement mechanics
 [x] spacing + alignment behavior has focused regression coverage
 [x] exact seven backend actions work in current baseline
@@ -1402,20 +1409,20 @@ render child content supplied by SduiRenderer
 When backend adds a new Template:
 
 ```text
-create its TemplateRenderer class
+create its TemplateRenderer
 register it
 add tests/fixture
 ```
 
 When backend adds a new Component/Section/Group/Element, follow the identical hierarchy-specific pattern.
 
-This is the standard: **one obvious implementation class per backend type, one obvious registration location, shared mechanics without hidden semantic indirection.**
+This is the standard: **one obvious implementation object per backend type, one obvious registration location, shared mechanics without hidden semantic indirection.**
 
 ---
 
 # 24. Frozen renderer ownership and child-layout architecture
 
-> **Status:** FROZEN FOR THIS IMPLEMENTATION PASS — approved by owner.
+> **Status:** IMPLEMENTED IN SOURCE FOR THE CURRENT VOCABULARY — final engine freeze still waits on remaining audit work and executable CI.
 >
 > **Supersedes:** the previous review wording that allowed generic `structural*Renderer("wire_type")` factories to replace concrete hierarchy renderer classes.
 
@@ -1455,20 +1462,20 @@ button           → ButtonElementRenderer
 
 ## 24.1 Concrete renderer ownership is mandatory
 
-A backend type must be discoverable by file/class name and explicit registry entry.
+A backend type must be discoverable by file/object name and explicit registry entry.
 
-The current generic form below is **not** the desired architecture:
+The generic form below is not the desired architecture and is now removed from production source:
 
 ```kotlin
 structuralTemplateRenderer("form_template")
 structuralComponentRenderer("stack_component")
 ```
 
-Even if the current implementation of multiple types is mechanically identical, each type keeps its concrete renderer because that renderer is the semantic extension point for the backend contract.
+Even if multiple types are mechanically identical today, each type keeps its concrete renderer because that renderer is the semantic extension point for the backend contract.
 
 ## 24.2 Shared helpers are still required
 
-Concrete renderers must not copy common Row/Column/modifier logic.
+Concrete renderers must not copy common Row/Column algorithms.
 
 Current shared child-layout properties:
 
@@ -1496,7 +1503,7 @@ StackGroupRenderer
    └── delegates common mechanics to ChildLayout
 ```
 
-The concrete classes are semantic ownership; the helper is mechanical reuse.
+The concrete objects are semantic ownership; the helper is mechanical reuse.
 
 ## 24.3 Future layout algorithms
 
@@ -1504,9 +1511,9 @@ If backend adds another layout algorithm such as Grid/Overlay/Flow, implement th
 
 Do not copy the Grid algorithm into every hierarchy renderer.
 
-However, if backend protocol defines distinct semantic wire types such as `grid_component` and `grid_section`, those supported wire types still receive concrete `GridComponentRenderer` and `GridSectionRenderer` classes that delegate to the shared Grid helper.
+However, if backend protocol defines distinct semantic wire types such as `grid_component` and `grid_section`, those supported wire types still receive concrete `GridComponentRenderer` and `GridSectionRenderer` objects that delegate to the shared Grid helper.
 
-The goal is therefore **not** "no hierarchy renderer classes". The goal is:
+The goal is:
 
 ```text
 no duplicated layout algorithm
@@ -1522,20 +1529,28 @@ explicit renderer ownership for every backend type
 - helpers must not become hidden registries or product-specific routing layers;
 - `templateType` remains render identity only, never navigation logic.
 
-## 24.5 Freeze gates for this correction
+## 24.5 Current implementation gates
 
 ```text
-[ ] StructuralNodeRenderers generic factory layer removed
-[ ] concrete Template renderers restored and registered
-[ ] concrete Component renderer restored and registered
-[ ] concrete Section renderer restored and registered
-[ ] concrete Group renderer restored and registered
-[ ] Element renderers remain concrete
-[ ] ChildLayout remains the single current linear child-layout helper
-[ ] registry tests prove exact concrete renderer lookup
-[ ] hierarchy-coexistence regression remains green
-[ ] spacing + alignment regression remains green
-[ ] no unrelated audit finding is silently bundled into this pass
+[x] StructuralNodeRenderers generic factory layer removed
+[x] concrete Template renderers restored and registered
+[x] concrete Component renderer restored and registered
+[x] concrete Section renderer restored and registered
+[x] concrete Group renderer restored and registered
+[x] Element renderers remain concrete
+[x] ChildLayout remains the single current linear child-layout helper
+[x] registry tests prove exact concrete renderer lookup
+[x] hierarchy-coexistence regression retained
+[x] spacing + alignment regression retained
+[x] no unrelated audit finding bundled into this pass
+[ ] runner-executed multiplatform CI green
+```
+
+Implementation commit:
+
+```text
+e55ded9721d06261d7880c8a9833510f95ac6c12
+refactor(sdui): restore explicit hierarchy renderers
 ```
 
 ---
