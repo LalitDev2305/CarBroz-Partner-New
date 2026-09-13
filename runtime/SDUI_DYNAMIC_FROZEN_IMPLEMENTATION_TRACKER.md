@@ -1,6 +1,6 @@
 # SDUI + Dynamic Frozen Convergence — Implementation Tracker
 
-> **Status:** SOURCE-COMPLETE BASELINE / APPROVED AUDIT CORRECTIONS IN PROGRESS — configured CI remains blocked by GitHub runner allocation.
+> **Status:** APPROVED RENDERER-ARCHITECTURE CORRECTION READY FOR IMPLEMENTATION — configured CI remains blocked by GitHub runner allocation.
 >
 > **Authority 1:** `runtime/SDUI_SIMPLIFICATION_IMPLEMENTATION_PLAN.md`
 >
@@ -14,14 +14,27 @@
 - Branch: `feature/sdui-frozen-convergence`
 - Base: `development`
 - PR: `#11` (draft, open, not merged)
-- Frontend only. Backend was not modified by this convergence.
-- Login/OTP are not reimplemented as product-specific frontend flows. They exist only as generic SDUI fixtures/mock-flow proof.
-- **Resend/cooldown/timer remains explicitly deferred** until the real OTP JSON/auth contract is implemented.
-- Real backend/manual visual/auth validation remains post-engine validation for the owner’s actual app run.
-- **Owner has approved implementation of the hierarchy/layout corrections already discussed. Other audit findings remain discussion-only until separately approved.**
+- Frontend only. Backend is not modified by this SDUI/Dynamic convergence.
+- Login/OTP are not reimplemented as product-specific frontend flows; existing fixtures/mock flow remain protocol proof only.
+- **Resend/cooldown/timer remains deferred** until the real OTP/auth contract.
+- Real backend/manual visual/auth validation remains post-engine validation.
 - Do not merge to `development` without explicit owner approval.
 
-## 2. Frozen generic architecture being implemented
+Approved current correction:
+
+1. keep the frozen additive hierarchy contract;
+2. keep separate hierarchy registries;
+3. keep reusable `ChildLayout` mechanics;
+4. restore one concrete renderer class per supported backend Template/Component/Section/Group type;
+5. keep Element renderers concrete;
+6. register concrete renderer objects explicitly;
+7. remove the anonymous/generic `structural*Renderer("wire_type")` factory layer;
+8. add regression proof for exact concrete renderer lookup;
+9. do not bundle the other open audit findings into this pass.
+
+Other audit findings remain discussion-only unless separately approved.
+
+## 2. Frozen generic architecture
 
 Canonical hierarchy:
 
@@ -43,19 +56,66 @@ Frozen hierarchy semantics:
 - a Component may contain direct Elements, Sections, or both;
 - a Section may contain direct Elements, Groups, or both;
 - a Group contains Elements;
-- optional child collections are additive branches, not mutually exclusive choices;
-- the previous audit claim that Component/Section nullable child collections inherently created impossible states is withdrawn.
+- optional child collections are additive, not mutually exclusive;
+- the previous “impossible state” finding for these child collections is withdrawn.
 
-Active SDUI package:
+Frozen renderer/registration semantics:
 
 ```text
-runtime/sdui/src/commonMain/kotlin/com/carbroz/sdui/
-  model/
-  parser/
-  value/
-  runtime/
-  registry/
-  render/
+JSON node.type
+    ↓
+hierarchy-specific registry
+    ↓
+concrete renderer class for that backend type
+    ↓
+shared modifier/layout/accessory helpers where applicable
+    ↓
+Compose
+```
+
+Current required mappings:
+
+```text
+form_template    -> FormTemplateRenderer
+stack_template   -> StackTemplateRenderer
+default_template -> DefaultTemplateRenderer
+stack_component  -> StackComponentRenderer
+stack_section    -> StackSectionRenderer
+stack_group      -> StackGroupRenderer
+text             -> TextElementRenderer
+image            -> ImageElementRenderer
+input            -> InputElementRenderer
+button           -> ButtonElementRenderer
+```
+
+Shared `ChildLayout` owns current reusable linear child mechanics:
+
+```text
+axis
+spacing
+mainAxisAlignment
+crossAxisAlignment
+```
+
+It is **not** a registered backend node renderer.
+
+Dynamic ownership remains:
+
+```text
+NavigationStore current DynamicDestination
+  -> DynamicFeatureFactory
+  -> DynamicScreenStore
+  -> NetworkDataSource
+  -> API envelope.data
+  -> SduiDecoder
+  -> SduiSupportChecker
+  -> DynamicScreenState
+  -> DynamicScreen
+  -> SduiRenderer
+  -> SDUI hierarchy registries / concrete renderers
+  -> SduiInteraction
+  -> DynamicScreenStore
+  -> SduiActionExecutor
 ```
 
 Exact wire actions:
@@ -70,7 +130,7 @@ external_uri
 sequence
 ```
 
-Exact structured value references:
+Exact structured reference behavior:
 
 ```text
 $binding
@@ -79,177 +139,166 @@ $response
 $literal
 ```
 
-Dynamic ownership:
+## 3. Authority-document update evidence
+
+Approved renderer architecture was written into the authorities before source changes:
 
 ```text
-NavigationStore current DynamicDestination
-  -> DynamicFeatureFactory
-  -> DynamicScreenStore
-  -> NetworkDataSource
-  -> API envelope.data
-  -> SduiDecoder
-  -> SduiSupportChecker
-  -> DynamicScreenState
-  -> DynamicScreen
-  -> SduiRenderer
-  -> SduiInteraction
-  -> DynamicScreenStore
-  -> SduiActionExecutor
+cf8aba53aed1d6dfa74b47774dc8cf8b9640c6e6
+docs(sdui): freeze explicit renderer registration architecture
+
+18fcb6695d61d31e2c9a83c66196e98d81ad3e69
+docs(dynamic): align with explicit SDUI renderer registration
 ```
 
-Current generic rules proven in source/tests:
+Authority 1 now explicitly requires:
 
-- Full `DynamicDestination` is stored/restored: `screenId`, `templateId`, `templateType`, `endpoint`, `method`, `authentication`.
-- `templateType` controls rendering only; it never chooses a route.
-- `NavigationStore` is the only back-stack owner; Back dispatches `Pop`.
-- Refresh reloads the current full destination.
-- Dynamic screen GET unwraps API envelope `data` before decode.
-- Frontend performs capability/security support checking, not a second backend structural validator.
-- `DynamicScreenState` is the single mutable owner of fields/runtime node state/overlay for a live screen.
-- `DynamicContextProvider` is a read-only projection over transient flow/application context.
-- `SduiActionExecutor` executes exactly the seven backend actions.
-- `request` and `navigate` remain distinct; request navigation is explicit through `responseMode=destination`.
-- Request `$response` + `contextUpdates` commit atomically only after the requested response contract succeeds.
-- Destination-mode request validates/constructs the destination and satisfies SESSION requirements before committing transient flow state.
-- `responseMode=none` accepts successful no-body responses and clears stale `$response` rather than retaining a previous response accidentally.
-- SESSION destination establishes canonical session before navigation.
-- Request validation runs at the exact request execution point, including requests nested inside `sequence`.
-- Validation blocking stops a sequence without turning normal field validation into an action failure.
-- Targeted `dismiss(targetId)` clears only that requested/current overlay; untargeted dismiss clears the active overlay.
-- Runtime `visible` state is honored centrally across template/component/section/group/element traversal.
-- Action failure preserves an already-loaded screen instead of replacing valid content with the load-failure UI.
-- Production Dynamic/SDUI code contains no Login/OTP/Dashboard/Booking-specific routing branch.
+- hierarchy packages `render/template`, `render/component`, `render/section`, `render/group`, `render/element`;
+- one concrete renderer class per supported backend type;
+- explicit concrete object registration;
+- `ChildLayout` as shared mechanics only;
+- no `structuralTemplateRenderer("...")` / `structuralComponentRenderer("...")` registration indirection;
+- exact new-type workflow: create class -> register -> test/fixture.
 
-Architecture re-audit decisions:
+Authority 2 now explicitly requires:
 
-- Semantic structural-node identity and child-layout behavior are separate concerns.
-- `axis`, `spacing`, `mainAxisAlignment`, `crossAxisAlignment` describe reusable linear/axis child arrangement, not hierarchy-specific Stack ownership.
-- Hierarchy-safe registry separation remains approved.
-- The current Stack-specific helper/wrapper shape is approved for refactor into reusable child-layout machinery without changing backend wire types.
-- Component/Section coexistence semantics are frozen as described above.
-- Remaining audit findings are not automatically authorized by this approval.
+- Dynamic does not choose concrete SDUI renderers;
+- Dynamic passes decoded screen/context into `SduiRenderer`;
+- renderer selection and child layout stay entirely inside `runtime:sdui`.
 
-## 3. Phase status
+## 4. Phase status
 
 | Phase | Requirement | State | Evidence |
 |---|---|---|---|
-| 1 | Canonical realistic fixtures | VERIFIED | Login, OTP, Dashboard, Booking Details, all-node, all-action, all-value-reference and unsupported fixtures exist. OTP fixture deliberately contains no resend/cooldown policy. |
-| 2 | Destination consistency boundary | VERIFIED | Store checks `screenId + templateId + templateType`; full destination constructor enforces safe relative endpoint + GET load method. |
-| 3 | Exact SDUI models/actions/value refs | RE-AUDIT OPEN | Hierarchy child model is now accepted/frozen; separate `SduiValueReference` duplication finding still awaits discussion. |
-| 4 | API envelope + decoder | RE-AUDIT OPEN | Envelope/direct `JsonElement` decode is correct; unused decoder helper APIs and nested embedded-action ownership remain discussion items. |
-| 5 | Capability/security support checker | RE-AUDIT OPEN | Existing checks cover schema/hierarchy/actions/endpoints; Text-span/accessory capability ownership remains a separate future discussion. |
-| 6 | Separated hierarchy registry | VERIFIED / IMPLEMENTATION IN PROGRESS | Hierarchy-specific registration/lookup and duplicate rejection remain approved; layout-specific wrapper multiplication is being removed. |
-| 7 | Common rendering/accessories/contracts | IMPLEMENTATION IN PROGRESS | Child-layout ownership and spacing+alignment semantics are the current approved implementation target. |
-| 8 | Template/component/section/group/element renderers | IMPLEMENTATION IN PROGRESS | Stack-specific structural wrappers are being converged while preserving backend type vocabulary and hierarchy-safe registration. |
-| 9 | One Dynamic screen-state owner | RE-AUDIT OPEN | Store remains sole mutable state owner; bound-value vs node runtime-value divergence remains a separate discussion item. |
-| 10 | Structured value resolver | VERIFIED BEHAVIOR / CLEANUP OPEN | Four references and nested recursion work; duplicate unused typed reference model is under review. |
-| 11 | Seven-action executor | VERIFIED IN SOURCE/TESTS | HTTP/destination/session commit policy, atomic flow commit, no-body none-response, targeted dismiss, nested request validation, external URI, state and sequence failure policy covered. |
-| 12 | Full destination/navigation/lifecycle | VERIFIED | Serialization/navigation identity/conversion, process restoration, Back/Refresh, cancellation and repeated-action suppression covered. |
-| 13 | Legacy convergence/removal | VERIFIED STRUCTURALLY | Entire old `com.carbroz.runtime.sdui.*` production/test tree removed; temporary `runtime:binding` dependency removed; unrelated runtime modules preserved. |
-| 14 | Full vocabulary regression | RE-AUDIT OPEN | Existing fixtures cover current vocabulary; hierarchy-coexistence + layout regressions are now required for the approved pass. |
-| 15 | Dynamic + mock flow tests | VERIFIED BASELINE | Generic Login -> OTP -> Dashboard and Dashboard -> Booking Details -> Back flows covered; additional approved regressions are pending. |
-| 16 | Real Desktop/backend/manual app integration | DEFERRED BY OWNER | Post-engine real JSON/auth/UI/backend validation. No fake E2E claim. |
-| 17 | Configured multiplatform/architecture CI | WAITING ON RUNNER | `jvm-android` and `published-foundation-boundary` repeatedly fail before allocation (`runner_id=0`, `steps=[]`); dependent iOS therefore skips. |
-| 18 | Documentation freeze | WAITING ON APPROVED CORRECTIONS + PHASE 17 | Hierarchy contract is frozen; full engine freeze still requires approved audit corrections plus executable green CI. |
+| 1 | Canonical realistic fixtures | VERIFIED | Login, OTP, Dashboard, Booking Details, all-node, all-action, all-value-reference and unsupported fixtures exist. |
+| 2 | Destination consistency boundary | VERIFIED | Full destination identity and safe GET load contract exist. |
+| 3 | Exact SDUI models/actions/value refs | RE-AUDIT OPEN | Hierarchy model is accepted/frozen; typed `SduiValueReference` duplication remains separate discussion. |
+| 4 | API envelope + decoder | RE-AUDIT OPEN | Direct `JsonElement` decode is baseline-correct; unused helpers remain separate discussion. |
+| 5 | Capability/security support checker | RE-AUDIT OPEN | Existing hierarchy/action/endpoint checks remain; embedded action/accessory capability ownership remains separate discussion. |
+| 6 | Separated hierarchy registry | VERIFIED DESIGN / CORRECTION PENDING | Registry separation and duplicate rejection stay; concrete renderer registration must be restored. |
+| 7 | Common rendering/helpers | PARTIALLY VERIFIED | `ChildLayout` exists and spacing/alignment regression exists; unsupported layout vocabulary remains separate capability audit. |
+| 8 | Template/component/section/group/element renderers | APPROVED CORRECTION PENDING | Replace generic structural factory layer with concrete hierarchy renderer files delegating to shared helpers. |
+| 9 | One Dynamic screen-state owner | RE-AUDIT OPEN | Bound value vs runtime node value remains separate discussion. |
+| 10 | Structured value resolver | VERIFIED BEHAVIOR / CLEANUP OPEN | Four behaviors work; duplicate typed model under review. |
+| 11 | Seven-action executor | VERIFIED IN SOURCE/TESTS | Atomic request flow, SESSION, no-body none, targeted dismiss, nested validation, sequence covered. |
+| 12 | Full destination/navigation/lifecycle | VERIFIED | Back/Refresh/restoration/full destination covered. |
+| 13 | Legacy convergence/removal | VERIFIED STRUCTURALLY | old `com.carbroz.runtime.sdui.*` tree removed. |
+| 14 | Vocabulary regression | PARTIALLY VERIFIED | hierarchy coexistence + child-layout regressions exist; exact concrete renderer mapping regression must be added. |
+| 15 | Dynamic + mock flow tests | VERIFIED BASELINE | generic auth-shaped and booking navigation/back flows exist. |
+| 16 | Real backend/manual app integration | DEFERRED BY OWNER | post-engine validation. |
+| 17 | Configured multiplatform/architecture CI | WAITING ON RUNNER | Linux jobs repeatedly fail before runner allocation; iOS skips. |
+| 18 | Documentation freeze | WAITING | Authorities now match approved renderer direction, but implementation + remaining approved audit work + executable CI still required. |
 
-## 4. Executable proof inventory
+## 5. Current source state before this correction
+
+Current source head before implementation still contains the previous generic factory approach introduced by:
+
+```text
+b9a35a1426b971a9578d37058e3568f91566b179
+refactor(sdui): separate structural nodes from child layout
+```
+
+Useful part to keep from that commit:
+
+```text
+runtime/sdui/.../render/layout/ChildLayout.kt
+```
+
+Useful tests to keep:
+
+```text
+ChildLayoutTest
+hierarchy coexistence assertions in SduiFrozenVocabularyTest
+```
+
+Part to replace:
+
+```text
+runtime/sdui/.../render/StructuralNodeRenderers.kt
+
+structuralTemplateRenderer("stack_template")
+structuralTemplateRenderer("form_template")
+structuralTemplateRenderer("default_template")
+structuralComponentRenderer("stack_component")
+structuralSectionRenderer("stack_section")
+structuralGroupRenderer("stack_group")
+```
+
+Concrete files to restore:
+
+```text
+render/template/StackTemplateRenderer.kt
+render/template/FormTemplateRenderer.kt
+render/template/DefaultTemplateRenderer.kt
+render/component/StackComponentRenderer.kt
+render/section/StackSectionRenderer.kt
+render/group/StackGroupRenderer.kt
+```
+
+Each restored class should delegate common mechanics to `ChildLayout` rather than reintroducing duplicated Row/Column logic.
+
+## 6. Regression requirements for this implementation pass
+
+Must retain/prove:
+
+```text
+Component direct Elements + Sections coexist
+Section direct Elements + Groups coexist
+SduiRenderer traverses both branches
+vertical ChildLayout
+horizontal ChildLayout
+spacing + positional main-axis alignment
+separate hierarchy registry
+no duplicate registration
+exact concrete renderer object/type returned for every current structural wire type
+no generic structural renderer factory registration remains
+```
+
+No new product-specific Login/OTP logic.
+
+No changes in this pass to:
+
+```text
+SduiSupportChecker text-span capability design
+accessory capability design
+FieldState.value vs NodeRuntimeState.value ownership
+hierarchy traversal deduplication
+SduiValueReference cleanup
+unused decoder helpers
+element common-modifier/default inconsistencies
+theme/targetApp decisions
+```
+
+unless the owner separately approves one of them.
+
+## 7. Existing executable proof inventory
 
 ### SDUI runtime
 
 `SduiNodeRegistryTest`
-- all frozen hierarchy definitions register;
-- lookups resolve renderers;
-- duplicate template/element registration fails.
-
-`SduiValueResolverTest`
-- all four reference forms;
-- nested object/array resolution;
-- deterministic missing-path failures.
-
-`SduiDecoderSupportCheckerTest`
-- direct `JsonElement` decode;
-- malformed data;
-- unknown action;
-- supported/unsupported schema/template/element;
-- unsafe request endpoint.
-
-`SduiSupportCheckerHierarchyTest`
-- unsupported component/section/group;
-- unsafe navigate endpoint;
-- non-GET navigate destination rejected before execution.
+- hierarchy definitions register;
+- lookup works;
+- duplicate registration fails.
 
 `SduiFrozenVocabularyTest`
-- realistic fixtures decode and support-check;
-- all hierarchy/node types represented;
-- shared accessories represented on multiple element types including Input;
-- clickable Text span action represented;
-- unknown embedded span action fails at capability boundary;
-- exactly seven wire actions;
-- all four references recursively resolve;
-- unsupported vocabulary fails explicitly.
+- current fixtures decode/support-check;
+- Component contains both direct Elements + Sections;
+- Section contains both direct Elements + Groups;
+- exact seven actions;
+- exact four reference behaviors;
+- unsupported vocabulary fails.
 
-Approved new regression requirements:
-- one Component contains both direct Elements and Sections;
-- one Section contains both direct Elements and Groups;
-- traversal preserves/visits both branches;
-- reusable child-layout implementation supports vertical/horizontal axis;
-- spacing and main-axis alignment semantics are tested together.
+`ChildLayoutTest`
+- current defaults;
+- horizontal resolution;
+- spacing and positional main-axis alignment are independently preserved;
+- distributed main-axis alignment parses correctly.
 
 ### Dynamic feature
 
-`DynamicDestinationFlowContextTest`
-- complete destination serialization round-trip;
-- stable navigation identity;
-- lossless SDUI destination conversion;
-- unsafe endpoint/non-GET load rejection;
-- flow-context merge/latest-response/clear behavior.
+`DynamicDestinationFlowContextTest`, `DynamicContextProviderTest`, `SduiActionExecutorTest`, `DynamicScreenStoreTest`, `DynamicScreenStoreFrozenRegressionTest`, `DynamicFrozenFlowIntegrationTest` provide the existing generic orchestration/navigation/action proof.
 
-`DynamicContextProviderTest`
-- read-only safe runtime context projection.
-
-`SduiActionExecutorTest`
-- request reference resolution and exact network request;
-- HTTP failure commit policy;
-- 2xx destination-contract failure leaves flow state untouched;
-- 2xx SESSION validation failure leaves flow state untouched;
-- successful response/context commit only after full action contract success;
-- atomic response/context commit;
-- `responseMode=none` supports 204/no body and clears stale response;
-- response destination navigation;
-- SESSION establishment before navigation;
-- direct navigate mode/destination;
-- present/dismiss/state;
-- external URI resolution/safety;
-- sequence order/stop-on-failure;
-- latest successful request replaces `$response`.
-
-`DynamicScreenStoreTest`
-- envelope load/identity/field initialization;
-- malformed envelope/unsupported schema/network failure;
-- binding update;
-- validate true/false policy;
-- state/present/dismiss reduction;
-- retry/refresh/back;
-- background cancellation.
-
-`DynamicScreenStoreFrozenRegressionTest`
-- templateId/templateType mismatch;
-- runtime node state does not mutate immutable server screen;
-- targeted dismiss cannot clear an unrelated overlay;
-- validated request nested inside sequence cannot bypass field validation;
-- repeated interaction suppressed while action is in flight.
-
-`DynamicFrozenFlowIntegrationTest`
-- Login -> OTP -> Dashboard through generic request/response/destination/session contracts;
-- Dashboard -> Booking Details -> Back through generic Navigate + `NavigationStore.Pop`.
-
-### Composition/startup
-
-- Navigation process-state tests use full `DynamicDestination` persistence/restoration.
-- Composition DI tests use the new decoder/support/registry/renderer/value/executor graph.
-- Startup mapping creates the full dynamic destination without `templateType` routing inference.
-
-## 5. Legacy/stale-code proof
+## 8. Legacy/stale-code proof
 
 Legacy retirement commit:
 
@@ -265,88 +314,32 @@ runtime/sdui/src/commonMain/kotlin/com/carbroz/runtime/sdui/**
 runtime/sdui/src/commonTest/kotlin/com/carbroz/runtime/sdui/**
 ```
 
-The current `runtime/sdui/build.gradle.kts` has no temporary `runtime:binding` dependency.
+Temporary `runtime:binding` dependency was removed. Unrelated runtime/action/binding/application/platform infrastructure remains intentionally preserved.
 
-Preserved intentionally because they are not duplicate SDUI ownership:
-
-```text
-runtime/action
-runtime/binding
-runtime/application
-realtime/platform/foundation infrastructure
-```
-
-Exact-tree audits on source-complete heads found no old SDUI namespace, `FormStore.kt`, `DynamicScreenInstructionCodec.kt`, old Dynamic action wrappers or binding-context tree.
-
-PR/source audit also found:
-- no `templateType` routing rule;
-- no product `screenId == ...` routing rule;
-- no resend/cooldown implementation or test naming; resend/cooldown appears only as the explicit deferred owner decision in documentation.
-
-## 6. Late generic-engine hardening evidence
-
-These were found by auditing the frozen generic contract after the initial legacy convergence, not by reintroducing product-specific behavior:
+## 9. Important generic-engine hardening already completed
 
 ```text
-c2036c2e656ff79b36083d0cc063dca835acd6e1
-fix(dynamic): commit request flow state only after action success
-
-ef953e9a455d658a3cd1502172fe18b147242b4c
-fix(dynamic): make successful request flow commit atomic
-
-09c76ca66c9f8dc5593d2eb4be0859f26ff1ad11
-fix(sdui): support shared accessories on input elements
-
-39ecab03d077d1cef2b28c52f33a657cf43ae40d
-fix(sdui): render canonical stack layout properties
-
-f921e512e696b80451d8107f80739e3733938d9d
-fix(sdui): check embedded text span action support
-
-9f5d7b44e000031b3cf91f929b8406e874af29c6
-fix(dynamic): preserve targeted dismiss semantics
-
-145e14355dbf5ffdb535c365e9ce5eba2c9b4c97
-fix(dynamic): dismiss only requested overlay target
-
-f7e8eca70939b1789b545413f59963b5719cce9e
-fix(sdui): apply runtime visibility across hierarchy
-
-63b312bfc70ab20341554e60910c5eb4e4d46bdc
-fix(sdui): reject unsupported navigate load methods
-
-c34260be1bb31b0b159957fb9cd6f8c4216f67a1
-fix(dynamic): validate nested request actions at execution point
-
-e9022e8528b4ed96f02bcac4df2cea1004af1004
-fix(dynamic): route request validation through executor sequence
-
-72aad87329df0d12e0a5cfa6039744bd8dc9c0dd
-fix(dynamic): keep loaded content on action failure
-
-ba7fe66d5fa5eb26d9b1ae1ba6a4fc88877f1ecf
-fix(dynamic): allow successful no-body request commits
-
-560f0d40cbb57ad1f1543f484eafd1f1aedcd584
-fix(dynamic): permit no-body responseMode none success
+c2036c2e... request flow commit only after success
+ef953e9a... atomic successful request flow commit
+09c76ca6... shared Input accessories
+39ecab03... canonical stack layout keys
+f921e512... embedded text span action support checking
+9f5d7b44... targeted dismiss semantics
+145e1435... dismiss only requested overlay
+f7e8eca7... hierarchy-wide runtime visibility
+63b312bf... reject non-GET navigate destination
+c34260be... nested request validation execution point
+e9022e85... executor-sequence request validation
+72aad873... preserve loaded content on action failure
+ba7fe66d... successful no-body request commits
+560f0d40... responseMode none supports no body
 ```
 
-Associated regression/fixture commits include:
+These are not being redone by the current renderer correction.
 
-```text
-1d076b5ba4a713825681741b8af61a97d477b124
-4a622ea3d32886b1b8bcbf1e085410be7131d306
-690e49788d49493e5f6f645b4cdaa8e03d4d9390
-41dcccea1076b328e15e66d90c18e51dc966fb57
-71208bf834cc6a7a2b49b72d5f57b00c45cc025a
-6d3966659aa5c49f538a51ce00aa04510b278e74
-90471632fb4db9163566d43ee9745f4e652ab189
-909ce570435214de736aac358cbfcdbd1320c5ee
-```
+## 10. CI evidence
 
-## 7. CI evidence
-
-Configured workflow (`.github/workflows/ci.yml`):
+Configured workflow remains:
 
 ```text
 jvm-android
@@ -357,158 +350,108 @@ published-foundation-boundary
   publishFoundationToLocalRepository
   Android/Desktop composition tests against published foundation artifacts
 
-ios (needs both Linux jobs)
-  KMP iOS compile/link
-  native Debug host
-  native Staging host
-  published-foundation iOS compile boundary
+ios
+  needs both Linux jobs
+  KMP iOS compile/link + native host/published-foundation checks
 ```
 
-Meaningful executable evidence before the runner-allocation incident:
+Last meaningful executable evidence before runner-allocation failure:
 
-| SHA / run | Result |
-|---|---|
-| `8b78a0cc87b263b7514bdc53d7192dc008330ca5` / `34706115457` | `published-foundation-boundary` green; `jvm-android` actually executed and exposed the frozen-fixture Kotlin interpolation defect; iOS skipped due dependency failure. The concrete source defect was fixed afterward. |
+```text
+8b78a0cc87b263b7514bdc53d7192dc008330ca5 / run 34706115457
+```
 
-Persistent pre-runner evidence afterward includes:
+Later Linux jobs repeatedly show the pre-runner pattern (`steps=[]`, previously confirmed `runner_id=0`, empty runner name), so those failures are not treated as source compile/test conclusions.
 
-| SHA / run | Result |
-|---|---|
-| `9667c828...` / `34708136537` | Linux jobs failed with zero steps; rerun repeated same state. |
-| `7c6dd9be...` / `34708588329` | `runner_id=0`, empty runner name, zero steps. |
-| `c2036c2e...` / `34708833317` | same pre-runner failure. |
-| `ef953e9a...` / `34709065432` | same pre-runner failure. |
-| `79c34674...` / `34709111488` | same pre-runner failure on initial attempt and explicit failed-job rerun. |
-| `4a622ea3...` / `34714015894` | same pre-runner failure after accessory regression work. |
-| `6d396665...` / `34714419540` | same pre-runner failure after support/destination hardening. |
-| `909ce570435214de736aac358cbfcdbd1320c5ee` / `34714752791` | exact source-complete head: both Ubuntu jobs completed in ~3 seconds with `steps=[]`, `runner_id=0`, empty runner name; iOS skipped because dependencies never executed. |
+For the previous child-layout source commit:
 
-No compile/test conclusion is inferred from a job that never acquired a runner. The workflow file itself has not been weakened or bypassed. Final generic-engine freeze still requires an exact-head run where the configured jobs actually execute.
+```text
+b9a35a1426b971a9578d37058e3568f91566b179 / run 34742504145
+```
 
-## 8. Explicitly deferred / outside generic-engine freeze
+both Linux jobs again completed as failure with no steps and iOS skipped.
 
-These are not missing generic SDUI architecture work:
+Final freeze still requires a run where jobs actually acquire runners and execute.
 
-1. **Resend/cooldown/timer policy** — decide only with actual OTP JSON/auth flow.
-2. **Production Login/OTP request payload/auth-policy certification** — validate against real production contract later.
-3. **Manual Android/iOS/Desktop visual inspection** — owner will run the app and inspect actual UI.
-4. **Real backend/environment E2E** — post-engine validation without frontend guessing or backend modification.
-
-Any later real JSON that needs a new generic capability must extend the frozen generic contracts, never introduce a Login/OTP-specific branch.
-
-## 9. Freeze checklist
+## 11. Freeze checklist
 
 ### SDUI
 
 - [x] canonical API envelope `data`
-- [x] backend-aligned typed models/enums
-- [x] Component may contain direct Elements + Sections together
-- [x] Section may contain direct Elements + Groups together
-- [x] Group contains Elements
 - [x] backend-destination-driven navigation
 - [x] full destination stored/restored
 - [x] Back = stack pop
 - [x] Refresh reloads current destination
 - [x] no `templateType` routing decisions
 - [x] no duplicate deep structural validator
-- [~] capability/security support checker exists; embedded-action/accessory capability ownership remains under re-audit
-- [x] safe request/navigate endpoint checks
-- [x] navigate dynamic destination GET capability check
-- [x] embedded clickable text-span actions currently support-checked
+- [x] Component direct Elements + Sections allowed together
+- [x] Section direct Elements + Groups allowed together
+- [x] Group contains Elements
 - [x] separated hierarchy registry
 - [x] duplicate registration fails
-- [x] reusable accessories on multiple element types including Input
-- [~] canonical linear-layout wire keys restored; final child-layout abstraction and spacing/alignment semantics are being implemented
-- [x] hierarchy-wide runtime visibility
-- [~] one Dynamic screen state owner exists; bound-value vs node runtime-value consistency remains a separate audit item
-- [x] exact seven wire actions
-- [x] exact four value-reference behaviors
-- [x] current baseline node vocabulary represented
-- [x] Image/Text/Input/Button renderer path
-- [x] segmented input property path
-- [x] baseline full-vocabulary fixture tests
-- [x] Login -> OTP -> Dashboard mock flow
+- [x] reusable `ChildLayout` exists
+- [x] spacing + alignment regression exists
+- [ ] remove generic `StructuralNodeRenderers` factory layer
+- [ ] restore concrete Template renderer classes
+- [ ] restore concrete Component renderer class
+- [ ] restore concrete Section renderer class
+- [ ] restore concrete Group renderer class
+- [x] Element renderers are concrete
+- [ ] SduiDefinitions registers concrete renderer objects
+- [ ] registry test proves exact concrete renderer mapping
+- [x] exact seven wire actions baseline
+- [x] exact four reference behaviors baseline
+- [x] generic mock flows baseline
 - [x] legacy SDUI runtime removed
-- [x] resend/cooldown excluded from current implementation
-- [ ] hierarchy-coexistence regression proof added
-- [ ] semantic node identity vs reusable child-layout implementation converged
-- [ ] spacing + alignment regression proof added
-- [ ] configured JVM/Android + published-foundation + iOS CI actually executes green
-- [~] real backend/manual visual/auth validation explicitly deferred
+- [x] resend/cooldown excluded
+- [ ] remaining separately approved audit corrections
+- [ ] executable JVM/Android + published-foundation + iOS CI green
+- [~] real backend/manual validation deferred
 
 ### Dynamic
 
-- [x] full `DynamicDestination` in navigation/restoration
+- [x] full DynamicDestination
 - [x] no template-type routing
-- [x] normal Back uses `NavigationStore.Pop`
-- [x] Refresh reuses current full destination
-- [x] `DynamicScreenState` sole mutable screen-state owner
-- [x] no active `FormStore`
-- [~] node runtime `value` vs canonical binding `FieldState.value` remains a separate audit item
-- [x] Store owns orchestration but not Compose rendering
-- [x] renderer owns no network/navigation
+- [x] Back = NavigationStore.Pop
+- [x] Refresh current destination
+- [x] DynamicScreenState owns live state
+- [x] no active FormStore
+- [x] Dynamic does not choose concrete SDUI renderer types
+- [x] Store does not render Compose
 - [x] exact seven-action executor
-- [x] failed request/destination/session actions do not partially commit flow state
-- [x] successful response/context flow commit is atomic
-- [x] no-body `responseMode=none` success does not retain stale response
-- [x] request validation applies inside nested sequences
-- [x] targeted dismiss preserves unrelated active overlay
-- [x] action failure preserves loaded content
-- [x] context provider is projection, not second mutable owner
-- [x] generic auth-shaped mock flow
-- [x] generic booking navigation/back mock flow
-- [x] cancellation/repeated-action tests
-- [ ] duplicated hierarchy traversal remains a separate audit discussion unless needed by the approved hierarchy regression
-- [ ] configured multiplatform CI actually executes green
-- [~] real backend/manual app integration explicitly deferred
+- [x] request/session/sequence flow hardening baseline
+- [~] bound value vs runtime node value remains separate audit item
+- [ ] remaining approved audit corrections
+- [ ] executable multiplatform CI green
+- [~] real backend/manual validation deferred
 
-## 10. Remaining sequence to `FROZEN GREEN`
+## 12. Remaining sequence to `FROZEN GREEN`
 
-1. Implement the approved hierarchy/layout corrections only.
-2. Add focused hierarchy-coexistence and child-layout regressions.
-3. Review the result with the owner before moving to the next audit finding.
-4. Continue remaining class-audit decisions one by one; do not bundle unapproved cleanup.
-5. Re-run exact-tree stale/dead-code and architecture audits after approved corrections.
-6. Obtain a GitHub Actions run where jobs actually acquire runners and execute.
-7. Fix only concrete compile/test failures exposed by that executable run.
-8. Require `jvm-android` green.
-9. Require `published-foundation-boundary` green.
-10. Require dependent `ios` to execute and finish green.
-11. Perform one final exact-SHA stale-code audit after executable green CI.
-12. Update both authority documents from review-draft wording to implemented/frozen generic-engine truth while preserving all deferred boundaries above.
-13. Do not merge PR #11 without owner approval.
-14. Only then declare: **`SDUI + DYNAMIC GENERIC ENGINE — FROZEN GREEN`**.
+1. Implement only the approved concrete-renderer correction described above.
+2. Add exact concrete-renderer registry regression.
+3. Audit the resulting diff for no generic factory residue and no unrelated changes.
+4. Update this tracker with the source/test commit evidence.
+5. Review the next open audit finding with the owner before changing production source.
+6. Continue remaining approved audit corrections one by one.
+7. Obtain GitHub Actions runners that actually execute the configured jobs.
+8. Fix only concrete failures from executable CI.
+9. Require `jvm-android`, `published-foundation-boundary`, and dependent `ios` green.
+10. Perform final exact-SHA stale/dead-code/architecture audit.
+11. Keep real backend/manual visual/auth validation explicitly deferred as agreed.
+12. Do not merge PR #11 without owner approval.
+13. Only then declare: **`SDUI + DYNAMIC GENERIC ENGINE — FROZEN GREEN`**.
 
-## 11. Architecture re-audit checkpoint
+## 13. Open class-audit items after this renderer correction
 
-The owner identified that the current Stack abstraction may be conflating semantic node identity with generic child arrangement. A complete active `runtime/sdui` production-class audit was performed before further source refactor.
+1. `SduiSupportChecker` Text-span embedded-action capability ownership — discussion-only.
+2. Accessory vocabulary/capability checking — discussion-only.
+3. Bound `Input` display vs `$binding` submission ownership divergence — discussion-only.
+4. Duplicated hierarchy traversal between renderer/support checker/Dynamic — discussion-only.
+5. `SduiValueReference` active-use duplication — discussion-only.
+6. Unused `SduiDecoder` accessory/string-action helpers — discussion-only.
+7. Element common modifier/enabled/value/default consistency — discussion-only.
+8. Theme/targetApp consumption/capability decisions — discussion-only.
 
-The audit categories are:
+Withdrawn item:
 
-```text
-naming / semantic accuracy
-single responsibility
-unused or duplicate protocol representations
-hierarchy traversal duplication
-renderer/layout genericity
-capability checking
-silent fallback/failure
-state ownership consistency
-future extension cost
-module dependency surface
-```
-
-Current discussion items are:
-
-1. `RenderStack` / `StackContainerRenderer` is shared linear child-layout machinery and must not force hierarchy-specific Stack/Grid/etc renderer multiplication. **Approved for implementation.**
-2. Current nonzero spacing can override/erase main-axis alignment semantics in the linear layout helper. **Approved for implementation/regression.**
-3. `SduiSupportChecker` contains a concrete `text` property-shape branch for span actions; embedded-action capability discovery needs a generic ownership boundary. **Still discussion-only.**
-4. Accessory vocabulary is not capability-checked and unknown accessories currently disappear silently. **Still discussion-only.**
-5. Bound Input display state can prefer `NodeRuntimeState.value` while action `$binding` reads `FieldState.value`, allowing UI/submission divergence. **Still discussion-only.**
-6. Hierarchy traversal is independently repeated by renderer, support checker and Dynamic field/validation code. **Still discussion-only except the approved coexistence regression may add proof around current traversal.**
-7. `SduiValueReference` appears to duplicate the four-reference wire representation without being used by the active resolver path. **Still discussion-only.**
-8. `SduiDecoder.decodeAccessory` and string-based action decoding appear unused in active source and should be removed or justified. **Still discussion-only.**
-9. Element renderers have inconsistent ownership/default behavior for common modifiers, enabled state, dynamic text/value resolution and hardcoded padding. **Still discussion-only.**
-10. **Withdrawn finding:** `SduiComponent.elements + sections` and `SduiSection.elements + groups` are intentionally coexistent branches. The current model shape is accepted for this contract and must not be converted to an XOR/either-or model.
-
-The implementation-plan authority document contains the frozen hierarchy contract in Section 25. `feature/dynamic/DYNAMIC_FEATURE_ARCHITECTURE.md` requires no additional hierarchy-model change because this contract is owned by `runtime:sdui`; its existing boundary rules already prohibit Dynamic from owning child-layout algorithms.
+- `SduiComponent.elements + sections` and `SduiSection.elements + groups` are intentionally coexistent. Keep the current model shape; do not convert it to XOR/either-or.
