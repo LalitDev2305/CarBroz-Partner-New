@@ -70,7 +70,6 @@ kotlin {
             implementation(foundationDependency("capabilities"))
             implementation(foundationDependency("analytics"))
             implementation(project(":platform:background"))
-            implementation(project(":runtime:action"))
             implementation(project(":runtime:binding"))
             implementation(project(":runtime:sdui"))
             implementation(project(":data:network"))
