@@ -1,6 +1,6 @@
 # CarBroz Partner Frontend — Dynamic Feature Architecture
 
-> **Status:** ACTIVE ARCHITECTURE — Dynamic ownership is established; remaining SDUI audit corrections and executable CI still block final freeze.
+> **Status:** ACTIVE ARCHITECTURE — Dynamic ownership is established; the explicit SDUI renderer-registration boundary is implemented in source, while remaining audit corrections and executable CI still block final freeze.
 >
 > **Purpose:** explain the `feature:dynamic` module in simple app-flow language. This module owns the live lifecycle of every backend-driven Partner screen after Splash. It does not define the SDUI protocol or choose concrete SDUI renderers; that belongs to `runtime:sdui`.
 
@@ -631,7 +631,7 @@ SduiInteraction
 
 # 25. Frozen SDUI renderer/layout ownership boundary
 
-> **Status:** FROZEN FOR THE CURRENT RENDERER CORRECTION.
+> **Status:** IMPLEMENTED IN `runtime:sdui` FOR THE CURRENT VOCABULARY — source commit `e55ded9721d06261d7880c8a9833510f95ac6c12`; final engine freeze still waits on remaining audit work and executable CI.
 
 `feature:dynamic` owns destination loading, live mutable state, interaction orchestration and action execution.
 
@@ -686,15 +686,22 @@ if stack_component -> StackComponentRenderer
 if grid_component -> LazyGrid
 ```
 
-Future new render node types are added to `runtime:sdui` through concrete renderer class + hierarchy registration + tests. Dynamic changes only if the backend introduces a genuinely new application-side action/effect contract.
+Future new render node types are added to `runtime:sdui` through concrete renderer object/file + hierarchy registration + tests. Dynamic changes only if the backend introduces a genuinely new application-side action/effect contract.
+
+Implementation evidence:
+
+```text
+e55ded9721d06261d7880c8a9833510f95ac6c12
+refactor(sdui): restore explicit hierarchy renderers
+```
 
 Additional freeze gates:
 
 ```text
 [x] feature:dynamic contains no child-layout algorithm
 [x] feature:dynamic contains no concrete node-renderer selection
-[ ] corrected runtime:sdui explicit-renderer architecture is implemented
-[ ] registry regression proves concrete renderer mapping
+[x] corrected runtime:sdui explicit-renderer architecture is implemented
+[x] registry regression proves concrete renderer mapping
 [~] canonical bound-value ownership remains separate audit work
 [ ] exact-head executable CI is green before final freeze
 ```
