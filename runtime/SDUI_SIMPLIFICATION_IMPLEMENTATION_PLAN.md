@@ -1,6 +1,6 @@
 # CarBroz Partner Frontend — SDUI Simplification & Implementation Plan
 
-> **Status:** REVIEW DRAFT — hierarchy child-composition contract frozen; architecture re-audit otherwise open and not fully frozen yet.
+> **Status:** REVIEW DRAFT — architecture re-audit open; not frozen and not an implementation mandate yet.
 >
 > **Goal:** build one simple, scalable, fully dynamic SDUI runtime for the whole CarBroz Partner app. The frontend must render and execute what the backend sends; it must not hardcode Login/OTP behavior or infer product navigation from template types.
 
@@ -244,8 +244,8 @@ The backend SDUI engine already validates the SDUI structure before returning it
 Therefore the frontend should **not** perform another large structural validation pass for things such as:
 
 ```text
-whether a Component uses direct Elements, Sections, or both
-whether a Section uses direct Elements, Groups, or both
+component contains sections or elements
+section contains groups or elements
 duplicate IDs
 backend property schema correctness
 action schema correctness already guaranteed by the backend builder/validator
@@ -419,15 +419,15 @@ The renderer uses its `type` to select the correct registered template renderer.
 
 **What it represents:** a major block inside a template.
 
-Frozen child contract:
+Example Login:
 
 ```text
-Component
-  ├── zero or more direct Element(s)
-  └── zero or more Section(s)
+form_template
+  ↓
+brand component
+phone-entry component
+action component
 ```
-
-Direct Elements and Sections may coexist in the same Component. They are **not mutually exclusive**. The nullable collections reflect optional presence in the backend payload; the frontend must not reinterpret them as an either/or union.
 
 It only holds backend data. Rendering happens elsewhere.
 
@@ -437,24 +437,14 @@ It only holds backend data. Rendering happens elsewhere.
 
 **What it represents:** a grouping level inside a component when backend needs more structure.
 
-Frozen child contract:
-
-```text
-Section
-  ├── zero or more direct Element(s)
-  └── zero or more Group(s)
-```
-
-Direct Elements and Groups may coexist in the same Section. They are **not mutually exclusive**.
-
 Example Dashboard:
 
 ```text
 Dashboard component
   ↓
 active-bookings section
-  ├── direct elements when required
-  └── booking-card groups
+  ↓
+booking-card groups/elements
 ```
 
 ---
@@ -462,13 +452,6 @@ active-bookings section
 ## 6.5 `SduiGroup.kt`
 
 **What it represents:** the final structural group before elements.
-
-Frozen child contract:
-
-```text
-Group
-  └── Element(s)
-```
 
 Example OTP:
 
@@ -900,11 +883,82 @@ The goal is readability and preventing accidental duplicate/wrong-level registra
 
 Do not maintain one long mixed list containing templates, components, sections, groups and elements together.
 
-Use hierarchy-specific definition collections.
+Use hierarchy-specific definition collections:
+
+```kotlin
+object TemplateDefinitions {
+    val all = listOf(
+        StackTemplateRenderer,
+        FormTemplateRenderer,
+        DefaultTemplateRenderer,
+    )
+}
+
+object ComponentDefinitions {
+    val all = listOf(
+        StackComponentRenderer,
+    )
+}
+
+object SectionDefinitions {
+    val all = listOf(
+        StackSectionRenderer,
+    )
+}
+
+object GroupDefinitions {
+    val all = listOf(
+        StackGroupRenderer,
+    )
+}
+
+object ElementDefinitions {
+    val all = listOf(
+        TextElementRenderer,
+        ImageElementRenderer,
+        InputElementRenderer,
+        ButtonElementRenderer,
+    )
+}
+```
+
+Then one clear registration class:
+
+```kotlin
+object SduiNodeRegistration {
+    fun createRegistry(): SduiNodeRegistry = SduiNodeRegistry().apply {
+        registerTemplates(TemplateDefinitions.all)
+        registerComponents(ComponentDefinitions.all)
+        registerSections(SectionDefinitions.all)
+        registerGroups(GroupDefinitions.all)
+        registerElements(ElementDefinitions.all)
+    }
+}
+```
+
+This is intentionally easy to read:
+
+```text
+all templates     registered together
+all components    registered together
+all sections      registered together
+all groups        registered together
+all elements      registered together
+```
 
 `SduiNodeRegistry` should reject duplicate types inside the same hierarchy.
 
-The hierarchy-safe registry remains approved. Layout implementation must not require a separate renderer class for every hierarchy × layout combination when the behavior is identical.
+Example:
+
+```text
+registerElements([ButtonRenderer, AnotherButtonRenderer])
+    ↓
+both type = button
+    ↓
+startup/test failure: duplicate element renderer
+```
+
+That prevents silent override.
 
 ---
 
@@ -914,6 +968,24 @@ The hierarchy-safe registry remains approved. Layout implementation must not req
 
 This is the **traffic controller for drawing one SDUI screen**.
 
+Example Login flow:
+
+```text
+DynamicScreen receives SduiScreen(partner_login)
+    ↓
+DynamicScreen calls SduiRenderer.Render(screen)
+    ↓
+SduiRenderer sees template.type = form_template
+    ↓
+find FormTemplateRenderer in registry
+    ↓
+FormTemplateRenderer renders its components
+    ↓
+component renderer renders sections/elements
+    ↓
+ButtonElementRenderer finally draws Continue button
+```
+
 `SduiRenderer` does not know Login business logic.
 
 Its job is only:
@@ -922,16 +994,47 @@ Its job is only:
 read node type
 find correct renderer
 call it
-walk all valid children
+walk children
 ```
-
-For Component and Section, "all valid children" means both direct Elements and the nested structural collections may be present and must both be traversed.
 
 ---
 
 ## 11.2 `SduiRenderContext.kt`
 
 This exists because renderers need a small amount of runtime information, but we do not want every renderer to depend directly on `DynamicScreenStore`.
+
+Think of it as a **read-only bag the renderer receives while drawing**.
+
+Example Input renderer needs:
+
+```text
+current value for binding "mobileNumber"
+current field error
+overridden enabled/visible state
+function to emit interaction
+```
+
+Instead of passing 10 parameters to every renderer, pass one context:
+
+```kotlin
+data class SduiRenderContext(
+    val fields: Map<String, FieldState>,
+    val nodeStates: Map<String, NodeRuntimeState>,
+    val onInteraction: (SduiInteraction) -> Unit,
+)
+```
+
+Live example:
+
+```text
+InputElementRenderer renders mobile input
+    ↓
+asks context.fields["mobileNumber"] for value
+    ↓
+user types 9876...
+    ↓
+renderer calls context.onInteraction(...)
+```
 
 The context does not execute actions or mutate state itself.
 
@@ -941,7 +1044,61 @@ The context does not execute actions or mutate state itself.
 
 This represents **what the user just did in the rendered SDUI**.
 
-The renderer carries the backend action directly; do not introduce a second command lookup system.
+Examples:
+
+```text
+user changed input
+user clicked button
+user clicked legal text span
+user long-pressed text
+user focused input
+```
+
+Suggested shape:
+
+```kotlin
+sealed interface SduiInteraction {
+    data class ValueChanged(
+        val elementId: String,
+        val bindingKey: String,
+        val value: JsonElement,
+    ) : SduiInteraction
+
+    data class ActionTriggered(
+        val sourceId: String,
+        val event: String,
+        val action: SduiAction,
+    ) : SduiInteraction
+}
+```
+
+Why carry the action directly?
+
+Because the renderer already has the element/span and knows which backend action belongs to `onClick`/`onLongClick`.
+
+We do not need:
+
+```text
+NodePath → CommandIndex → look up action again
+```
+
+Live Continue-button example:
+
+```text
+ButtonElementRenderer has element.actions["onClick"]
+    ↓
+user clicks Continue
+    ↓
+ActionTriggered(
+  sourceId = "continue_button",
+  event = "onClick",
+  action = Request(...)
+)
+    ↓
+DynamicScreenStore receives interaction
+    ↓
+SduiActionExecutor executes Request
+```
 
 ---
 
@@ -949,13 +1106,55 @@ The renderer carries the backend action directly; do not introduce a second comm
 
 **Job:** convert common backend layout/appearance values into Compose modifiers.
 
+Example:
+
+```text
+fillMaxWidth = true
+height = 56
+shape.cornerRadius = 16
+background = gradient
+```
+
 Renderer asks the modifier resolver instead of reimplementing spacing/size/border rules in every element.
 
 ---
 
 # 12. Accessory rendering — leading/trailing are reusable across supported elements
 
-Accessory implementations are shared across owning elements. The owner element decides whether it supports accessories; the accessory implementation is shared.
+## `AccessoryRenderer.kt`
+
+**Job:** render an accessory definition independent of the owning element.
+
+Example:
+
+```text
+Button trailing = icon arrow_forward
+    ↓
+ButtonElementRenderer
+    ↓
+AccessoryRenderer
+    ↓
+IconAccessoryRenderer
+```
+
+Example text:
+
+```text
+PARTNER text
+leading divider
+trailing divider
+```
+
+Example future image:
+
+```text
+partner profile image
+trailing verification badge/icon
+```
+
+The owner element decides whether it supports accessories; the accessory implementation is shared.
+
+Do not create Text-specific leading/trailing rendering logic.
 
 ---
 
@@ -967,43 +1166,145 @@ Every renderer follows the same rule:
 
 ## Template renderer
 
-A Template renders its own semantic/template behavior and delegates Components.
+Example `FormTemplateRenderer`:
+
+```text
+Receives form_template
+    ↓
+renders top-level form layout
+    ↓
+asks SduiRenderer to render each component
+```
+
+It does not validate phone numbers or call APIs.
 
 ## Component renderer
 
-A Component may render **direct Elements and Sections in the same node**. Those collections are AND/OR, not XOR.
+Example `StackComponentRenderer`:
 
 ```text
-Component
-  ├── Element(s)
-  └── Section(s)
+Receives stack_component
+    ↓
+creates Column/Row based on backend properties
+    ↓
+renders its sections OR elements
 ```
 
 ## Section renderer
 
-A Section may render **direct Elements and Groups in the same node**.
-
 ```text
-Section
-  ├── Element(s)
-  └── Group(s)
+Receives stack_section
+    ↓
+creates section layout
+    ↓
+renders groups OR elements
 ```
 
 ## Group renderer
 
-A Group delegates its Elements.
+```text
+Receives stack_group
+    ↓
+creates final layout group
+    ↓
+renders elements
+```
 
 ## Element renderer
 
-An Element renders its visual/interactable leaf behavior and emits `SduiInteraction` for supported events. No Element renderer directly executes network/navigation.
+Example button:
+
+```text
+Receives button element
+    ↓
+reads text/background/accessories/runtime enabled state
+    ↓
+renders Compose button
+    ↓
+onClick emits SduiInteraction.ActionTriggered
+```
+
+No element renderer directly executes network/navigation.
 
 ---
 
 # 14. How a new developer adds a new SDUI type
 
-New semantic node types should be added only when the backend contract introduces genuinely different behavior. A new child-layout algorithm must be implemented once and reused across structural hierarchy levels where allowed; do not generate hierarchy × layout class matrices.
+These steps are mandatory and intentionally predictable.
 
-New elements still follow the normal renderer + registration + test/fixture path.
+## 14.1 Add a new template
+
+Example backend adds `dashboard_template`.
+
+Step 1 — confirm backend JSON contract:
+
+```text
+type = dashboard_template
+properties = ...
+children = components
+```
+
+Step 2 — create:
+
+```text
+render/template/DashboardTemplateRenderer.kt
+```
+
+Step 3 — implement only dashboard-template rendering.
+
+Step 4 — register in:
+
+```kotlin
+TemplateDefinitions.all
+```
+
+Step 5 — add tests:
+
+```text
+DashboardTemplateRendererTest
+SduiSupportChecker recognizes dashboard_template
+registry duplicate test remains green
+mock full-screen render test
+```
+
+Nothing else should need modification.
+
+## 14.2 Add a new component
+
+Example `card_component`.
+
+1. create `CardComponentRenderer.kt`;
+2. support only that component's properties/layout;
+3. register in `ComponentDefinitions.all`;
+4. add component renderer tests;
+5. add one mock screen using it.
+
+## 14.3 Add a new section
+
+1. create renderer under `render/section/`;
+2. register in `SectionDefinitions.all`;
+3. add tests.
+
+## 14.4 Add a new group
+
+1. create renderer under `render/group/`;
+2. register in `GroupDefinitions.all`;
+3. add tests.
+
+## 14.5 Add a new element
+
+Example future `rating` element.
+
+1. confirm backend `rating` schema and supported events;
+2. create `RatingElementRenderer.kt`;
+3. renderer reads value from `SduiRenderContext` if bound;
+4. renderer emits `SduiInteraction` when user changes/clicks;
+5. register in `ElementDefinitions.all`;
+6. add renderer tests;
+7. add mock screen fixture;
+8. add end-to-end interaction test.
+
+Do **not** create a new feature Store, action engine, registry framework, or network adapter just because one new element is added.
 
 ---
 
@@ -1011,19 +1312,100 @@ New elements still follow the normal renderer + registration + test/fixture path
 
 The action system is for the entire app, not Login/OTP only.
 
-Supported actions remain exactly:
+## Request
+
+Example future booking screen:
 
 ```text
-request
-navigate
-present
-dismiss
-state
-external_uri
-sequence
+Partner taps Accept Job
+    ↓
+button.onClick = request action
+    ↓
+DynamicScreenStore receives ActionTriggered
+    ↓
+SduiActionExecutor
+    ↓
+resolve $binding/$context/$response/$literal
+    ↓
+NetworkDataSource
+    ↓
+responseMode = none or destination
 ```
 
-Request and Navigate remain separate. Navigation always uses the full backend destination. State/presentation results reduce into the single live Dynamic screen state owner.
+## Navigate
+
+Example Dashboard → Booking Details:
+
+```text
+booking card clicked
+    ↓
+navigate action contains full booking-details destination
+    ↓
+NavigationStore.Push(full destination)
+```
+
+## Present
+
+Example booking cancellation bottom sheet:
+
+```text
+Cancel clicked
+    ↓
+present(targetId = cancel_sheet, bottom_sheet)
+    ↓
+DynamicScreenState.overlay set
+    ↓
+Compose displays target as bottom sheet
+```
+
+## Dismiss
+
+```text
+Close clicked
+    ↓
+dismiss
+    ↓
+overlay cleared
+```
+
+## State
+
+Example resend button becomes enabled:
+
+```text
+state(targetId = resend, set enabled = true)
+    ↓
+nodeStates[resend]
+    ↓
+recompose
+```
+
+## External URI
+
+Example Terms & Conditions:
+
+```text
+text span clicked
+    ↓
+external_uri($context(legal.termsUri))
+    ↓
+ValueResolver
+    ↓
+CapabilityRegistry opens URL
+```
+
+## Sequence
+
+Example future action:
+
+```text
+sequence
+  1. state(button.loading = true)
+  2. request(...)
+  3. navigate(...)
+```
+
+Execute children in order and stop on failure according to the final action-error policy.
 
 ---
 
@@ -1031,13 +1413,77 @@ Request and Navigate remain separate. Navigation always uses the full backend de
 
 Bound input values live only in `DynamicScreenState`.
 
+Example:
+
+```text
+Input binding key = mobileNumber
+```
+
+State:
+
+```kotlin
+fields["mobileNumber"] = FieldState(
+    value = JsonPrimitive("9876543210"),
+    error = null,
+)
+```
+
+Flow:
+
+```text
+Input renderer reads fields[mobileNumber]
+    ↓
+user types
+    ↓
+ValueChanged interaction
+    ↓
+DynamicScreenStore updates field
+    ↓
+state changes
+    ↓
+Compose recomposes
+```
+
 No local canonical `remember` value plus FormStore plus DynamicStore duplication.
 
 ---
 
 # 17. Support for the whole Partner app
 
-The engine must remain product-neutral and support future Partner screens through backend composition rather than frontend screen branching.
+Do not design around only Login and OTP.
+
+The same engine must handle future screens such as:
+
+```text
+Dashboard
+Booking list
+Booking details
+On-the-way state
+Arrived state
+Start service OTP
+Service checklist
+Photo capture entry points
+Earnings
+Payouts
+Availability
+Leaves
+Profile
+KYC
+Organization employees
+Emergency transfer
+```
+
+The engine remains generic because:
+
+```text
+screen structure comes from backend
+node types come from registered renderers
+actions come from backend
+bindings come from backend
+navigation destinations come from backend
+```
+
+Product-specific meaning should stay in backend composition and domain APIs, not hardcoded screen branching in frontend.
 
 ---
 
@@ -1053,20 +1499,246 @@ Detailed class-by-class documentation is kept separately in:
 feature/dynamic/DYNAMIC_FEATURE_ARCHITECTURE.md
 ```
 
+At high level:
+
+```text
+NavigationStore gives DynamicDestination
+    ↓
+DynamicScreenStore loads and owns current screen state
+    ↓
+SduiRenderer draws it
+    ↓
+SduiInteraction returns to DynamicScreenStore
+    ↓
+SduiActionExecutor performs action
+```
+
 ---
 
 # 19. Testing strategy — easy mock-driven full SDUI verification
 
 Tests should prove both small units and complete flows.
 
-In addition to existing fixtures/tests, the frozen hierarchy contract requires a regression fixture/test containing:
+## 19.1 Contract fixtures
+
+Maintain realistic backend JSON fixtures in test sources:
 
 ```text
-one Component with BOTH direct Element(s) and Section(s)
-one Section with BOTH direct Element(s) and Group(s)
+partner_login.json
+partner_otp.json
+partner_dashboard_minimal.json
+booking_list.json
+booking_details.json
+all_node_types.json
+all_action_types.json
+all_value_reference_types.json
+invalid_unsupported_node.json
+invalid_unsupported_action.json
 ```
 
-The test must prove decoder/support/traversal preserve and visit both branches. This is a protocol capability test, not a client-side structural-validation rule.
+Fixtures should use the same envelope shape the API actually returns.
+
+---
+
+## 19.2 Decoder tests
+
+Test:
+
+```text
+valid API data decodes
+all templates decode
+all structural levels decode
+all element types decode
+all actions decode
+all value references decode
+accessories decode on multiple supported element types
+malformed JSON fails cleanly
+unknown action type fails deterministically
+```
+
+---
+
+## 19.3 Support-checker tests
+
+Test only client capability concerns:
+
+```text
+supported schema passes
+unsupported schema fails
+unknown template fails
+unknown component fails
+unknown section fails
+unknown group fails
+unknown element fails
+unknown action fails
+unsafe endpoint fails
+```
+
+Do not duplicate backend structural-schema tests here.
+
+---
+
+## 19.4 Registry tests
+
+```text
+all TemplateDefinitions register
+all ComponentDefinitions register
+all SectionDefinitions register
+all GroupDefinitions register
+all ElementDefinitions register
+lookup returns correct renderer
+duplicate template type fails
+duplicate element type fails
+wrong hierarchy cannot be registered through the wrong method
+```
+
+---
+
+## 19.5 Renderer tests
+
+For every renderer:
+
+```text
+correct renderer chosen for type
+properties applied
+children delegated
+visible/enabled runtime override applied
+interaction emitted correctly
+leading/trailing accessory rendering supported where declared
+```
+
+Important fixtures:
+
+```text
+Text spans + clickable legal link
+Image with sizing/contentScale
+Input normal
+Input segmented OTP
+Button with trailing icon
+Horizontal stack
+Vertical stack
+Gradient/background/border/shape
+```
+
+---
+
+## 19.6 Value-resolver tests
+
+```text
+$binding resolves
+$context resolves
+$response resolves
+$literal resolves
+nested object resolves
+nested array resolves
+missing binding fails predictably
+missing context path fails predictably
+missing response path fails predictably
+```
+
+---
+
+## 19.7 Field-state tests
+
+```text
+ValueChanged updates one field
+other fields remain unchanged
+required validation
+pattern validation
+valid field clears error
+validate=false does not block request
+validate=true blocks invalid request
+```
+
+---
+
+## 19.8 Action-executor tests
+
+Test each action independently:
+
+```text
+request builds correct NetworkRequest
+request resolves bindings/context/response
+request none stores lastResponse
+request destination converts backend response to DynamicDestination
+navigate dispatches exact backend destination
+present sets overlay
+dismiss clears overlay
+state set works
+state toggle works
+external_uri resolves URI and delegates to capability owner
+sequence executes in order
+sequence stops according to failure policy
+```
+
+---
+
+## 19.9 Navigation tests
+
+```text
+Splash bootstrap destination becomes root
+navigate pushes full DynamicDestination
+system Back pops previous full destination
+refresh reuses current destination endpoint
+restored stack preserves screenId/templateId/templateType/endpoint/auth
+frontend never navigates based on templateType alone
+```
+
+---
+
+## 19.10 Complete mock Login → OTP flow
+
+Mock backend:
+
+```text
+bootstrap → Login destination
+Login GET → Login SDUI
+Send OTP POST → challenge response
+Navigate/response destination → OTP
+OTP GET → OTP SDUI
+Verify OTP POST → Dashboard destination
+Dashboard GET → Dashboard SDUI
+```
+
+Assertions:
+
+```text
+correct endpoint called at every step
+field values resolved
+challengeId survives in the correct shared auth-flow/response context design
+NavigationStore contains full destinations
+Back from OTP returns Login destination
+no hardcoded Login/OTP screen branching exists
+```
+
+---
+
+## 19.11 Full vocabulary fixture
+
+Create one synthetic `all_node_types.json` screen that intentionally contains every registered:
+
+```text
+template
+component
+section
+group
+element
+accessory
+```
+
+Create one `all_action_types.json` fixture containing:
+
+```text
+request
+navigate
+present
+dismiss
+state
+external_uri
+sequence
+```
+
+This gives one fast regression test proving the engine understands the complete current protocol vocabulary.
 
 ---
 
@@ -1087,20 +1759,30 @@ The test must prove decoder/support/traversal preserve and visit both branches. 
 13. Every new action must originate in backend protocol first, then frontend model/executor/tests.
 14. Unknown/unsupported server vocabulary must fail cleanly; never silently guess.
 15. Keep dynamic feature and SDUI responsibilities separate.
-16. `SduiComponent.elements` + `sections` and `SduiSection.elements` + `groups` are intentionally coexistent child branches; never remodel them as mutually exclusive alternatives.
 
 ---
 
 # 21. Implementation order after this document is approved
 
-The previous convergence phases remain historical execution order. For the current audit-correction pass the immediate order is:
-
 ```text
-A. freeze hierarchy child-composition semantics
-B. refactor child-layout ownership away from Stack-specific helper naming/wrappers
-C. add hierarchy + layout regressions
-D. discuss remaining audit findings one by one before changing them
-E. resume executable CI/freeze sequence only after approved audit corrections
+Phase 1  Capture canonical backend JSON fixtures
+Phase 2  Fix backend destination inconsistencies
+Phase 3  Define exact frontend SDUI models/actions/value references
+Phase 4  Unwrap API envelope correctly and implement SduiDecoder
+Phase 5  Replace deep frontend validation with SduiSupportChecker
+Phase 6  Build separated hierarchy registry + clear registration entry point
+Phase 7  Implement common properties/accessories/render context/interaction
+Phase 8  Implement template/component/section/group/element renderers
+Phase 9  Move bound field/runtime state to one DynamicScreenState owner
+Phase 10 Implement SduiValueResolver
+Phase 11 Implement exact seven-action SduiActionExecutor
+Phase 12 Simplify DynamicDestination/navigation/back/refresh handling
+Phase 13 Remove obsolete Command/PreparedAction/ActionRegistry/FormStore/etc.
+Phase 14 Run complete mock vocabulary tests
+Phase 15 Run Login → OTP → Dashboard mock integration
+Phase 16 Run real backend Desktop integration
+Phase 17 Android/iOS/Desktop full verification + architecture gates
+Phase 18 Freeze only after all green
 ```
 
 ---
@@ -1112,9 +1794,6 @@ Do not mark SDUI frozen until all answers are yes:
 ```text
 [ ] frontend consumes actual backend API envelope/data
 [ ] frontend models match backend names and values
-[ ] Component supports direct Elements + Sections together
-[ ] Section supports direct Elements + Groups together
-[ ] Group supports Elements
 [ ] navigation is fully backend-destination driven
 [ ] full DynamicDestination is stored/restored in navigation stack
 [ ] system Back works by stack pop
@@ -1129,8 +1808,11 @@ Do not mark SDUI frozen until all answers are yes:
 [ ] all seven backend actions work
 [ ] all four value-reference forms work
 [ ] all current backend node types render
+[ ] Image renderer exists
+[ ] text spans/actions work
+[ ] segmented OTP input works
 [ ] mock full-vocabulary tests pass
-[ ] hierarchy coexistence regression passes
+[ ] Login→OTP→Dashboard mock flow passes
 [ ] real Desktop backend flow passes
 [ ] Android/iOS/Desktop CI is green
 ```
@@ -1139,11 +1821,48 @@ Do not mark SDUI frozen until all answers are yes:
 
 # 23. Final mental model for a new developer
 
-A new backend-driven screen should normally need no new Dynamic feature class. New semantic SDUI vocabulary is added only at the correct SDUI layer, registered once and tested.
+When you receive a requirement such as:
+
+> Add a new Partner Earnings chart element.
+
+Do this:
+
+```text
+1. Backend defines/finalizes `earnings_chart` element JSON.
+2. Frontend adds `EarningsChartElementRenderer`.
+3. Register it in `ElementDefinitions.all`.
+4. Add renderer unit tests.
+5. Add/update mock SDUI fixture.
+6. Add interaction test only if the element emits events.
+7. Nothing else changes.
+```
+
+When backend adds a new template:
+
+```text
+1. Add renderer.
+2. Register in TemplateDefinitions.all.
+3. Add tests/fixture.
+```
+
+When backend adds a new action:
+
+```text
+1. Add exactly one SduiAction variant.
+2. Add exactly one execution branch.
+3. Add resolver/security handling if needed.
+4. Add tests.
+```
+
+That is the standard we want: **simple enough that a new developer knows exactly where to work, but strict enough that the engine remains safe and scalable for the entire Partner app.**
 
 ---
 
 # 24. Architecture amendment — semantic node identity vs child layout
+
+> **Status:** accepted review direction, implementation names still pending the class-by-class audit and owner discussion.
+>
+> **Supersedes:** any Stack-specific interpretation in earlier package, registry, renderer, testing, or extension examples in this review draft. Earlier examples remain historical context; this section is authoritative where they conflict.
 
 A structural SDUI node answers two independent questions:
 
@@ -1166,7 +1885,7 @@ Template / Component / Section / Group
                     reusable child-layout implementation
 ```
 
-The properties:
+The current properties:
 
 ```text
 axis
@@ -1175,36 +1894,59 @@ mainAxisAlignment
 crossAxisAlignment
 ```
 
-represent a **linear/axis child-layout algorithm**. They are not inherently Template, Component, Section or Group properties and do not justify a separate Stack renderer implementation at every hierarchy level.
+represent a **linear/axis child-layout algorithm**. They are not inherently Template properties, Component properties, Section properties, Group properties, or proof that each hierarchy level needs its own "Stack" rendering implementation.
+
+The current `RenderStack` / `StackContainerRenderer` implementation is therefore treated as an implementation under architecture review, not as a frozen architectural abstraction.
 
 ## 24.1 Required direction
 
 - Keep semantic node identity separate from child-layout behavior.
-- Keep hierarchy-safe registration.
+- Keep hierarchy-safe registration unless the audit proves a better type-safe alternative; this amendment does **not** require collapsing Template/Component/Section/Group registries.
 - Reuse one child-layout implementation across hierarchy levels whenever they share the same arrangement contract.
 - A future genuinely different layout algorithm such as grid, overlay or flow should be implemented once and reused where the backend contract allows it.
-- Do not create a hierarchy × layout matrix merely to choose a layout algorithm.
-- A semantic node type may still have its own renderer when it has real type-specific behavior beyond generic child arrangement.
+- Do not create a hierarchy × layout matrix such as `StackTemplateRenderer`, `GridTemplateRenderer`, `StackComponentRenderer`, `GridComponentRenderer`, and equivalent Section/Group permutations merely to choose a layout algorithm.
+- A semantic template/component type may still have its own renderer when it has real type-specific behavior beyond generic child arrangement.
 - Generic self-presentation properties remain separate from child arrangement.
-- Normal leaf Elements remain leaves unless the protocol explicitly introduces a compositional/container Element.
+- Normal leaf Elements remain leaves. Their internal Compose layout is an implementation detail unless the protocol explicitly introduces a compositional/container Element.
 - `templateType` remains backend semantic/render-capability identity. It must never become a navigation rule and must not be assumed to equal one child-layout algorithm.
 
-## 24.2 Correctness requirements
+## 24.2 Correctness requirements exposed by this review
+
+The final child-layout abstraction must preserve the complete backend layout contract. In particular:
 
 - spacing and main-axis alignment must be able to work together rather than one silently disabling the other;
 - unsupported layout vocabulary must fail through the client support/capability boundary instead of silently guessing;
 - node self modifiers and child arrangement must have consistent ownership;
 - adding another layout algorithm must not require duplicate implementations at Template, Component, Section and Group levels.
 
+## 24.3 Naming is deliberately not frozen yet
+
+Names such as `ChildLayoutRenderer`, `LinearLayoutRenderer`, `AxisLayoutRenderer`, or similar are only candidate descriptions at this stage. The exact package/class/file shape will be selected only after the complete active `runtime/sdui` class audit is reviewed with the owner.
+
+No production refactor should be performed solely from this amendment before that discussion.
+
+## 24.4 Additional freeze gate
+
+The SDUI engine must not be declared frozen until all of the following are true:
+
+```text
+[ ] semantic structural-node identity is separated from reusable child-layout behavior
+[ ] no hierarchy × layout renderer explosion is required for future layout algorithms
+[ ] spacing + alignment semantics are covered by regression tests
+[ ] unsupported child-layout/accessory/embedded-action vocabulary fails cleanly
+[ ] the class-by-class active runtime/sdui audit is reviewed and approved
+[ ] agreed audit corrections are implemented and verified before final CI/freeze
+```
+
 ---
 
 # 25. Frozen hierarchy child-composition contract
 
-> **Status:** FROZEN — this specific hierarchy rule is no longer under review.
+> **Status:** FROZEN — this specific hierarchy rule is approved and is no longer under architecture review.
 >
-> This section supersedes any earlier wording that could be read as `Element OR Section` or `Element OR Group` exclusivity.
+> **Supersedes:** any earlier `OR` wording in this document that could be read as mutual exclusion between the child collections below.
 
-The canonical hierarchy is:
+The canonical structural hierarchy is:
 
 ```text
 Screen
@@ -1217,14 +1959,24 @@ Screen
                   └── Element(s)
 ```
 
-The branches are additive:
+The child branches are additive, not exclusive:
 
-- a `Component` may contain direct Elements, Sections, or both;
-- a `Section` may contain direct Elements, Groups, or both;
-- a `Group` contains Elements;
-- optional child collections do not imply mutual exclusion;
-- the frontend must traverse every present valid branch;
-- the frontend must not introduce an XOR/sealed-child model that prevents coexistence;
-- whether an otherwise valid structural node may be completely empty remains a backend structural-validation concern unless the wire contract later explicitly assigns that check to the client.
+- `SduiComponent.elements` and `SduiComponent.sections` may both be present in the same Component;
+- `SduiSection.elements` and `SduiSection.groups` may both be present in the same Section;
+- `SduiGroup` contains Elements;
+- nullable/optional child collections indicate optional presence in the backend payload and do **not** define an XOR/either-or relationship;
+- every present valid child branch must be traversed by rendering, support/capability inspection and any shared hierarchy utility;
+- the frontend must not remodel Component or Section into a mutually exclusive sealed child union that prevents these combinations;
+- whether a structurally valid node is allowed to contain no children at all remains a backend structural-validation concern unless the protocol explicitly assigns that rule to the client.
 
-Therefore the current `SduiComponent` and `SduiSection` child model shape is accepted for this contract. The previous audit claim that these nullable collections inherently represented impossible in-memory combinations is withdrawn.
+Therefore the current `SduiComponent` and `SduiSection` model shape is accepted for this hierarchy contract. The earlier audit concern that the nullable child collections inherently represented impossible in-memory combinations is withdrawn.
+
+Required regression coverage before final freeze:
+
+```text
+[ ] one Component fixture contains BOTH direct Element(s) and Section(s)
+[ ] one Section fixture contains BOTH direct Element(s) and Group(s)
+[ ] decoder preserves both branches
+[ ] support checking visits both branches
+[ ] rendering/traversal visits both branches
+```
